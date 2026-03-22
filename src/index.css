@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 224 66% 28%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 224 66% 28%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 224 66% 28%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 210 40% 98%;
+    --sidebar-primary-foreground: 224 66% 28%;
+    --sidebar-accent: 224 60% 35%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 224 60% 35%;
+    --sidebar-ring: 210 40% 98%;
+
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer utilities {
+  .shadow-smooth {
+    box-shadow: 0 0 0 1px rgba(0,0,0,.05), 0 2px 4px rgba(0,0,0,.05);
+  }
+  .shadow-smooth-hover {
+    box-shadow: 0 0 0 1px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.08);
+  }
+  .gradient-primary {
+    background: linear-gradient(135deg, hsl(224 66% 28%), hsl(224 66% 38%));
+  }
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(224 66% 28%), hsl(224 50% 45%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+}
