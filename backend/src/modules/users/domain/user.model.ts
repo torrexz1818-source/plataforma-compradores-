@@ -8,6 +8,11 @@ export interface User {
   fullName: string;
   company: string;
   position: string;
+  phone?: string;
+  ruc?: string;
+  sector?: string;
+  location?: string;
+  description?: string;
   role: UserRole;
   status: UserStatus;
   points: number;

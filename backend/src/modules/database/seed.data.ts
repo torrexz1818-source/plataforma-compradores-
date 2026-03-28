@@ -8,6 +8,9 @@ export type SeedUser = {
   fullName: string;
   company: string;
   position: string;
+  sector?: string;
+  location?: string;
+  description?: string;
   role: UserRole;
   status: UserStatus;
   points: number;
@@ -64,6 +67,9 @@ export const seedUsers: SeedUser[] = [
     fullName: 'Maria Garcia',
     company: 'TechCorp',
     position: 'Procurement Manager',
+    sector: 'Tecnologia',
+    location: 'Lima, Peru',
+    description: 'Buscamos proveedores de software B2B y servicios cloud.',
     role: UserRole.BUYER,
     status: UserStatus.ACTIVE,
     points: 1250,
@@ -90,6 +96,9 @@ export const seedUsers: SeedUser[] = [
     fullName: 'Ana Rodriguez',
     company: 'Global Inc.',
     position: 'Senior Buyer',
+    sector: 'Manufactura',
+    location: 'Monterrey, Mexico',
+    description: 'Compras recurrentes de insumos industriales y logistica.',
     role: UserRole.BUYER,
     status: UserStatus.ACTIVE,
     points: 890,
@@ -103,6 +112,9 @@ export const seedUsers: SeedUser[] = [
     fullName: 'Roberto Silva',
     company: 'Industrial MX',
     position: 'Procurement Director',
+    sector: 'Construccion',
+    location: 'Arequipa, Peru',
+    description: 'Interesados en proveedores de maquinaria y seguridad industrial.',
     role: UserRole.BUYER,
     status: UserStatus.ACTIVE,
     points: 2100,

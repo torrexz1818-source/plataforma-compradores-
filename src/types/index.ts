@@ -7,6 +7,9 @@ export interface User {
   email: string;
   company: string;
   position: string;
+  sector?: string;
+  location?: string;
+  description?: string;
   role: UserRole;
   status: UserStatus;
   points: number;
@@ -107,4 +110,40 @@ export interface AdminDashboardData {
   users: User[];
   posts: Post[];
   comments: AdminComment[];
+}
+
+export type NotificationIconName =
+  | 'Building2'
+  | 'MessageCircle'
+  | 'FileText'
+  | 'Star';
+
+export interface NotificationItem {
+  id: string;
+  icon: NotificationIconName;
+  title: string;
+  description: string;
+  time: string;
+  read: boolean;
+}
+
+export interface BuyerSector {
+  sector: string;
+  count: number;
+}
+
+export interface BuyerDirectoryItem {
+  id: string;
+  name: string;
+  company: string;
+  sector: string;
+  location: string;
+  description: string;
+  isActiveBuyer: boolean;
+  createdAt: string;
+}
+
+export interface BuyerProfile extends Omit<BuyerDirectoryItem, 'isActiveBuyer'> {
+  email: string;
+  phone: string;
 }

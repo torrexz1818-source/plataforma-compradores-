@@ -1,42 +1,19 @@
-import { ReactNode } from 'react';
-import {
-  Bell,
-  Building2,
-  FileText,
-  LayoutDashboard,
-  LogOut,
-  MessageCircle,
-  Newspaper,
-  Store,
-  Users,
-} from 'lucide-react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Bell, Building2, FileText, LayoutDashboard, LogOut, MessageCircle, Users } from 'lucide-react';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 
-interface MainLayoutProps {
-  children: ReactNode;
-}
+const navItems = [
+  { to: '/buyer/dashboard', label: 'Inicio', icon: LayoutDashboard },
+  { to: '/buyer/directory', label: 'Directorio', icon: Building2 },
+  { to: '/buyer/sale', label: 'Sale', icon: FileText },
+  { to: '/community', label: 'Comunidad', icon: MessageCircle },
+  { to: '/notifications', label: 'Notificaciones', icon: Bell },
+];
 
-const MainLayout = ({ children }: MainLayoutProps) => {
+const BuyerLayout = () => {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const isSupplier = user?.role === 'supplier';
-
-  const navItems = isSupplier
-    ? [
-        { to: '/supplier/dashboard', label: 'Inicio', icon: LayoutDashboard },
-        { to: '/supplier/directory', label: 'Directorio compradores', icon: Building2 },
-        { to: '/supplier/posts', label: 'Publicaciones', icon: Newspaper },
-        { to: '/notifications', label: 'Notificaciones', icon: Bell },
-      ]
-    : [
-        { to: '/buyer/dashboard', label: 'Inicio', icon: LayoutDashboard },
-        { to: '/buyer/directory', label: 'Directorio', icon: Building2 },
-        { to: '/buyer/sale', label: 'Sale', icon: FileText },
-        { to: '/community', label: 'Comunidad', icon: MessageCircle },
-        { to: '/notifications', label: 'Notificaciones', icon: Bell },
-      ];
 
   const isActive = (path: string) => {
     if (path === '/buyer/directory') {
@@ -44,13 +21,6 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         location.pathname === '/buyer/directory' ||
         location.pathname.startsWith('/buyer/directory/') ||
         location.pathname.startsWith('/buyer/supplier/')
-      );
-    }
-
-    if (path === '/supplier/directory') {
-      return (
-        location.pathname === '/supplier/directory' ||
-        location.pathname.startsWith('/supplier/directory/')
       );
     }
 
@@ -71,15 +41,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       <aside className="w-72 bg-[#0f2a5e] text-white flex flex-col">
         <div className="px-6 py-6 border-b border-white/15">
           <p className="text-xl font-bold tracking-tight">SupplyConnect</p>
-          <span
-            className={`inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-semibold ${
-              isSupplier
-                ? 'bg-[#0F6E56]/25 border border-[#0F6E56]/50 text-emerald-100'
-                : 'bg-blue-500/25 border border-blue-300/40'
-            }`}
-          >
-            {isSupplier ? <Store className="w-3 h-3" /> : <Users className="w-3 h-3" />}
-            {isSupplier ? 'Proveedor' : 'Comprador'}
+          <span className="inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-500/25 border border-blue-300/40">
+            <Users className="w-3 h-3" />
+            Comprador
           </span>
         </div>
 
@@ -102,7 +66,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
         <div className="px-4 py-4 border-t border-white/15">
           <p className="text-xs text-white/65">Sesion iniciada</p>
-          <p className="text-sm font-medium truncate">{user?.fullName ?? 'Usuario'}</p>
+          <p className="text-sm font-medium truncate">{user?.fullName ?? 'Comprador'}</p>
           <button
             type="button"
             onClick={handleLogout}
@@ -114,9 +78,13 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 overflow-auto">{children}</main>
+      <main className="flex-1 min-w-0">
+        <div className="max-w-6xl mx-auto px-6 py-8">
+          <Outlet />
+        </div>
+      </main>
     </div>
   );
 };
 
-export default MainLayout;
+export default BuyerLayout;

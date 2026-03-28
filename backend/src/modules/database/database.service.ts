@@ -17,6 +17,9 @@ type UserDocument = {
   fullName: string;
   company: string;
   position: string;
+  sector?: string;
+  location?: string;
+  description?: string;
   role: UserRole;
   status: UserStatus;
   points: number;
@@ -65,6 +68,37 @@ type LessonProgressDocument = {
   duration: string;
 };
 
+type PasswordResetOtpDocument = {
+  id: string;
+  email: string;
+  userId: string;
+  codeHash: string;
+  attempts: number;
+  expiresAt: Date;
+  createdAt: Date;
+  verifiedAt?: Date;
+  resetTokenHash?: string;
+  resetTokenExpiresAt?: Date;
+  consumedAt?: Date;
+};
+
+type PasswordResetRateLimitDocument = {
+  key: string;
+  count: number;
+  windowStartedAt: Date;
+  updatedAt: Date;
+};
+
+type MessageDocument = {
+  id: string;
+  senderId: string;
+  supplierId: string;
+  buyerId?: string;
+  postId?: string;
+  message: string;
+  createdAt: Date;
+};
+
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
@@ -100,6 +134,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const posts = this.collection<PostDocument>('posts');
     const comments = this.collection<CommentDocument>('comments');
     const lessonProgress = this.collection<LessonProgressDocument>('lessonProgress');
+    const passwordResetOtps =
+      this.collection<PasswordResetOtpDocument>('passwordResetOtps');
+    const passwordResetRateLimits = this.collection<PasswordResetRateLimitDocument>(
+      'passwordResetRateLimits',
+    );
+    const messages = this.collection<MessageDocument>('messages');
 
     const adminCount = await users.countDocuments({ role: UserRole.ADMIN });
     if (adminCount > 1) {
@@ -125,6 +165,17 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       comments.createIndex({ parentId: 1 }),
       lessonProgress.createIndex({ id: 1 }, { unique: true }),
       lessonProgress.createIndex({ postId: 1, userId: 1 }, { unique: true }),
+      passwordResetOtps.createIndex({ id: 1 }, { unique: true }),
+      passwordResetOtps.createIndex({ email: 1, createdAt: -1 }),
+      passwordResetOtps.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+      passwordResetRateLimits.createIndex({ key: 1 }, { unique: true }),
+      passwordResetRateLimits.createIndex(
+        { updatedAt: 1 },
+        { expireAfterSeconds: 24 * 60 * 60 },
+      ),
+      messages.createIndex({ id: 1 }, { unique: true }),
+      messages.createIndex({ buyerId: 1, createdAt: -1 }),
+      messages.createIndex({ supplierId: 1, createdAt: -1 }),
     ]);
   }
 
@@ -144,6 +195,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           fullName: user.fullName,
           company: user.company,
           position: user.position,
+          sector: user.sector,
+          location: user.location,
+          description: user.description,
           role: user.role,
           status: user.status,
           points: user.points,

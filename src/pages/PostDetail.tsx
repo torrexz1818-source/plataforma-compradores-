@@ -27,7 +27,7 @@ const PostDetail = () => {
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
             <p className="text-muted-foreground mb-4">Post no encontrado</p>
-            <Button variant="outline" onClick={() => navigate('/')}>Volver al inicio</Button>
+            <Button variant="outline" onClick={() => navigate('/home')}>Volver al inicio</Button>
           </div>
         </div>
       </MainLayout>

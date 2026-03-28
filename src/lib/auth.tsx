@@ -1,6 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from 'react';
 import { getMe, getStoredToken, login as loginRequest, register as registerRequest, setStoredToken } from '@/lib/api';
-import { User } from '@/types';
+import { AuthResponse, User } from '@/types';
 
 type AuthContextValue = {
   user: User | null;
@@ -12,9 +12,15 @@ type AuthContextValue = {
     fullName: string;
     company: string;
     position: string;
+    ruc?: string;
+    phone?: string;
+    sector?: string;
+    location?: string;
+    description?: string;
+    role?: 'buyer' | 'supplier';
     email: string;
     password: string;
-  }) => Promise<void>;
+  }) => Promise<AuthResponse>;
   logout: () => void;
   refreshMe: () => Promise<void>;
 };
@@ -86,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setStoredToken(response.accessToken);
         setToken(response.accessToken);
         setUser(response.user);
+        return response;
       },
       logout: () => {
         setStoredToken(null);

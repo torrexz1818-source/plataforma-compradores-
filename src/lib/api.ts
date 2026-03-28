@@ -1,8 +1,12 @@
 import {
   AdminDashboardData,
   AuthResponse,
+  BuyerDirectoryItem,
+  BuyerProfile,
+  BuyerSector,
   Comment,
   HomeFeed,
+  NotificationItem,
   Post,
   PostCategory,
   PostDetailData,
@@ -36,6 +40,11 @@ type CommentMutationResponse = {
 type LikeResponse = {
   liked: boolean;
   likes: number;
+};
+
+type ForgotPasswordVerifyResponse = {
+  message: string;
+  resetToken: string;
 };
 
 export function getStoredToken(): string | null {
@@ -126,6 +135,12 @@ export async function register(payload: {
   fullName: string;
   company: string;
   position: string;
+  ruc?: string;
+  phone?: string;
+  sector?: string;
+  location?: string;
+  description?: string;
+  role?: 'buyer' | 'supplier';
   email: string;
   password: string;
 }) {
@@ -245,4 +260,87 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
     auth: true,
     body: JSON.stringify({ status }),
   });
+}
+
+export async function getNotifications(role: 'buyer' | 'supplier') {
+  return apiRequest<NotificationItem[]>(
+    `/notifications${buildQuery({ role })}`,
+    { auth: true },
+  );
+}
+
+export async function markNotificationAsRead(id: string) {
+  return apiRequest<{ success: true; id: string }>(`/notifications/${id}/read`, {
+    method: 'PATCH',
+    auth: true,
+  });
+}
+
+export async function deleteNotification(id: string) {
+  return apiRequest<{ success: true; id: string }>(`/notifications/${id}`, {
+    method: 'DELETE',
+    auth: true,
+  });
+}
+
+export async function requestPasswordReset(email: string) {
+  return apiRequest<{ message: string }>('/auth/forgot-password/request', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export async function verifyPasswordResetCode(email: string, code: string) {
+  return apiRequest<ForgotPasswordVerifyResponse>('/auth/forgot-password/verify', {
+    method: 'POST',
+    body: JSON.stringify({ email, code }),
+  });
+}
+
+export async function resetPasswordWithToken(payload: {
+  email: string;
+  resetToken: string;
+  newPassword: string;
+}) {
+  return apiRequest<{ message: string }>('/auth/forgot-password/reset', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getBuyerSectors() {
+  return apiRequest<BuyerSector[]>('/buyer-sectors', { auth: true });
+}
+
+export async function getBuyersBySector(sector: string) {
+  return apiRequest<BuyerDirectoryItem[]>(
+    `/buyers${buildQuery({ sector })}`,
+    { auth: true },
+  );
+}
+
+export async function getBuyerById(id: string) {
+  return apiRequest<BuyerProfile>(`/buyers/${id}`, { auth: true });
+}
+
+export async function sendMessage(payload: {
+  supplierId: string;
+  buyerId?: string;
+  message: string;
+  postId?: string;
+}) {
+  return apiRequest<{ id: string; createdAt: string }>('/messages', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function sendSupplierMessage(payload: {
+  supplierId: string;
+  buyerId: string;
+  message: string;
+  postId?: string;
+}) {
+  return sendMessage(payload);
 }

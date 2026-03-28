@@ -37,7 +37,7 @@ const Login = () => {
 
     try {
       await login(form);
-      navigate('/');
+      navigate('/home');
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'No se pudo iniciar sesion');
     } finally {
@@ -80,6 +80,11 @@ const Login = () => {
                 placeholder="********"
               />
               {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
+              <div className="mt-2 text-right">
+                <Link to="/forgot-password" className="text-xs text-primary font-medium hover:underline">
+                  Olvidaste tu contrasena?
+                </Link>
+              </div>
             </div>
 
             {submitError && <p className="text-xs text-destructive">{submitError}</p>}

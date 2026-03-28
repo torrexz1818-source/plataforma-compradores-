@@ -1,4 +1,4 @@
-import { Home, Users, Award, Shield, LogOut } from 'lucide-react';
+import { Home, Users, Shield, LogOut, Bell } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/lib/auth';
 import { useLocation } from 'react-router-dom';
@@ -15,8 +15,9 @@ import {
 } from '@/components/ui/sidebar';
 
 const navItems = [
-  { title: 'Inicio', url: '/', icon: Home },
+  { title: 'Inicio', url: '/buyer/dashboard', icon: Home },
   { title: 'Comunidad', url: '/community', icon: Users },
+  { title: 'Notificaciones', url: '/notifications', icon: Bell },
 ];
 
 export function AppSidebar() {
@@ -24,10 +25,14 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const collapsed = state === 'collapsed';
   const location = useLocation();
+  const homePath = user?.role === 'supplier' ? '/supplier/dashboard' : '/buyer/dashboard';
+  const baseItems = navItems.map((item) =>
+    item.title === 'Inicio' ? { ...item, url: homePath } : item,
+  );
   const isActive = (path: string) => location.pathname === path;
   const items = user?.role === 'admin'
-    ? [...navItems, { title: 'Admin', url: '/admin', icon: Shield }]
-    : navItems;
+    ? [...baseItems, { title: 'Admin', url: '/admin', icon: Shield }]
+    : baseItems;
 
   const initials = user?.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2) ?? 'SC';
 
@@ -75,12 +80,6 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">{user?.fullName ?? 'Invitado'}</p>
-              <div className="flex items-center gap-1">
-                <Award className="w-3 h-3 text-sidebar-foreground/60" />
-                <span className="text-xs text-sidebar-foreground/60">
-                  {user ? `${user.points} pts - ${user.role}` : 'Inicia sesion para participar'}
-                </span>
-              </div>
             </div>
           )}
         </div>
