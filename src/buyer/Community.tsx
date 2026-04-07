@@ -29,6 +29,7 @@ const Community = () => {
         categoryId: activeCategory || undefined,
       }),
   });
+  const buyerPosts = posts.filter((post) => post.author.role === 'buyer');
 
   return (
     <MainLayout>
@@ -80,10 +81,10 @@ const Community = () => {
         <div className="space-y-4">
           {isLoading && <p className="text-muted-foreground text-sm text-center py-12">Cargando posts...</p>}
           {isError && <p className="text-destructive text-sm text-center py-12">No se pudo cargar la comunidad.</p>}
-          {posts.map((post, i) => (
+          {buyerPosts.map((post, i) => (
             <PostCard key={post.id} post={post} index={i} />
           ))}
-          {!isLoading && !isError && posts.length === 0 && (
+          {!isLoading && !isError && buyerPosts.length === 0 && (
             <p className="text-muted-foreground text-sm text-center py-12">No se encontraron posts.</p>
           )}
         </div>

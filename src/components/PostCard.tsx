@@ -91,7 +91,17 @@ const PostCard = ({ post, index = 0 }: PostCardProps) => {
           <Heart className={`w-4 h-4 ${liked ? 'fill-primary' : ''}`} />
           {likeCount}
         </button>
-        <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-primary hover:bg-muted transition-colors">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (post.type === 'community') {
+              navigate(`/buyer/community/post/${post.id}`);
+              return;
+            }
+            navigate(`/post/${post.id}`);
+          }}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+        >
           <MessageCircle className="w-4 h-4" />
           {post.comments}
         </button>

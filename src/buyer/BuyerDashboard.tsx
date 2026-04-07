@@ -1,30 +1,25 @@
-import { Search, ArrowRight, Play } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowRight, Play } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import StatsCard from '@/components/StatsCard';
-import PostCard from '@/components/PostCard';
-import { getHomeFeed } from '@/lib/api';
+import { getHomeFeed, getPlatformStats } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const BuyerDashboard = () => {
-  const [search, setSearch] = useState('');
   const navigate = useNavigate();
-  const { data, isLoading, isError } = useQuery({
+  const { data } = useQuery({
     queryKey: ['home-feed'],
     queryFn: getHomeFeed,
   });
+  const { data: platformStats, isLoading: isStatsLoading, isError: isStatsError } = useQuery({
+    queryKey: ['platform-stats'],
+    queryFn: getPlatformStats,
+  });
 
-  const educationalPosts = data?.educationalPosts ?? [];
-  const continueWatching = data?.continueWatching ?? [];
-  const filteredPosts = educationalPosts.filter(
-    (p) =>
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      p.description.toLowerCase().includes(search.toLowerCase()),
-  );
+  const totalSectorUsers = (platformStats?.sectorBreakdown ?? []).reduce((acc, item) => acc + item.count, 0);
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -45,9 +40,9 @@ const BuyerDashboard = () => {
           <Button
             variant="outline"
             className="bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 hover:bg-primary-foreground/20"
-            onClick={() => document.getElementById('continue-watching')?.scrollIntoView({ behavior: 'smooth' })}
+            onClick={() => navigate('/contenido-educativo')}
           >
-            <Play className="w-4 h-4 mr-1" /> Continuar viendo
+            <Play className="w-4 h-4 mr-1" /> Ir a contenido educativo
           </Button>
         </div>
       </motion.div>
@@ -58,60 +53,101 @@ const BuyerDashboard = () => {
         ))}
       </div>
 
-      <div className="relative mb-8">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Busca tu clase o contenido"
-          className="pl-10"
-        />
-      </div>
+      {isStatsLoading && <p className="text-sm text-muted-foreground mb-6">Cargando estadisticas...</p>}
+      {isStatsError && <p className="text-sm text-destructive mb-6">No se pudo cargar el dashboard.</p>}
 
-      <div className="mb-10">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Contenido Educativo</h2>
-        <div className="space-y-4">
-          {isLoading && <p className="text-muted-foreground text-sm">Cargando contenido...</p>}
-          {isError && <p className="text-destructive text-sm">No se pudo cargar el contenido.</p>}
-          {filteredPosts.map((post, i) => (
-            <PostCard key={post.id} post={post} index={i} />
-          ))}
-          {!isLoading && !isError && filteredPosts.length === 0 && (
-            <p className="text-muted-foreground text-sm text-center py-8">No se encontraron resultados.</p>
-          )}
-        </div>
-      </div>
+      {platformStats && (
+        <div className="space-y-6 mb-8">
+          <section>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">Resumen general de la plataforma</p>
+          </section>
 
-      <div id="continue-watching">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Continuar Viendo</h2>
-        <div className="grid md:grid-cols-3 gap-4">
-          {continueWatching.map((lesson, i) => (
-            <motion.div
-              key={lesson.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              onClick={() => navigate(`/post/${lesson.postId}`)}
-              className="bg-card rounded-lg shadow-smooth overflow-hidden hover:shadow-smooth-hover transition-shadow cursor-pointer"
-            >
-              <div className="bg-muted h-28 flex items-center justify-center">
-                <div className="w-10 h-10 rounded-full bg-card/90 flex items-center justify-center shadow-smooth">
-                  <Play className="w-4 h-4 text-primary ml-0.5" />
-                </div>
-              </div>
-              <div className="p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-1 line-clamp-1">{lesson.title}</h3>
-                <p className="text-xs text-muted-foreground mb-3">{lesson.duration}</p>
-                <div className="flex items-center gap-2">
-                  <Progress value={lesson.progress} className="h-1.5 flex-1" />
-                  <span className="text-xs font-medium text-muted-foreground">{lesson.progress}%</span>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+          <section className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Total usuarios</p>
+                <p className="text-3xl font-bold mt-1">{platformStats.totalUsers}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Compradores</p>
+                <p className="text-3xl font-bold mt-1">{platformStats.buyers}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-6">
+                <p className="text-sm text-muted-foreground">Proveedores</p>
+                <p className="text-3xl font-bold mt-1">{platformStats.suppliers}</p>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Usuarios por sector</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {platformStats.sectorBreakdown.map((item) => {
+                  const widthPercent =
+                    totalSectorUsers > 0 ? Math.max((item.count / totalSectorUsers) * 100, 2) : 0;
+
+                  return (
+                    <div key={item.sector} className="grid grid-cols-[130px_1fr_42px] items-center gap-3">
+                      <span className="text-sm text-foreground">{item.sector}</span>
+                      <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-blue-500" style={{ width: `${widthPercent}%` }} />
+                      </div>
+                      <span className="text-sm text-foreground text-right">{item.count}</span>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Ultimos registros</CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b border-border">
+                      <th className="py-2 pr-4 font-semibold">Nombre</th>
+                      <th className="py-2 pr-4 font-semibold">Empresa</th>
+                      <th className="py-2 pr-4 font-semibold">Sector</th>
+                      <th className="py-2 pr-0 font-semibold">Rol</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {platformStats.latestUsers.map((user) => (
+                      <tr key={user.id} className="border-b border-border/60">
+                        <td className="py-3 pr-4">{user.name}</td>
+                        <td className="py-3 pr-4">{user.company}</td>
+                        <td className="py-3 pr-4">{user.sector}</td>
+                        <td className="py-3 pr-0">
+                          <Badge
+                            className={
+                              user.role === 'buyer'
+                                ? 'bg-blue-100 text-blue-700 hover:bg-blue-100'
+                                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+                            }
+                          >
+                            {user.role === 'buyer' ? 'Comprador' : 'Proveedor'}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          </section>
         </div>
-      </div>
-    </div>
+      )}
+    </div >
   );
 };
 

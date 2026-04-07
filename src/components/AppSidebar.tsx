@@ -1,4 +1,4 @@
-import { Home, Users, Shield, LogOut, Bell } from 'lucide-react';
+import { Building2, FileText, Home, Newspaper, Shield, LogOut, Bell, Users } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/lib/auth';
 import { useLocation } from 'react-router-dom';
@@ -14,10 +14,18 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 
-const navItems = [
+const buyerNavItems = [
   { title: 'Inicio', url: '/buyer/dashboard', icon: Home },
+  { title: 'Directorio proveedores', url: '/buyer/directory', icon: Building2 },
+  { title: 'Liquidaciones', url: '/buyer/sale', icon: FileText },
   { title: 'Comunidad', url: '/community', icon: Users },
   { title: 'Notificaciones', url: '/notifications', icon: Bell },
+];
+
+const supplierNavItems = [
+  { title: 'Inicio proveedor', url: '/supplier/dashboard', icon: Home },
+  { title: 'Directorio compradores', url: '/supplier/directory', icon: Building2 },
+  { title: 'Publicaciones', url: '/publicaciones', icon: Newspaper },
 ];
 
 export function AppSidebar() {
@@ -25,14 +33,15 @@ export function AppSidebar() {
   const { user, logout } = useAuth();
   const collapsed = state === 'collapsed';
   const location = useLocation();
-  const homePath = user?.role === 'supplier' ? '/supplier/dashboard' : '/buyer/dashboard';
-  const baseItems = navItems.map((item) =>
-    item.title === 'Inicio' ? { ...item, url: homePath } : item,
-  );
+  const baseItems = user?.role === 'supplier' ? supplierNavItems : buyerNavItems;
   const isActive = (path: string) => location.pathname === path;
   const items = user?.role === 'admin'
-    ? [...baseItems, { title: 'Admin', url: '/admin', icon: Shield }]
-    : baseItems;
+    ? [
+        { title: 'Administrador', grouped: [{ title: 'Panel administrativo', url: '/admin/dashboard', icon: Shield }] },
+        { title: 'Comprador', grouped: buyerNavItems },
+        { title: 'Proveedor', grouped: supplierNavItems },
+      ]
+    : [{ title: '', grouped: baseItems }];
 
   const initials = user?.fullName.split(' ').map((n) => n[0]).join('').slice(0, 2) ?? 'SC';
 
@@ -48,24 +57,33 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      end={item.url === '/'}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        isActive(item.url)
-                          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                          : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-                      }`}
-                      activeClassName=""
-                    >
-                      <item.icon className="w-5 h-5" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+              {items.map((section) => (
+                <div key={section.title || 'default'} className="space-y-0.5">
+                  {section.title && !collapsed && (
+                    <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-sidebar-foreground/60">
+                      {section.title}
+                    </p>
+                  )}
+                  {section.grouped.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          end={item.url === '/'}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                            isActive(item.url)
+                              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                              : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+                          }`}
+                          activeClassName=""
+                        >
+                          <item.icon className="w-5 h-5" />
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </div>
               ))}
             </SidebarMenu>
           </SidebarGroupContent>

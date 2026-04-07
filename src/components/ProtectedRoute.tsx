@@ -15,7 +15,7 @@ function getDashboardPath(role: string | undefined) {
   }
 
   if (role === 'admin') {
-    return '/admin';
+    return '/admin/dashboard';
   }
 
   return '/buyer/dashboard';
@@ -34,6 +34,10 @@ const ProtectedRoute = ({ role, children }: ProtectedRouteProps) => {
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (user.role === 'admin') {
+    return children;
   }
 
   if (user.role !== role) {

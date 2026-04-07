@@ -1,15 +1,18 @@
+import { useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Play } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import MainLayout from '@/layouts/MainLayout';
 import CommentSection from '@/components/CommentSection';
-import { getPostDetail } from '@/lib/api';
+import { getPostDetail, registerEducationalContentView } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { useAuth } from '@/lib/auth';
 
 const PostDetail = () => {
   const { id } = useParams();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -20,6 +23,14 @@ const PostDetail = () => {
 
   const post = data?.post;
   const lesson = data?.lesson;
+
+  useEffect(() => {
+    if (!id || !post || post.type !== 'educational' || user?.role !== 'buyer') {
+      return;
+    }
+
+    void registerEducationalContentView(id);
+  }, [id, post, user?.role]);
 
   if (!isLoading && !post) {
     return (

@@ -7,7 +7,10 @@ import {
   adminCreatePost,
   adminDeleteComment,
   adminDeletePost,
+  getAdminMemberships,
   getAdminDashboard,
+  getPlatformStats,
+  updateMembershipByAdmin,
   updateUserStatus,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -17,20 +20,40 @@ import { Textarea } from '@/components/ui/textarea';
 import { UserStatus } from '@/types';
 
 const Admin = () => {
+  const toDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      reader.readAsDataURL(file);
+    });
+
   const queryClient = useQueryClient();
   const { user, isLoading: isAuthLoading } = useAuth();
   const [form, setForm] = useState({
     title: '',
     description: '',
-    categoryId: '',
-    type: 'educational' as 'educational' | 'community',
-    videoUrl: '',
-    thumbnailUrl: '',
   });
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string>('');
+  const [videoPreview, setVideoPreview] = useState<string>('');
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-dashboard'],
     queryFn: getAdminDashboard,
+    enabled: user?.role === 'admin',
+  });
+  const platformStatsQuery = useQuery({
+    queryKey: ['admin-platform-stats'],
+    queryFn: getPlatformStats,
+    enabled: user?.role === 'admin',
+  });
+
+  const membershipsQuery = useQuery({
+    queryKey: ['admin-memberships'],
+    queryFn: getAdminMemberships,
     enabled: user?.role === 'admin',
   });
 
@@ -40,11 +63,11 @@ const Admin = () => {
       setForm({
         title: '',
         description: '',
-        categoryId: '',
-        type: 'educational',
-        videoUrl: '',
-        thumbnailUrl: '',
       });
+      setThumbnailFile(null);
+      setVideoFile(null);
+      setThumbnailPreview('');
+      setVideoPreview('');
       void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['home-feed'] });
       void queryClient.invalidateQueries({ queryKey: ['community-posts'] });
@@ -75,6 +98,22 @@ const Admin = () => {
     },
   });
 
+  const membershipMutation = useMutation({
+    mutationFn: ({
+      userId,
+      status,
+      adminApproved,
+    }: {
+      userId: string;
+      status: 'pending' | 'active' | 'expired' | 'suspended';
+      adminApproved: boolean;
+    }) =>
+      updateMembershipByAdmin(userId, { status, adminApproved }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-memberships'] });
+    },
+  });
+
   const summaryCards = useMemo(
     () =>
       data
@@ -87,6 +126,16 @@ const Admin = () => {
           ]
         : [],
     [data],
+  );
+  const membershipsByUserId = useMemo(
+    () => new Map((membershipsQuery.data ?? []).map((membership) => [membership.userId, membership])),
+    [membershipsQuery.data],
+  );
+  const sectorBreakdown = platformStatsQuery.data?.sectorBreakdown ?? [];
+  const latestUsers = (platformStatsQuery.data?.latestUsers ?? []).slice(0, 8);
+  const maxSectorCount = useMemo(
+    () => Math.max(...sectorBreakdown.map((item) => item.count), 1),
+    [sectorBreakdown],
   );
 
   if (!isAuthLoading && !user) {
@@ -107,6 +156,7 @@ const Admin = () => {
   }
 
   const categories = data?.categories ?? [];
+  const selectedUser = (data?.users ?? []).find((item) => item.id === selectedUserId) ?? null;
 
   return (
     <MainLayout>
@@ -127,12 +177,74 @@ const Admin = () => {
           ))}
         </div>
 
+        <section className="grid lg:grid-cols-2 gap-6">
+          <div className="bg-card rounded-lg border border-border p-5">
+            <h2 className="text-3xl font-bold text-foreground mb-8">Usuarios por sector</h2>
+            {platformStatsQuery.isLoading && (
+              <p className="text-sm text-muted-foreground">Cargando sectores...</p>
+            )}
+            <div className="space-y-6">
+              {sectorBreakdown.map((item) => (
+                <div key={item.sector} className="grid grid-cols-[140px_1fr_28px] items-center gap-4">
+                  <span className="text-2xl text-foreground">{item.sector}</span>
+                  <div className="h-6 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-blue-500"
+                      style={{ width: `${Math.max((item.count / maxSectorCount) * 100, 8)}%` }}
+                    />
+                  </div>
+                  <span className="text-2xl text-foreground text-right">{item.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-card rounded-lg border border-border p-5">
+            <h2 className="text-3xl font-bold text-foreground mb-8">Ultimos registros</h2>
+            {platformStatsQuery.isLoading && (
+              <p className="text-sm text-muted-foreground">Cargando usuarios...</p>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="py-3 text-left text-2xl font-semibold text-foreground">Nombre</th>
+                    <th className="py-3 text-left text-2xl font-semibold text-foreground">Empresa</th>
+                    <th className="py-3 text-left text-2xl font-semibold text-foreground">Sector</th>
+                    <th className="py-3 text-left text-2xl font-semibold text-foreground">Rol</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {latestUsers.map((item) => (
+                    <tr key={item.id} className="border-b border-border/70">
+                      <td className="py-4 text-2xl text-foreground">{item.name}</td>
+                      <td className="py-4 text-2xl text-foreground">{item.company}</td>
+                      <td className="py-4 text-2xl text-foreground">{item.sector || 'General'}</td>
+                      <td className="py-4">
+                        <span
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xl font-semibold ${
+                            item.role === 'supplier'
+                              ? 'bg-emerald-100 text-emerald-700'
+                              : 'bg-blue-100 text-blue-700'
+                          }`}
+                        >
+                          {item.role === 'supplier' ? 'Proveedor' : 'Comprador'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
         <section className="grid lg:grid-cols-[1.2fr,0.8fr] gap-6">
           <div className="bg-card rounded-lg border border-border p-5 space-y-4">
             <div>
               <h2 className="text-lg font-semibold text-foreground">Crear contenido</h2>
               <p className="text-sm text-muted-foreground">
-                Aqui puedes publicar videos educativos o posts comunitarios.
+                Aqui solo puedes publicar contenido para el modulo educativo.
               </p>
             </div>
 
@@ -142,37 +254,16 @@ const Admin = () => {
                 onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
                 placeholder="Titulo"
               />
-              <select
-                value={form.type}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    type: event.target.value as 'educational' | 'community',
-                  }))
-                }
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="educational">Video educativo</option>
-                <option value="community">Post comunitario</option>
-              </select>
-              <select
-                value={form.categoryId}
-                onChange={(event) => setForm((current) => ({ ...current, categoryId: event.target.value }))}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              >
-                <option value="">Selecciona categoria</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+              <Input value="Video educativo" disabled className="h-10" />
               <Input
-                value={form.thumbnailUrl}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, thumbnailUrl: event.target.value }))
-                }
-                placeholder="Thumbnail URL (opcional)"
+                type="file"
+                accept="image/*"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  setThumbnailFile(file);
+                  setThumbnailPreview(file ? URL.createObjectURL(file) : '');
+                }}
+                className="h-10"
               />
             </div>
 
@@ -184,10 +275,29 @@ const Admin = () => {
             />
 
             <Input
-              value={form.videoUrl}
-              onChange={(event) => setForm((current) => ({ ...current, videoUrl: event.target.value }))}
-              placeholder="Video URL (obligatorio para contenido educativo)"
+              type="file"
+              accept="video/*"
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setVideoFile(file);
+                setVideoPreview(file ? URL.createObjectURL(file) : '');
+              }}
+              className="h-10"
             />
+
+            {thumbnailPreview && (
+              <div className="rounded-md border border-border p-2">
+                <p className="text-xs text-muted-foreground mb-2">Vista previa imagen</p>
+                <img src={thumbnailPreview} alt="Preview imagen" className="max-h-44 rounded-md object-contain w-full" />
+              </div>
+            )}
+
+            {videoPreview && (
+              <div className="rounded-md border border-border p-2">
+                <p className="text-xs text-muted-foreground mb-2">Vista previa video</p>
+                <video src={videoPreview} controls className="max-h-56 rounded-md w-full" />
+              </div>
+            )}
 
             {createMutation.error && (
               <p className="text-sm text-destructive">
@@ -202,21 +312,23 @@ const Admin = () => {
                 createMutation.isPending ||
                 !form.title.trim() ||
                 !form.description.trim() ||
-                !form.categoryId ||
-                (form.type === 'educational' && !form.videoUrl.trim())
+                !videoFile
               }
-              onClick={() =>
+              onClick={async () => {
+                const defaultCategoryId = categories[0]?.id ?? 'cat-1';
+                const videoUrl = videoFile ? await toDataUrl(videoFile) : undefined;
+                const thumbnailUrl = thumbnailFile ? await toDataUrl(thumbnailFile) : undefined;
                 void createMutation.mutateAsync({
                   title: form.title,
                   description: form.description,
-                  categoryId: form.categoryId,
-                  type: form.type,
-                  videoUrl: form.videoUrl || undefined,
-                  thumbnailUrl: form.thumbnailUrl || undefined,
-                })
-              }
+                  categoryId: defaultCategoryId,
+                  type: 'educational',
+                  videoUrl,
+                  thumbnailUrl,
+                });
+              }}
             >
-              {createMutation.isPending ? 'Guardando...' : 'Crear contenido'}
+              {createMutation.isPending ? 'Guardando...' : 'Crear contenido educativo'}
             </Button>
           </div>
 
@@ -235,7 +347,7 @@ const Admin = () => {
 
         <section className="grid lg:grid-cols-2 gap-6">
           <div className="bg-card rounded-lg border border-border p-5">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Publicaciones y videos</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">Publicaciones de proveedores</h2>
             {isLoading && <p className="text-sm text-muted-foreground">Cargando contenido...</p>}
             {isError && <p className="text-sm text-destructive">No se pudo cargar el panel.</p>}
             <div className="space-y-3">
@@ -265,7 +377,7 @@ const Admin = () => {
           </div>
 
           <div className="bg-card rounded-lg border border-border p-5">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Comentarios</h2>
+            <h2 className="text-lg font-semibold text-foreground mb-4">Comunidad</h2>
             <div className="space-y-3">
               {(data?.comments ?? []).map((comment) => (
                 <div key={comment.id} className="rounded-lg border border-border p-4">
@@ -299,27 +411,82 @@ const Admin = () => {
               <div key={managedUser.id} className="rounded-lg border border-border p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm font-semibold text-foreground">{managedUser.fullName}</p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedUserId((current) => (current === managedUser.id ? null : managedUser.id))
+                      }
+                      className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
+                    >
+                      {managedUser.fullName}
+                    </button>
                     <p className="text-xs text-muted-foreground">
                       {managedUser.company} - {managedUser.role} - {managedUser.status}
                     </p>
+                    {managedUser.role !== 'admin' && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Membresía:{' '}
+                        {(() => {
+                          const membership = membershipsByUserId.get(managedUser.id);
+                          if (!membership) return 'pending';
+                          return `${membership.status}${membership.adminApproved ? ' (autorizada)' : ''}`;
+                        })()}
+                      </p>
+                    )}
                   </div>
                   {managedUser.role !== 'admin' && (
-                    <Button
-                      variant={managedUser.status === 'active' ? 'outline' : 'default'}
-                      size="sm"
-                      disabled={statusMutation.isPending}
-                      onClick={() =>
-                        void statusMutation.mutateAsync({
-                          userId: managedUser.id,
-                          status: managedUser.status === 'active' ? 'disabled' : 'active',
-                        })
-                      }
-                    >
-                      {managedUser.status === 'active' ? 'Desactivar' : 'Activar'}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={managedUser.status === 'active' ? 'outline' : 'default'}
+                        size="sm"
+                        disabled={statusMutation.isPending}
+                        onClick={() =>
+                          void statusMutation.mutateAsync({
+                            userId: managedUser.id,
+                            status: managedUser.status === 'active' ? 'disabled' : 'active',
+                          })
+                        }
+                      >
+                        {managedUser.status === 'active' ? 'Desactivar' : 'Activar'}
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={membershipMutation.isPending}
+                        onClick={() => {
+                          const membership = membershipsByUserId.get(managedUser.id);
+                          const isAuthorized =
+                            membership?.status === 'active' && membership.adminApproved;
+
+                          void membershipMutation.mutateAsync({
+                            userId: managedUser.id,
+                            status: isAuthorized ? 'suspended' : 'active',
+                            adminApproved: !isAuthorized,
+                          });
+                        }}
+                      >
+                        {(() => {
+                          const membership = membershipsByUserId.get(managedUser.id);
+                          const isAuthorized =
+                            membership?.status === 'active' && membership.adminApproved;
+                          return isAuthorized ? 'Suspender membresía' : 'Autorizar membresía';
+                        })()}
+                      </Button>
+                    </div>
                   )}
                 </div>
+
+                {selectedUser?.id === managedUser.id && (
+                  <div className="mt-3 pt-3 border-t border-border text-xs text-muted-foreground grid sm:grid-cols-2 gap-2">
+                    <p><span className="font-medium text-foreground">Email:</span> {selectedUser.email}</p>
+                    <p><span className="font-medium text-foreground">Empresa:</span> {selectedUser.company}</p>
+                    <p><span className="font-medium text-foreground">Cargo:</span> {selectedUser.position}</p>
+                    <p><span className="font-medium text-foreground">Sector:</span> {selectedUser.sector ?? 'General'}</p>
+                    <p><span className="font-medium text-foreground">Ubicación:</span> {selectedUser.location ?? 'Sin ubicación'}</p>
+                    <p><span className="font-medium text-foreground">Puntos:</span> {selectedUser.points}</p>
+                    <p className="sm:col-span-2"><span className="font-medium text-foreground">Descripción:</span> {selectedUser.description ?? 'Sin descripción'}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>

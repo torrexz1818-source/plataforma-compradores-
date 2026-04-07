@@ -29,6 +29,9 @@ const registerSchema = z.object({
   supplierType: z.string().optional(),
   offerCategories: z.array(z.string()).optional(),
   coverage: z.string().optional(),
+  province: z.string().trim().max(100).optional(),
+  district: z.string().trim().max(100).optional(),
+  supplierDescription: z.string().trim().max(500).optional(),
   yearsInMarket: z.string().optional(),
   hasCatalog: z.string().optional(),
 });
@@ -56,6 +59,9 @@ type FormState = {
   supplierType: string;
   offerCategories: string[];
   coverage: string;
+  province: string;
+  district: string;
+  supplierDescription: string;
   yearsInMarket: string;
   hasCatalog: string;
 };
@@ -290,6 +296,9 @@ const Register = () => {
     supplierType: '',
     offerCategories: [],
     coverage: '',
+    province: '',
+    district: '',
+    supplierDescription: '',
     yearsInMarket: '',
     hasCatalog: '',
   });
@@ -340,6 +349,13 @@ const Register = () => {
     setSubmitError('');
     setIsSubmitting(true);
     try {
+      const normalizedCoverage = (form.coverage || '').trim();
+      const normalizedProvince = (form.province || '').trim();
+      const normalizedDistrict = (form.district || '').trim();
+      const supplierLocation = [normalizedCoverage, normalizedProvince, normalizedDistrict]
+        .filter((value) => value.length > 0)
+        .join(' - ');
+
       const response = await register({
         fullName: form.fullName,
         company: form.razonSocial,
@@ -347,7 +363,8 @@ const Register = () => {
         ruc: form.ruc,
         phone: form.phone,
         sector: form.sector || undefined,
-        location: (form.coverage || '').trim() || undefined,
+        location: form.role === 'supplier' ? supplierLocation || undefined : (form.coverage || '').trim() || undefined,
+        description: form.role === 'supplier' ? (form.supplierDescription || '').trim() || undefined : undefined,
         email: form.email,
         password: form.password,
         role: form.role as 'buyer' | 'supplier',
@@ -583,6 +600,22 @@ const Register = () => {
                       ))}
                     </select>
                   </FieldWrap>
+                  <FieldWrap label="Provincia">
+                    <Input
+                      value={form.province}
+                      onChange={(e) => set('province', e.target.value)}
+                      placeholder="Ej. Lima"
+                    />
+                  </FieldWrap>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <FieldWrap label="Distrito">
+                    <Input
+                      value={form.district}
+                      onChange={(e) => set('district', e.target.value)}
+                      placeholder="Ej. Miraflores"
+                    />
+                  </FieldWrap>
                   <FieldWrap label="Tiempo en el mercado">
                     <select
                       value={form.yearsInMarket}
@@ -596,6 +629,14 @@ const Register = () => {
                     </select>
                   </FieldWrap>
                 </div>
+                <FieldWrap label="Descripcion del proveedor">
+                  <textarea
+                    value={form.supplierDescription}
+                    onChange={(e) => set('supplierDescription', e.target.value)}
+                    placeholder="Describe tus productos o servicios principales"
+                    className="w-full min-h-[110px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </FieldWrap>
                 <FieldWrap label="Tiene catalogo digital?">
                   <YNGroup
                     value={form.hasCatalog}

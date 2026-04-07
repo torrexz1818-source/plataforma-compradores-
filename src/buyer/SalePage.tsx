@@ -1,17 +1,26 @@
 import { useMemo, useState } from 'react';
-import { Search, Heart, MessageCircle, Share2, Building2, Send } from 'lucide-react';
+import { Search, Heart, Share2, Building2, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getPosts, sendMessage, togglePostLike } from '@/lib/api';
+import { useNavigate } from 'react-router-dom';
+import { getPosts, togglePostLike } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Input } from '@/components/ui/input';
 
+function cleanUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    return (u.hostname + u.pathname).replace(/^www\./, '').replace(/\/$/, '');
+  } catch {
+    return url;
+  }
+}
+
 const SalePage = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
-  const [contactOpenFor, setContactOpenFor] = useState<string | null>(null);
-  const [messageText, setMessageText] = useState('');
   const [feedback, setFeedback] = useState('');
 
   const { data: posts = [], isLoading, isError } = useQuery({
@@ -37,27 +46,13 @@ const SalePage = () => {
       await queryClient.invalidateQueries({ queryKey: ['sale-feed-posts'] });
       await queryClient.invalidateQueries({ queryKey: ['post-detail', postId] });
     },
-  });
-
-  const contactMutation = useMutation({
-    mutationFn: async (payload: { supplierId: string; postId: string; message: string }) =>
-      sendMessage({
-        supplierId: payload.supplierId,
-        postId: payload.postId,
-        message: payload.message,
-      }),
-    onSuccess: () => {
-      setFeedback('Mensaje enviado correctamente al proveedor.');
-      setMessageText('');
-      setContactOpenFor(null);
-    },
     onError: (error: Error) => {
       setFeedback(error.message);
     },
   });
 
   const handleShare = async (postId: string) => {
-    const url = `${window.location.origin}/post/${postId}`;
+    const url = `${window.location.origin}/buyer/sale/${postId}`;
     try {
       await navigator.clipboard.writeText(url);
       setFeedback('Enlace copiado al portapapeles.');
@@ -69,7 +64,7 @@ const SalePage = () => {
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold text-foreground mb-1">Estel</h1>
+        <h1 className="text-2xl font-bold text-foreground mb-1">Liquidaciones</h1>
         <p className="text-muted-foreground text-sm mb-6">
           Feed de proveedores - descubre novedades y oportunidades.
         </p>
@@ -109,23 +104,73 @@ const SalePage = () => {
                   <Building2 className="w-4 h-4 text-primary-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground">{post.author.company}</p>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/buyer/user/supplier/${post.author.id}`)}
+                    className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
+                  >
+                    {post.author.company}
+                  </button>
                   <p className="text-xs text-muted-foreground">
                     {new Date(post.createdAt).toLocaleString()}
                   </p>
                 </div>
               </div>
-              <p className="text-sm text-foreground leading-relaxed mb-3">{post.description}</p>
+            </div>
+
+            {post.thumbnailUrl && (
+              <div
+                className="w-full max-h-[220px] border-y border-border overflow-hidden bg-[#f8f8f7] flex items-center justify-center"
+              >
+                <img
+                  src={post.thumbnailUrl}
+                  alt={`Imagen de ${post.title}`}
+                  loading="lazy"
+                  className="w-full max-h-[220px] object-contain"
+                />
+              </div>
+            )}
+
+            <div className="p-5">
+              <h3 className="text-base font-semibold text-foreground mb-1">{post.title}</h3>
+              <p
+                className="text-sm text-foreground leading-relaxed mb-3"
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                }}
+              >
+                {post.description}
+              </p>
               {post.videoUrl && (
-                <div className="bg-muted rounded-md h-48 mb-3 flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground">Contenido multimedia del proveedor</span>
-                </div>
+                <a
+                  href={post.videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline inline-block mb-1 max-w-[280px] overflow-hidden text-ellipsis whitespace-nowrap"
+                  title={post.videoUrl}
+                >
+                  {cleanUrl(post.videoUrl)}
+                </a>
               )}
             </div>
+
             <div className="border-t border-border px-5 py-3 flex flex-wrap items-center gap-6">
               <button
                 type="button"
-                onClick={() => likeMutation.mutate(post.id)}
+                onClick={() => {
+                  if (user?.role !== 'buyer') {
+                    setFeedback('Solo compradores pueden dar like en Liquidaciones.');
+                    return;
+                  }
+                  if (post.isLiked) {
+                    setFeedback('Ya diste like a esta publicacion.');
+                    return;
+                  }
+                  likeMutation.mutate(post.id);
+                }}
                 className={`flex items-center gap-1.5 text-sm transition-colors ${
                   post.isLiked
                     ? 'text-primary font-medium'
@@ -136,12 +181,6 @@ const SalePage = () => {
               </button>
               <button
                 type="button"
-                className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <MessageCircle className="w-4 h-4" /> {post.comments}
-              </button>
-              <button
-                type="button"
                 onClick={() => handleShare(post.id)}
                 className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
@@ -149,55 +188,12 @@ const SalePage = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setContactOpenFor(post.id)}
+                onClick={() => navigate(`/buyer/sale/${post.id}`)}
                 className="flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 transition-colors font-medium"
               >
-                <Send className="w-4 h-4" /> Contactar
+                <Info className="w-4 h-4" /> Mas informacion
               </button>
             </div>
-
-            {contactOpenFor === post.id && (
-              <div className="border-t border-border px-5 py-4 bg-muted/20">
-                <p className="text-sm font-medium text-foreground mb-2">
-                  Enviar mensaje a {post.author.company}
-                </p>
-                <textarea
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                  className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-700/20"
-                  placeholder="Escribe tu mensaje..."
-                />
-                <div className="mt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!user?.id || !messageText.trim()) {
-                        return;
-                      }
-                      contactMutation.mutate({
-                        supplierId: post.author.id,
-                        postId: post.id,
-                        message: messageText.trim(),
-                      });
-                    }}
-                    disabled={contactMutation.isPending || !messageText.trim()}
-                    className="rounded-md bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                  >
-                    {contactMutation.isPending ? 'Enviando...' : 'Enviar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setContactOpenFor(null);
-                      setMessageText('');
-                    }}
-                    className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            )}
           </motion.div>
         ))}
       </div>

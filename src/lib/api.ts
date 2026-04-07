@@ -3,13 +3,23 @@ import {
   AuthResponse,
   BuyerDirectoryItem,
   BuyerProfile,
+  SupplierDirectoryItem,
+  SupplierProfileData,
+  SupplierReview,
+  SupplierSector,
   BuyerSector,
   Comment,
+  ConversationMessage,
+  ConversationSummary,
   HomeFeed,
   NotificationItem,
+  MonthlyReport,
   Post,
   PostCategory,
   PostDetailData,
+  PlatformStats,
+  SupplierPublication,
+  SupplierInboxMessage,
   User,
   UserStatus,
 } from '@/types';
@@ -262,6 +272,36 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
   });
 }
 
+export async function getAdminMemberships() {
+  return apiRequest<Array<{
+    userId: string;
+    userRole: 'buyer' | 'supplier' | 'admin';
+    plan: string;
+    status: 'pending' | 'active' | 'expired' | 'suspended';
+    adminApproved: boolean;
+    approvedAt?: string;
+    approvedBy?: string;
+    expiresAt?: string;
+    createdAt: string;
+  }>>('/admin/memberships', { auth: true });
+}
+
+export async function updateMembershipByAdmin(
+  userId: string,
+  payload: {
+    plan?: string;
+    status?: 'pending' | 'active' | 'expired' | 'suspended';
+    adminApproved?: boolean;
+    expiresAt?: string;
+  },
+) {
+  return apiRequest(`/admin/memberships/${userId}`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getNotifications(role: 'buyer' | 'supplier') {
   return apiRequest<NotificationItem[]>(
     `/notifications${buildQuery({ role })}`,
@@ -269,8 +309,36 @@ export async function getNotifications(role: 'buyer' | 'supplier') {
   );
 }
 
+export async function getNotificationsV2(params?: {
+  isRead?: boolean;
+  type?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  return apiRequest<NotificationItem[]>(
+    `/notifications${buildQuery({
+      isRead: typeof params?.isRead === 'boolean' ? String(params.isRead) : undefined,
+      type: params?.type,
+      limit: params?.limit ? String(params.limit) : undefined,
+      offset: params?.offset ? String(params.offset) : undefined,
+    })}`,
+    { auth: true },
+  );
+}
+
+export async function getUnreadNotificationsCount() {
+  return apiRequest<{ count: number }>('/notifications/unread-count', { auth: true });
+}
+
 export async function markNotificationAsRead(id: string) {
   return apiRequest<{ success: true; id: string }>(`/notifications/${id}/read`, {
+    method: 'PATCH',
+    auth: true,
+  });
+}
+
+export async function markAllNotificationsAsRead() {
+  return apiRequest<{ success: true; updated: number }>('/notifications/read-all', {
     method: 'PATCH',
     auth: true,
   });
@@ -323,10 +391,42 @@ export async function getBuyerById(id: string) {
   return apiRequest<BuyerProfile>(`/buyers/${id}`, { auth: true });
 }
 
+export async function getSupplierSectors() {
+  return apiRequest<SupplierSector[]>('/supplier-sectors', { auth: true });
+}
+
+export async function getSuppliersBySector(sector: string) {
+  return apiRequest<SupplierDirectoryItem[]>(
+    `/suppliers${buildQuery({ sector })}`,
+    { auth: true },
+  );
+}
+
+export async function getSupplierById(id: string) {
+  return apiRequest<SupplierProfileData>(`/suppliers/${id}`, { auth: true });
+}
+
+export async function getSupplierReviews(id: string) {
+  const data = await apiRequest<{ items: SupplierReview[] }>(`/suppliers/${id}/reviews`, { auth: true });
+  return data.items;
+}
+
+export async function createSupplierReview(
+  supplierId: string,
+  payload: { rating: number; comment: string },
+) {
+  return apiRequest<{ review: SupplierReview }>(`/suppliers/${supplierId}/reviews`, {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function sendMessage(payload: {
   supplierId: string;
   buyerId?: string;
   message: string;
+  publicationId?: string;
   postId?: string;
 }) {
   return apiRequest<{ id: string; createdAt: string }>('/messages', {
@@ -340,7 +440,125 @@ export async function sendSupplierMessage(payload: {
   supplierId: string;
   buyerId: string;
   message: string;
+  publicationId?: string;
   postId?: string;
 }) {
   return sendMessage(payload);
+}
+
+export async function getPlatformStats() {
+  return apiRequest<PlatformStats>('/stats', { auth: true });
+}
+
+export async function getMonthlyReport(month?: string) {
+  return apiRequest<MonthlyReport>(`/reportes${buildQuery({ month })}`, { auth: true });
+}
+
+export async function getRecommendedSuppliers(params?: { buyerId?: string; limit?: number }) {
+  return apiRequest<Array<{
+    id: string;
+    name: string;
+    company: string;
+    sector: string;
+    averageRating: number;
+    matchReasons: string[];
+    score: number;
+  }>>(
+    `/suppliers/recommended${buildQuery({
+      buyerId: params?.buyerId,
+      limit: params?.limit ? String(params.limit) : undefined,
+    })}`,
+    { auth: true },
+  );
+}
+
+export async function getTopEducationalContent(month?: string, limit = 3) {
+  return apiRequest<Array<{ id: string; title: string; description: string; viewCount?: number; views?: number }>>(
+    `/educational-content/top${buildQuery({ month, limit: String(limit) })}`,
+    { auth: true },
+  );
+}
+
+export async function getRecommendedEducationalContent(params?: { buyerId?: string; limit?: number }) {
+  return apiRequest<Array<{ id: string; title: string; description: string; score: number }>>(
+    `/educational-content/recommended${buildQuery({
+      buyerId: params?.buyerId,
+      limit: params?.limit ? String(params.limit) : undefined,
+    })}`,
+    { auth: true },
+  );
+}
+
+export async function registerEducationalContentView(contentId: string) {
+  return apiRequest<{ success: true; contentId: string }>(`/educational-content/${contentId}/view`, {
+    method: 'POST',
+    auth: true,
+  });
+}
+
+export async function getSupplierInboxMessages() {
+  return apiRequest<SupplierInboxMessage[]>('/messages/inbox', { auth: true });
+}
+
+export async function getConversations() {
+  return apiRequest<ConversationSummary[]>('/conversations', { auth: true });
+}
+
+export async function getConversationByPair(buyerId: string, supplierId: string) {
+  return apiRequest<ConversationSummary | null>(
+    `/conversations${buildQuery({ buyerId, supplierId })}`,
+    { auth: true },
+  );
+}
+
+export async function createConversation(payload: { toUserId: string; publicationId?: string | null }) {
+  return apiRequest<ConversationSummary>('/conversations', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getConversationMessages(conversationId: string) {
+  return apiRequest<ConversationMessage[]>(`/conversations/${conversationId}/messages`, {
+    auth: true,
+  });
+}
+
+export async function sendConversationMessage(conversationId: string, message: string) {
+  return apiRequest<{ id: string; conversationId: string; createdAt: string }>(
+    `/conversations/${conversationId}/messages`,
+    {
+      method: 'POST',
+      auth: true,
+      body: JSON.stringify({ message }),
+    },
+  );
+}
+
+export async function getSupplierPublications() {
+  const data = await apiRequest<{ items: SupplierPublication[] }>(
+    '/publications?supplierId=me',
+    { auth: true },
+  );
+  return data.items;
+}
+
+export async function getSupplierPublicationById(id: string) {
+  const data = await apiRequest<{ publication: SupplierPublication }>(`/publications/${id}`, {
+    auth: true,
+  });
+  return data.publication;
+}
+
+export async function updateSupplierPublication(
+  id: string,
+  payload: { title?: string; content?: string; image?: string; url?: string },
+) {
+  const data = await apiRequest<{ publication: SupplierPublication }>(`/publications/${id}`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+  return data.publication;
 }

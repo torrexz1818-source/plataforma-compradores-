@@ -1,101 +1,410 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ImagePlus, Send } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { createPost, getPosts } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { createPost, getSupplierPublications, sendMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { PublicationMessage } from '@/types';
+import { useHighlight } from '@/hooks/useHighlight';
+
+async function toDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen seleccionada.'));
+    reader.readAsDataURL(file);
+  });
+}
 
 const SupplierPosts = () => {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [submitError, setSubmitError] = useState('');
+  const { user } = useAuth();
+  const highlightedId = searchParams.get('highlight');
+  const expandMessages = searchParams.get('expand') === 'messages';
+  useHighlight(highlightedId);
 
-  const postsQuery = useQuery({
-    queryKey: ['supplier-posts', user?.id],
-    queryFn: () => getPosts({ type: 'community' }),
+  const [titulo, setTitulo] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [url, setUrl] = useState('');
+  const [imagen, setImagen] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [imagePayload, setImagePayload] = useState<string | undefined>(undefined);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [published, setPublished] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [expandedByPublication, setExpandedByPublication] = useState<Record<string, boolean>>({});
+
+  const publicationsQuery = useQuery({
+    queryKey: ['supplier-publications', user?.id],
+    queryFn: getSupplierPublications,
+    enabled: Boolean(user?.id),
   });
-
-  const myPosts = useMemo(
-    () => (postsQuery.data ?? []).filter((post) => post.author.id === user?.id),
-    [postsQuery.data, user?.id],
-  );
 
   const createMutation = useMutation({
     mutationFn: async () =>
       createPost({
-        title: title.trim(),
-        description: description.trim(),
+        title: titulo.trim() || 'Publicacion del proveedor',
+        description: descripcion.trim() || 'Sin descripcion.',
         categoryId: 'cat-3',
         type: 'community',
+        videoUrl: url.trim() || undefined,
+        thumbnailUrl: imagePayload,
       }),
     onSuccess: async () => {
-      setTitle('');
-      setDescription('');
-      setSubmitError('');
-      await queryClient.invalidateQueries({ queryKey: ['supplier-posts', user?.id] });
+      setPublished(true);
+      setFeedback('');
+      setTitulo('');
+      setDescripcion('');
+      setUrl('');
+      setImagen(null);
+      setPreview(null);
+      setImagePayload(undefined);
+      await queryClient.invalidateQueries({ queryKey: ['sale-feed-posts'] });
+      await queryClient.invalidateQueries({ queryKey: ['community-posts'] });
+      await queryClient.invalidateQueries({ queryKey: ['supplier-publications', user?.id] });
+      window.setTimeout(() => setPublished(false), 3000);
     },
     onError: (error: Error) => {
-      setSubmitError(error.message);
+      setFeedback(error.message);
     },
   });
 
-  const onSubmit = (event: FormEvent) => {
-    event.preventDefault();
-    if (!title.trim() || !description.trim()) {
+  const replyMutation = useMutation({
+    mutationFn: async (message: PublicationMessage) => {
+      if (!user?.id) {
+        throw new Error('Sesion no disponible');
+      }
+
+      return sendMessage({
+        supplierId: user.id,
+        buyerId: message.buyerId,
+        publicationId: message.publicationId,
+        message: replyText.trim(),
+      });
+    },
+    onSuccess: async () => {
+      setReplyingTo(null);
+      setReplyText('');
+      setFeedback('Respuesta enviada correctamente.');
+      await queryClient.invalidateQueries({ queryKey: ['supplier-publications', user?.id] });
+    },
+    onError: (error: Error) => {
+      setFeedback(error.message);
+    },
+  });
+
+  const handleImagen = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
       return;
     }
+
+    try {
+      const dataUrl = await toDataUrl(file);
+      setImagen(file);
+      setPreview(dataUrl);
+      setImagePayload(dataUrl);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : 'No se pudo cargar la imagen.');
+    }
+  };
+
+  const handlePublicar = () => {
+    if (!titulo.trim() && !descripcion.trim()) {
+      return;
+    }
+
     createMutation.mutate();
   };
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Publicaciones del proveedor</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Crea actualizaciones para que los compradores conozcan tus novedades.
-        </p>
-      </div>
+  const handleResponder = (message: PublicationMessage) => {
+    if (!replyText.trim()) {
+      return;
+    }
 
-      <form onSubmit={onSubmit} className="bg-card border border-border rounded-xl p-5 space-y-3">
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
+    replyMutation.mutate(message);
+  };
+
+  const toggleExpanded = (publicationId: string) => {
+    setExpandedByPublication((current) => ({
+      ...current,
+      [publicationId]: !current[publicationId],
+    }));
+  };
+
+  const publications = publicationsQuery.data ?? [];
+
+  return (
+    <div className="max-w-3xl mx-auto py-6 px-4">
+      <h1 className="text-xl font-bold text-foreground mb-1">Publicaciones del proveedor</h1>
+      <p className="text-sm text-muted-foreground mb-6">
+        Crea actualizaciones y revisa mensajes privados por cada publicación.
+      </p>
+
+      <div className="bg-card border border-border rounded-xl p-5 mb-8">
+        <Input
+          value={titulo}
+          onChange={(event) => setTitulo(event.target.value)}
           placeholder="Titulo de la publicacion"
-          className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+          className="mb-3"
         />
-        <textarea
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
+
+        <Textarea
+          value={descripcion}
+          onChange={(event) => setDescripcion(event.target.value)}
           placeholder="Describe tu promocion, servicio o novedad"
-          className="w-full min-h-[110px] rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20"
+          rows={4}
+          className="resize-none mb-3"
         />
-        <button
-          type="submit"
-          disabled={createMutation.isPending}
-          className="inline-flex items-center rounded-md bg-emerald-700 hover:bg-emerald-800 text-white px-4 py-2 text-sm font-semibold"
+
+        <Input
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          placeholder="URL del producto o sitio (opcional)"
+          className="mb-3"
+        />
+
+        {preview && (
+          <div className="mb-3 rounded-lg overflow-hidden border border-border">
+            <img src={preview} alt="Preview" className="w-full max-h-48 object-cover" />
+          </div>
+        )}
+
+        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors mb-4 w-fit">
+          <ImagePlus className="w-4 h-4" />
+          {imagen ? imagen.name : 'Agrega imagen'}
+          <input type="file" accept="image/*" className="hidden" onChange={handleImagen} />
+        </label>
+
+        {published && <p className="text-sm text-green-600 mb-3">Publicacion publicada exitosamente.</p>}
+        {feedback && !published && <p className="text-sm text-emerald-700 mb-3">{feedback}</p>}
+
+        <Button
+          onClick={handlePublicar}
+          disabled={createMutation.isPending || (!titulo.trim() && !descripcion.trim())}
+          className="bg-primary text-primary-foreground"
+          size="sm"
         >
           {createMutation.isPending ? 'Publicando...' : 'Publicar'}
-        </button>
-        {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-      </form>
+        </Button>
+      </div>
 
-      {postsQuery.isLoading && (
-        <p className="text-sm text-muted-foreground">Cargando publicaciones...</p>
+      <h2 className="text-sm font-semibold text-foreground mb-4 tracking-wide uppercase">
+        Publicaciones anteriores
+      </h2>
+
+      {publicationsQuery.isLoading && (
+        <p className="text-sm text-muted-foreground mb-4">Cargando publicaciones...</p>
       )}
 
-      <div className="space-y-3">
-        {myPosts.map((post) => (
-          <article key={post.id} className="bg-card border border-border rounded-xl p-5">
-            <h2 className="text-base font-semibold text-foreground">{post.title}</h2>
-            <p className="text-sm text-muted-foreground mt-1">{post.description}</p>
-            <p className="text-xs text-muted-foreground mt-2">
-              {new Date(post.createdAt).toLocaleString()}
-            </p>
-          </article>
-        ))}
-        {!postsQuery.isLoading && !myPosts.length && (
-          <p className="text-sm text-muted-foreground">
-            Aún no tienes publicaciones creadas.
+      <div className="flex flex-col gap-5">
+        {publications.map((publication) => {
+          const messageCount = publication.messages.length;
+          const isExpanded = expandMessages && highlightedId === publication.id
+            ? true
+            : Boolean(expandedByPublication[publication.id]);
+          const initialMessages =
+            messageCount >= 3 && !isExpanded
+              ? publication.messages.slice(0, 2)
+              : publication.messages;
+          const hiddenMessages =
+            messageCount >= 3 ? publication.messages.slice(2) : [];
+
+          return (
+            <article id={`item-${publication.id}`} key={publication.id} className="bg-card border border-border rounded-xl p-5">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-base font-semibold text-foreground">{publication.title}</p>
+                  <p className="text-sm text-muted-foreground mt-1">{publication.content}</p>
+                  {publication.url && (
+                    <a
+                      href={publication.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-primary hover:underline mt-2 inline-block"
+                    >
+                      Abrir enlace del proveedor
+                    </a>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate(`/publicaciones/edit/${publication.id}`)}
+                >
+                  Editar
+                </Button>
+              </div>
+
+              {publication.image && (
+                <div className="mb-4 rounded-lg overflow-hidden border border-border">
+                  <img
+                    src={publication.image}
+                    alt={`Imagen de ${publication.title}`}
+                    className="w-full max-h-56 object-cover"
+                  />
+                </div>
+              )}
+
+              {messageCount > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                    Mensajes
+                  </p>
+
+                  <div className="flex flex-col gap-3">
+                    {initialMessages.map((message) => (
+                      <div key={message.id} className="rounded-lg border border-border p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-foreground">
+                              {message.buyerName}
+                            </p>
+                            <p className="text-xs text-muted-foreground mb-1">
+                              {message.buyerCompany}
+                            </p>
+                            <p className="text-sm text-foreground">{message.content}</p>
+
+                            {message.reply && (
+                              <div className="mt-2 pl-3 border-l-2 border-primary/30">
+                                <p className="text-xs text-muted-foreground">Tu respuesta:</p>
+                                <p className="text-sm text-foreground">{message.reply}</p>
+                              </div>
+                            )}
+
+                            {replyingTo === message.id && (
+                              <div className="mt-3 flex gap-2">
+                                <Input
+                                  value={replyText}
+                                  onChange={(event) => setReplyText(event.target.value)}
+                                  placeholder="Escribe tu respuesta..."
+                                  className="text-sm h-8"
+                                  onKeyDown={(event) => {
+                                    if (event.key === 'Enter') {
+                                      handleResponder(message);
+                                    }
+                                  }}
+                                />
+                                <Button
+                                  size="sm"
+                                  className="h-8 px-3"
+                                  onClick={() => handleResponder(message)}
+                                  disabled={replyMutation.isPending || !replyText.trim()}
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+
+                          {!message.reply && (
+                            <button
+                              onClick={() => setReplyingTo(replyingTo === message.id ? null : message.id)}
+                              className="text-sm text-primary hover:underline flex-shrink-0"
+                            >
+                              {replyingTo === message.id ? 'Cancelar' : 'Responder'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    <AnimatePresence initial={false}>
+                      {messageCount >= 3 && isExpanded && (
+                        <motion.div
+                          key={`expanded-${publication.id}`}
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.25, ease: 'easeInOut' }}
+                          className="flex flex-col gap-3 overflow-hidden"
+                        >
+                          {hiddenMessages.map((message) => (
+                            <div key={message.id} className="rounded-lg border border-border p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {message.buyerName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mb-1">
+                                    {message.buyerCompany}
+                                  </p>
+                                  <p className="text-sm text-foreground">{message.content}</p>
+
+                                  {message.reply && (
+                                    <div className="mt-2 pl-3 border-l-2 border-primary/30">
+                                      <p className="text-xs text-muted-foreground">Tu respuesta:</p>
+                                      <p className="text-sm text-foreground">{message.reply}</p>
+                                    </div>
+                                  )}
+
+                                  {replyingTo === message.id && (
+                                    <div className="mt-3 flex gap-2">
+                                      <Input
+                                        value={replyText}
+                                        onChange={(event) => setReplyText(event.target.value)}
+                                        placeholder="Escribe tu respuesta..."
+                                        className="text-sm h-8"
+                                        onKeyDown={(event) => {
+                                          if (event.key === 'Enter') {
+                                            handleResponder(message);
+                                          }
+                                        }}
+                                      />
+                                      <Button
+                                        size="sm"
+                                        className="h-8 px-3"
+                                        onClick={() => handleResponder(message)}
+                                        disabled={replyMutation.isPending || !replyText.trim()}
+                                      >
+                                        <Send className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {!message.reply && (
+                                  <button
+                                    onClick={() => setReplyingTo(replyingTo === message.id ? null : message.id)}
+                                    className="text-sm text-primary hover:underline flex-shrink-0"
+                                  >
+                                    {replyingTo === message.id ? 'Cancelar' : 'Responder'}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {messageCount >= 3 && (
+                    <button
+                      onClick={() => toggleExpanded(publication.id)}
+                      className="mt-3 text-sm text-primary hover:underline"
+                    >
+                      {isExpanded
+                        ? 'Mostrar menos'
+                        : `Ver todos los mensajes (${messageCount})`}
+                    </button>
+                  )}
+                </div>
+              )}
+            </article>
+          );
+        })}
+
+        {!publicationsQuery.isLoading && publications.length === 0 && (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            Aun no tienes publicaciones registradas.
           </p>
         )}
       </div>

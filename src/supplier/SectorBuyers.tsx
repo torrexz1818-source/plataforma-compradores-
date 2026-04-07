@@ -1,9 +1,10 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { getBuyerById, getBuyersBySector, sendSupplierMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useHighlight } from '@/hooks/useHighlight';
 
 const FAVORITES_KEY = 'supplier_favorite_buyers';
 
@@ -27,8 +28,11 @@ function writeFavorites(ids: string[]) {
 
 const SectorBuyers = () => {
   const { sector: sectorParam = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const sector = decodeURIComponent(sectorParam);
   const { user } = useAuth();
+  const highlightedId = searchParams.get('highlight');
+  useHighlight(highlightedId);
 
   const [selectedBuyerId, setSelectedBuyerId] = useState<string | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
@@ -120,6 +124,7 @@ const SectorBuyers = () => {
           const isFavorite = favoriteIds.includes(buyer.id);
           return (
             <article
+              id={`item-${buyer.id}`}
               key={buyer.id}
               className="bg-card border border-border rounded-xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4"
             >
