@@ -13,6 +13,7 @@ import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { AuthenticatedGuard } from '../../common/auth/authenticated.guard';
 import { PostsService } from '../posts/posts.service';
 import { UserStatus } from '../users/domain/user-status.enum';
+import { MembershipStatus } from '../users/users.service';
 import { UsersService } from '../users/users.service';
 
 type CreateManagedPostBody = {
@@ -26,6 +27,13 @@ type CreateManagedPostBody = {
 
 type UpdateUserStatusBody = {
   status: UserStatus;
+};
+
+type UpdateMembershipBody = {
+  plan?: string;
+  status?: MembershipStatus;
+  adminApproved?: boolean;
+  expiresAt?: string;
 };
 
 @Controller('admin')
@@ -75,5 +83,26 @@ export class AdminController {
     @CurrentUser() user: { sub: string },
   ) {
     return this.usersService.updateStatus(id, body.status, user.sub);
+  }
+
+  @Get('memberships')
+  listMemberships() {
+    return this.usersService.listMemberships();
+  }
+
+  @Patch('memberships/:userId')
+  updateMembership(
+    @Param('userId') userId: string,
+    @Body() body: UpdateMembershipBody,
+    @CurrentUser() user: { sub: string },
+  ) {
+    return this.usersService.upsertMembershipByAdmin({
+      userId,
+      plan: body.plan,
+      status: body.status,
+      adminApproved: body.adminApproved,
+      expiresAt: body.expiresAt,
+      approvedBy: user.sub,
+    });
   }
 }

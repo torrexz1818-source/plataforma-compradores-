@@ -14,10 +14,12 @@ import { DatabaseService } from '../database/database.service';
 import { LoginRequestDto } from './dto/login.request.dto';
 import { RegisterRequestDto } from './dto/register.request.dto';
 import { EmailService } from './email.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
 import { User } from '../users/domain/user.model';
 import { UserRole } from '../users/domain/user-role.enum';
 import { UserStatus } from '../users/domain/user-status.enum';
+import { MembershipRecord } from '../users/users.service';
 
 type SafeUser = Pick<
   User,
@@ -35,6 +37,12 @@ type SafeUser = Pick<
   | 'avatarUrl'
 > & {
   createdAt: string;
+  hasSensitiveAccess?: boolean;
+  membership?: Omit<MembershipRecord, 'approvedAt' | 'expiresAt' | 'createdAt'> & {
+    approvedAt?: string;
+    expiresAt?: string;
+    createdAt: string;
+  } | null;
 };
 
 type AuthResponse = {
@@ -76,6 +84,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly databaseService: DatabaseService,
     private readonly emailService: EmailService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async register(data: RegisterRequestDto): Promise<AuthResponse> {
@@ -101,9 +110,31 @@ export class AuthService {
       role: data.role === 'supplier' ? UserRole.SUPPLIER : UserRole.BUYER,
     });
 
+    const isBuyer = user.role === UserRole.BUYER;
+    const targetRole = isBuyer ? UserRole.SUPPLIER : UserRole.BUYER;
+    const targetUserIds = await this.usersService.listActiveUserIdsByRole(targetRole);
+
+    this.notificationsService.createForUsers({
+      icon: 'Building2',
+      type: isBuyer ? 'NEW_BUYER' : 'NEW_SUPPLIER',
+      title: isBuyer
+        ? `Nuevo comprador: ${user.fullName} de ${user.company}`
+        : `Nuevo proveedor disponible: ${user.company} en ${user.sector ?? 'General'}`,
+      body: `${user.sector ?? 'General'} · ${user.location ?? 'Sin ubicacion'}`,
+      entityType: 'user',
+      entityId: user.id,
+      fromUserId: user.id,
+      role: targetRole,
+      userIds: targetUserIds,
+      url: isBuyer
+        ? `/directorio-compradores?highlight=${user.id}`
+        : `/directorio-proveedores?highlight=${user.id}`,
+      time: 'Ahora',
+    });
+
     return {
       accessToken: await this.signToken(user),
-      user: this.toSafeUser(user),
+      user: await this.toSafeUser(user),
     };
   }
 
@@ -127,7 +158,7 @@ export class AuthService {
 
     return {
       accessToken: await this.signToken(user),
-      user: this.toSafeUser(user),
+      user: await this.toSafeUser(user),
     };
   }
 
@@ -142,7 +173,7 @@ export class AuthService {
       throw new ForbiddenException('User is disabled');
     }
 
-    return { user: this.toSafeUser(user) };
+    return { user: await this.toSafeUser(user) };
   }
 
   async requestPasswordReset(email: string, ipAddress: string) {
@@ -358,7 +389,10 @@ export class AuthService {
     );
   }
 
-  private toSafeUser(user: User): SafeUser {
+  private async toSafeUser(user: User): Promise<SafeUser> {
+    const membership = await this.usersService.getMembershipByUserId(user.id);
+    const hasSensitiveAccess = await this.usersService.hasSensitiveAccess(user.id);
+
     return {
       id: user.id,
       email: user.email,
@@ -373,6 +407,20 @@ export class AuthService {
       points: user.points,
       avatarUrl: user.avatarUrl,
       createdAt: user.createdAt.toISOString(),
+      hasSensitiveAccess,
+      membership: membership
+        ? {
+            userId: membership.userId,
+            userRole: membership.userRole,
+            plan: membership.plan,
+            status: membership.status,
+            adminApproved: membership.adminApproved,
+            approvedBy: membership.approvedBy,
+            approvedAt: membership.approvedAt?.toISOString(),
+            expiresAt: membership.expiresAt?.toISOString(),
+            createdAt: membership.createdAt.toISOString(),
+          }
+        : null,
     };
   }
 

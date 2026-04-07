@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthenticatedGuard } from '../../common/auth/authenticated.guard';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { UsersModule } from '../users/users.module';
+import { ConversationsController } from './conversations.controller';
 import { MessagesController } from './messages.controller';
 import { MessagesService } from './messages.service';
 
@@ -14,7 +15,7 @@ import { MessagesService } from './messages.service';
       secret: process.env.JWT_SECRET ?? 'dev-supplyconnect-secret',
     }),
   ],
-  controllers: [MessagesController],
+  controllers: [MessagesController, ConversationsController],
   providers: [MessagesService, AuthenticatedGuard],
   exports: [MessagesService],
 })

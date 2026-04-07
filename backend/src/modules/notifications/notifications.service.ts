@@ -7,132 +7,139 @@ export type NotificationIcon =
   | 'FileText'
   | 'Star';
 
+export type NotificationType =
+  | 'LIKE_PUBLICATION'
+  | 'COMMENT_PUBLICATION'
+  | 'NEW_MESSAGE'
+  | 'NEW_CONVERSATION'
+  | 'MESSAGE_REPLY'
+  | 'NEW_BUYER'
+  | 'NEW_SUPPLIER'
+  | 'PROFILE_VIEW'
+  | 'NEW_EDUCATIONAL_CONTENT'
+  | 'REVIEW_RECEIVED'
+  | 'MONTHLY_REPORT'
+  | 'SYSTEM';
+
+export type NotificationEntityType =
+  | 'publication'
+  | 'message'
+  | 'user'
+  | 'report'
+  | 'content'
+  | 'review';
+
 type NotificationRole = UserRole.BUYER | UserRole.SUPPLIER;
 
 export type NotificationRecord = {
   id: string;
-  icon: NotificationIcon;
+  userId: string;
+  type: NotificationType;
   title: string;
-  description: string;
+  body: string;
+  entityType?: NotificationEntityType;
+  entityId?: string;
+  fromUserId?: string;
+  icon: NotificationIcon;
   time: string;
-  read: boolean;
+  isRead: boolean;
   role: NotificationRole;
-  userId?: string;
+  url?: string;
+  createdAt: string;
 };
 
-type PublicNotification = Omit<NotificationRecord, 'role' | 'userId'>;
+type PublicNotification = Omit<NotificationRecord, 'role'>;
 
-type CreateNotificationData = Pick<
-  NotificationRecord,
-  'icon' | 'title' | 'description' | 'role'
-> & {
+type CreateNotificationData = {
+  userId: string;
+  type?: NotificationType;
+  title: string;
+  body?: string;
+  description?: string;
+  entityType?: NotificationEntityType;
+  entityId?: string;
+  fromUserId?: string;
+  icon: NotificationIcon;
+  role: NotificationRole;
   time?: string;
-  userId?: string;
+  url?: string;
+};
+
+type CreateNotificationsForUsersData = Omit<CreateNotificationData, 'userId'> & {
+  userIds: string[];
 };
 
 @Injectable()
 export class NotificationsService {
-  private notifications: NotificationRecord[] = [
-    {
-      id: '1',
-      icon: 'Building2',
-      title: 'Nuevo proveedor recomendado',
-      description: 'TechParts Corp coincide con tu perfil de compras.',
-      time: 'Hace 10 min',
-      read: false,
-      role: UserRole.BUYER,
-    },
-    {
-      id: '2',
-      icon: 'MessageCircle',
-      title: 'Respuesta a tu comentario',
-      description:
-        'Maria Lopez respondio en "Mejores practicas de negociacion".',
-      time: 'Hace 1h',
-      read: false,
-      role: UserRole.BUYER,
-    },
-    {
-      id: '3',
-      icon: 'FileText',
-      title: 'Nueva publicacion de proveedor',
-      description:
-        'LogiExpress SA publico una actualizacion sobre sus servicios.',
-      time: 'Hace 3h',
-      read: true,
-      role: UserRole.BUYER,
-    },
-    {
-      id: '4',
-      icon: 'Star',
-      title: 'Resena publicada',
-      description: 'Tu resena de MetalWorks Inc ha sido publicada.',
-      time: 'Hace 1d',
-      read: true,
-      role: UserRole.BUYER,
-    },
-    {
-      id: '5',
-      icon: 'Star',
-      title: 'Nueva interaccion',
-      description: 'Un comprador visito tu perfil y guardo tu empresa.',
-      time: 'Hace 15 min',
-      read: false,
-      role: UserRole.SUPPLIER,
-    },
-    {
-      id: '6',
-      icon: 'MessageCircle',
-      title: 'Nuevo comentario',
-      description: 'Carlos Perez comento en tu publicacion.',
-      time: 'Hace 2h',
-      read: false,
-      role: UserRole.SUPPLIER,
-    },
-    {
-      id: '7',
-      icon: 'Building2',
-      title: 'Lead potencial',
-      description:
-        'Una empresa de manufactura mostro interes en tus servicios.',
-      time: 'Hace 5h',
-      read: true,
-      role: UserRole.SUPPLIER,
-    },
-    {
-      id: '8',
-      icon: 'FileText',
-      title: 'Tu publicacion fue compartida',
-      description: 'Tu post sobre "Logistica verde" fue compartido 12 veces.',
-      time: 'Hace 1d',
-      read: true,
-      role: UserRole.SUPPLIER,
-    },
-  ];
+  private notifications: NotificationRecord[] = [];
 
   listByRole(role: NotificationRole, userId?: string): PublicNotification[] {
+    if (!userId) {
+      return [];
+    }
+
     return this.notifications
       .filter(
         (notification) =>
           notification.role === role &&
-          (!notification.userId || (userId && notification.userId === userId)),
+          notification.userId === userId,
       )
-      .map(({ role: _role, userId: _userId, ...notification }) => notification);
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .map(({ role: _role, ...notification }) => notification);
   }
 
-  markAsRead(id: string): { success: true; id: string } {
-    const notification = this.notifications.find((item) => item.id === id);
+  listByUser(
+    userId: string,
+    filters?: { isRead?: boolean; type?: NotificationType; limit?: number; offset?: number },
+  ): PublicNotification[] {
+    const base = this.notifications
+      .filter((notification) => notification.userId === userId)
+      .filter((notification) =>
+        typeof filters?.isRead === 'boolean' ? notification.isRead === filters.isRead : true,
+      )
+      .filter((notification) => (filters?.type ? notification.type === filters.type : true))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const offset = Math.max(0, filters?.offset ?? 0);
+    const limit = Math.max(1, filters?.limit ?? 100);
+
+    return base
+      .slice(offset, offset + limit)
+      .map(({ role: _role, ...notification }) => notification);
+  }
+
+  unreadCount(userId: string): { count: number } {
+    const count = this.notifications.filter(
+      (notification) => notification.userId === userId && !notification.isRead,
+    ).length;
+    return { count };
+  }
+
+  markAsRead(id: string, userId: string): { success: true; id: string } {
+    const notification = this.notifications.find((item) => item.id === id && item.userId === userId);
 
     if (!notification) {
       throw new NotFoundException('Notificacion no encontrada.');
     }
 
-    notification.read = true;
+    notification.isRead = true;
     return { success: true, id };
   }
 
-  remove(id: string): { success: true; id: string } {
-    const index = this.notifications.findIndex((item) => item.id === id);
+  markAllAsRead(userId: string): { success: true; updated: number } {
+    let updated = 0;
+    this.notifications.forEach((notification) => {
+      if (notification.userId === userId && !notification.isRead) {
+        notification.isRead = true;
+        updated += 1;
+      }
+    });
+
+    return { success: true, updated };
+  }
+
+  remove(id: string, userId: string): { success: true; id: string } {
+    const index = this.notifications.findIndex((item) => item.id === id && item.userId === userId);
 
     if (index === -1) {
       throw new NotFoundException('Notificacion no encontrada.');
@@ -143,18 +150,59 @@ export class NotificationsService {
   }
 
   create(data: CreateNotificationData): NotificationRecord {
+    const createdAt = new Date().toISOString();
     const notification: NotificationRecord = {
-      id: Date.now().toString(),
-      icon: data.icon,
+      id: crypto.randomUUID(),
+      userId: data.userId,
+      type: data.type ?? 'SYSTEM',
       title: data.title,
-      description: data.description,
+      body: data.body ?? data.description ?? '',
+      entityType: data.entityType,
+      entityId: data.entityId,
+      fromUserId: data.fromUserId,
+      icon: data.icon,
       time: data.time ?? 'Ahora',
       role: data.role,
-      userId: data.userId,
-      read: false,
+      url: data.url,
+      isRead: false,
+      createdAt,
     };
 
     this.notifications.push(notification);
     return notification;
+  }
+
+  createForUsers(data: CreateNotificationsForUsersData): NotificationRecord[] {
+    const userIds = Array.from(new Set(data.userIds.filter(Boolean)));
+
+    if (!userIds.length) {
+      return [];
+    }
+
+    return userIds.map((userId) =>
+      this.create({
+        userId,
+        type: data.type,
+        title: data.title,
+        body: data.body,
+        description: data.description,
+        entityType: data.entityType,
+        entityId: data.entityId,
+        fromUserId: data.fromUserId,
+        icon: data.icon,
+        role: data.role,
+        time: data.time,
+        url: data.url,
+      }),
+    );
+  }
+
+  exists(filters: { userId: string; type: NotificationType; entityId?: string }): boolean {
+    return this.notifications.some(
+      (notification) =>
+        notification.userId === filters.userId &&
+        notification.type === filters.type &&
+        (filters.entityId ? notification.entityId === filters.entityId : true),
+    );
   }
 }

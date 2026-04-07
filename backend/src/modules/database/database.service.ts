@@ -91,11 +91,59 @@ type PasswordResetRateLimitDocument = {
 
 type MessageDocument = {
   id: string;
+  conversationId?: string;
   senderId: string;
   supplierId: string;
   buyerId?: string;
+  publicationId?: string;
   postId?: string;
   message: string;
+  createdAt: Date;
+};
+
+type ConversationDocument = {
+  id: string;
+  buyerId: string;
+  supplierId: string;
+  publicationId?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type SupplierReviewDocument = {
+  id: string;
+  supplierId: string;
+  buyerId: string;
+  rating: number;
+  comment: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type EducationalContentViewDocument = {
+  id: string;
+  contentId: string;
+  userId: string;
+  viewedAt: Date;
+  month: string;
+};
+
+type ProfileViewNotificationDocument = {
+  id: string;
+  viewerId: string;
+  targetUserId: string;
+  notifiedAt: Date;
+};
+
+type MembershipDocument = {
+  userId: string;
+  userRole: UserRole;
+  plan: string;
+  status: 'pending' | 'active' | 'expired' | 'suspended';
+  adminApproved: boolean;
+  approvedAt?: Date;
+  approvedBy?: string;
+  expiresAt?: Date;
   createdAt: Date;
 };
 
@@ -140,11 +188,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       'passwordResetRateLimits',
     );
     const messages = this.collection<MessageDocument>('messages');
-
-    const adminCount = await users.countDocuments({ role: UserRole.ADMIN });
-    if (adminCount > 1) {
-      throw new Error('Only one administrator is allowed for this application');
-    }
+    const conversations = this.collection<ConversationDocument>('conversations');
+    const supplierReviews = this.collection<SupplierReviewDocument>('supplierReviews');
+    const educationalContentViews =
+      this.collection<EducationalContentViewDocument>('educationalContentViews');
+    const profileViewNotifications =
+      this.collection<ProfileViewNotificationDocument>('profileViewNotifications');
+    const memberships = this.collection<MembershipDocument>('memberships');
 
     await Promise.all([
       users.createIndex({ id: 1 }, { unique: true }),
@@ -174,8 +224,24 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         { expireAfterSeconds: 24 * 60 * 60 },
       ),
       messages.createIndex({ id: 1 }, { unique: true }),
+      messages.createIndex({ conversationId: 1, createdAt: 1 }),
       messages.createIndex({ buyerId: 1, createdAt: -1 }),
       messages.createIndex({ supplierId: 1, createdAt: -1 }),
+      messages.createIndex({ supplierId: 1, publicationId: 1, createdAt: -1 }),
+      conversations.createIndex({ id: 1 }, { unique: true }),
+      conversations.createIndex({ buyerId: 1, updatedAt: -1 }),
+      conversations.createIndex({ supplierId: 1, updatedAt: -1 }),
+      conversations.createIndex({ buyerId: 1, supplierId: 1 }, { unique: true }),
+      supplierReviews.createIndex({ id: 1 }, { unique: true }),
+      supplierReviews.createIndex({ supplierId: 1, createdAt: -1 }),
+      supplierReviews.createIndex({ supplierId: 1, buyerId: 1 }, { unique: true }),
+      educationalContentViews.createIndex({ id: 1 }, { unique: true }),
+      educationalContentViews.createIndex({ month: 1, contentId: 1 }),
+      educationalContentViews.createIndex({ userId: 1, viewedAt: -1 }),
+      profileViewNotifications.createIndex({ id: 1 }, { unique: true }),
+      profileViewNotifications.createIndex({ viewerId: 1, targetUserId: 1, notifiedAt: -1 }),
+      memberships.createIndex({ userId: 1 }, { unique: true }),
+      memberships.createIndex({ status: 1, adminApproved: 1 }),
     ]);
   }
 
@@ -237,5 +303,42 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     if ((await lessonProgress.countDocuments()) === 0) {
       await lessonProgress.insertMany(seedLessonProgress);
     }
+
+    await this.ensurePrincipalAdminAccount();
+  }
+
+  private async ensurePrincipalAdminAccount(): Promise<void> {
+    const users = this.collection<UserDocument>('users');
+    const adminEmail = 'admin@supplyconnect.com';
+
+    const principalAdmin = await users.findOne({ email: adminEmail });
+    if (!principalAdmin) {
+      return;
+    }
+
+    // Keep a single principal admin account in the system.
+    await users.updateMany(
+      {
+        role: UserRole.ADMIN,
+        email: { $ne: adminEmail },
+      },
+      {
+        $set: {
+          role: UserRole.BUYER,
+          updatedAt: new Date(),
+        },
+      },
+    );
+
+    await users.updateOne(
+      { email: adminEmail },
+      {
+        $set: {
+          role: UserRole.ADMIN,
+          status: UserStatus.ACTIVE,
+          updatedAt: new Date(),
+        },
+      },
+    );
   }
 }

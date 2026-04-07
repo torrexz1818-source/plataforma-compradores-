@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthenticatedGuard } from '../../common/auth/authenticated.guard';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 
 @Module({
   imports: [
+    NotificationsModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? 'dev-supplyconnect-secret',
     }),

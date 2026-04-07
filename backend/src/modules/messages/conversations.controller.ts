@@ -3,51 +3,32 @@ import { AuthenticatedGuard } from '../../common/auth/authenticated.guard';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { MessagesService } from './messages.service';
 
-type CreateMessageBody = {
-  supplierId?: string;
-  buyerId?: string;
-  publicationId?: string;
-  postId?: string;
-  message?: string;
-};
-
-type CreateConversationBody = {
-  toUserId?: string;
-  publicationId?: string | null;
-};
-
-@Controller('messages')
+@Controller('conversations')
 @UseGuards(AuthenticatedGuard)
-export class MessagesController {
+export class ConversationsController {
   constructor(private readonly messagesService: MessagesService) {}
 
-  @Get('inbox')
-  getInbox(@CurrentUser() user: { sub: string }) {
-    return this.messagesService.getSupplierInbox(user.sub);
-  }
-
-  @Get('conversations')
+  @Get()
   getConversationByPair(
     @CurrentUser() user: { sub: string },
     @Query('buyerId') buyerId: string,
     @Query('supplierId') supplierId: string,
   ) {
-    return this.messagesService.getConversationByParticipants({
-      viewerId: user.sub,
-      buyerId,
-      supplierId,
-    });
-  }
+    if (buyerId && supplierId) {
+      return this.messagesService.getConversationByParticipants({
+        viewerId: user.sub,
+        buyerId,
+        supplierId,
+      });
+    }
 
-  @Get('conversations/list')
-  listConversations(@CurrentUser() user: { sub: string }) {
     return this.messagesService.listConversations(user.sub);
   }
 
-  @Post('conversations')
+  @Post()
   createConversation(
     @CurrentUser() user: { sub: string },
-    @Body() body: CreateConversationBody,
+    @Body() body: { toUserId?: string; publicationId?: string | null },
   ) {
     return this.messagesService.createConversation({
       viewerId: user.sub,
@@ -56,7 +37,7 @@ export class MessagesController {
     });
   }
 
-  @Get('conversations/:id/messages')
+  @Get(':id/messages')
   getConversationMessages(
     @CurrentUser() user: { sub: string },
     @Param('id') id: string,
@@ -64,7 +45,7 @@ export class MessagesController {
     return this.messagesService.listConversationMessages(id, user.sub);
   }
 
-  @Post('conversations/:id/messages')
+  @Post(':id/messages')
   postConversationMessage(
     @CurrentUser() user: { sub: string },
     @Param('id') id: string,
@@ -73,21 +54,6 @@ export class MessagesController {
     return this.messagesService.sendConversationMessage({
       conversationId: id,
       viewerId: user.sub,
-      message: body.message ?? '',
-    });
-  }
-
-  @Post()
-  create(
-    @Body() body: CreateMessageBody,
-    @CurrentUser() user: { sub: string },
-  ): Promise<unknown> {
-    return this.messagesService.create({
-      senderId: user.sub,
-      supplierId: body.supplierId ?? '',
-      buyerId: body.buyerId,
-      publicationId: body.publicationId,
-      postId: body.postId,
       message: body.message ?? '',
     });
   }
