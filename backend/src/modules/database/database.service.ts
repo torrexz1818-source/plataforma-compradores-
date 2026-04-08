@@ -147,18 +147,78 @@ type MembershipDocument = {
   createdAt: Date;
 };
 
+function sanitizeEnv(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
+}
+
+function buildMongoUri(): string {
+  const directUri =
+    sanitizeEnv(process.env.MONGODB_URI) ??
+    sanitizeEnv(process.env.MONGO_URL) ??
+    sanitizeEnv(process.env.DATABASE_URL);
+
+  if (directUri) {
+    return directUri;
+  }
+
+  const username = sanitizeEnv(process.env.MONGODB_USERNAME);
+  const password = sanitizeEnv(process.env.MONGODB_PASSWORD);
+  const host = sanitizeEnv(process.env.MONGODB_HOST);
+  const dbName = sanitizeEnv(process.env.MONGODB_DB_NAME) ?? 'supplyconnect';
+
+  if (!host) {
+    return 'mongodb://127.0.0.1:27017';
+  }
+
+  const credentials =
+    username && password
+      ? `${encodeURIComponent(username)}:${encodeURIComponent(password)}@`
+      : '';
+
+  const protocol = host.startsWith('mongodb://') || host.startsWith('mongodb+srv://')
+    ? ''
+    : 'mongodb+srv://';
+  const normalizedHost = host.replace(/^mongodb(\+srv)?:\/\//, '');
+
+  return `${protocol}${credentials}${normalizedHost}/${encodeURIComponent(dbName)}?retryWrites=true&w=majority`;
+}
+
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
-  private readonly client = new MongoClient(
-    process.env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017',
-  );
+  private readonly mongoUri = buildMongoUri();
+  private readonly client = new MongoClient(this.mongoUri);
 
   private db?: Db;
 
   async onModuleInit(): Promise<void> {
-    await this.client.connect();
-    this.db = this.client.db(process.env.MONGODB_DB_NAME ?? 'supplyconnect');
+    try {
+      await this.client.connect();
+    } catch (error) {
+      const maskedUri = this.mongoUri.replace(/\/\/([^:@]+):([^@]+)@/, '//$1:***@');
+      this.logger.error(
+        `MongoDB authentication failed. Verify Render env vars MONGODB_URI or MONGODB_USERNAME/MONGODB_PASSWORD/MONGODB_HOST. Current target: ${maskedUri}`,
+      );
+      throw error;
+    }
+
+    const configuredDbName = sanitizeEnv(process.env.MONGODB_DB_NAME);
+    this.db = configuredDbName
+      ? this.client.db(configuredDbName)
+      : undefined;
+    this.db ??= this.client.db();
     await this.ensureIndexes();
     await this.seedDefaults();
     this.logger.log('MongoDB connection ready');
