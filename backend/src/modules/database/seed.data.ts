@@ -258,7 +258,7 @@ export const seedUsers: SeedUser[] = [
   {
     id: 'user-admin-2',
     email: 'adolfo.mesa@supplynexu.com',
-    password: 'AdolfoMesa#2026Nexu',
+    password: 'Adolfo2026!',
     fullName: 'Adolfo Mesa',
     company: 'Supply Nexu',
     position: 'Administrador de plataforma',
@@ -271,7 +271,7 @@ export const seedUsers: SeedUser[] = [
   {
     id: 'user-admin-3',
     email: 'anna.torres@supplynexu.com',
-    password: 'AnnaTorres#2026Nexu',
+    password: 'Anna2026!',
     fullName: 'Anna Torres',
     company: 'Supply Nexu',
     position: 'Administrador de plataforma',
