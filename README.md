@@ -39,9 +39,9 @@ Guia completa:
 - Email: `admin@supplynexu.com`
 - Password: `Admin12345!`
 - Email: `adolfo.mesa@supplynexu.com`
-- Password: `AdolfoAdmin2026!`
+- Password: `AdolfoMesa#2026Nexu`
 - Email: `anna.torres@supplynexu.com`
-- Password: `AnnaAdmin2026!`
+- Password: `AnnaTorres#2026Nexu`
 
 Los administradores globales de la plataforma pueden:
 

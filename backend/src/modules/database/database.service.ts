@@ -19,13 +19,6 @@ import {
 import { UserRole } from '../users/domain/user-role.enum';
 import { UserStatus } from '../users/domain/user-status.enum';
 
-const revokedAdminEmails = [
-  'adolfo.mesa@supplynexu.com',
-  'anna.torres@supplynexu.com',
-];
-
-const revokedAdminIds = ['user-admin-2', 'user-admin-3'];
-
 type UserDocument = {
   id: string;
   email: string;
@@ -831,7 +824,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     ]);
 
     await this.ensureAdminAccounts();
-    await this.disableRevokedAdminAccounts();
   }
 
   private async ensureAdminAccounts(): Promise<void> {
@@ -904,26 +896,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           updatedAt: now,
         });
       }),
-    );
-  }
-
-  private async disableRevokedAdminAccounts(): Promise<void> {
-    const users = this.collection<UserDocument>('users');
-    const now = new Date();
-
-    await users.updateMany(
-      {
-        $or: [
-          { id: { $in: revokedAdminIds } },
-          { email: { $in: revokedAdminEmails } },
-        ],
-      },
-      {
-        $set: {
-          status: UserStatus.DISABLED,
-          updatedAt: now,
-        },
-      },
     );
   }
 }

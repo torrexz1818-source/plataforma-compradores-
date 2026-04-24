@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
+  ArrowLeft,
   Bot,
   BrainCircuit,
   CheckCircle2,
@@ -62,7 +63,7 @@ const NexuIA = () => {
     queryFn: () => getAgents(),
   });
 
-  const selectedAgentId = routeAgentId || agentsQuery.data?.[0]?.id || '';
+  const selectedAgentId = routeAgentId || '';
 
   const detailQuery = useQuery({
     queryKey: ['agents', selectedAgentId],
@@ -74,12 +75,6 @@ const NexuIA = () => {
     queryKey: ['agents', 'executions', 'mine'],
     queryFn: getMyAgentExecutions,
   });
-
-  useEffect(() => {
-    if (!routeAgentId && agentsQuery.data?.[0]?.id) {
-      navigate(`/nexu-ia/${agentsQuery.data[0].id}`, { replace: true });
-    }
-  }, [agentsQuery.data, navigate, routeAgentId]);
 
   useEffect(() => {
     if (!detailQuery.data) {
@@ -168,6 +163,7 @@ const NexuIA = () => {
   const selectedAgentExecutions = (executionsQuery.data ?? []).filter(
     (execution) => execution.agentId === selectedAgent?.id,
   );
+  const isDetailView = Boolean(routeAgentId);
 
   const marketplaceStats = [
     {
@@ -251,139 +247,96 @@ const NexuIA = () => {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-        <div className="space-y-6">
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-xl text-slate-900">Marketplace de agentes IA</CardTitle>
-              <CardDescription>
-                Filtra por categoria o automatizacion y abre la ficha completa de cada agente.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por nombre, caso de uso o descripcion"
-                  className="h-11 rounded-2xl border-slate-200 pl-11"
-                />
-              </div>
+      {!isDetailView ? (
+      <section className="space-y-6">
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-xl text-slate-900">Marketplace de agentes IA</CardTitle>
+            <CardDescription>
+              Filtra por categoria o automatizacion y abre la ficha completa de cada agente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre, caso de uso o descripcion"
+                className="h-11 rounded-2xl border-slate-200 pl-11"
+              />
+            </div>
 
-              <div className="space-y-3">
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Categoria
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {categories.map((category) => (
-                      <button
-                        key={category}
-                        type="button"
-                        onClick={() => setSelectedCategory(category)}
-                        className={`rounded-full px-3 py-1.5 text-sm transition ${
-                          selectedCategory === category
-                            ? 'bg-slate-900 text-white'
-                            : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        }`}
+            <div className="grid gap-4 md:grid-cols-2">
+              {filteredAgents.map((agent) => {
+                const Icon = getAgentIcon(agent.icon);
+                const isSelected = selectedAgentId === agent.id;
+
+                return (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    onClick={() => navigate(`/nexu-ia/${agent.id}`)}
+                    className={`rounded-[26px] border p-5 text-left transition-all ${
+                      isSelected
+                        ? 'border-slate-300 bg-[linear-gradient(145deg,#fafaf9_0%,#f3f4f6_100%)] shadow-md'
+                        : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div
+                        className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm"
+                        style={{ backgroundColor: '#111827' }}
                       >
-                        {category}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                    Tipo de automatizacion
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {automationTypes.map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() => setSelectedAutomationType(type)}
-                        className={`rounded-full px-3 py-1.5 text-sm transition ${
-                          selectedAutomationType === type
-                            ? 'bg-slate-700 text-white'
-                            : 'border border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                        }`}
-                      >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {filteredAgents.map((agent) => {
-                  const Icon = getAgentIcon(agent.icon);
-                  const isSelected = selectedAgentId === agent.id;
-
-                  return (
-                    <button
-                      key={agent.id}
-                      type="button"
-                      onClick={() => navigate(`/nexu-ia/${agent.id}`)}
-                      className={`w-full rounded-[26px] border p-5 text-left transition-all ${
-                        isSelected
-                          ? 'border-slate-300 bg-[linear-gradient(145deg,#fafaf9_0%,#f3f4f6_100%)] shadow-md'
-                          : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm'
-                      }`}
-                    >
-                      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                        <div
-                          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl text-white shadow-sm"
-                          style={{ backgroundColor: '#111827' }}
-                        >
-                          <Icon className="h-6 w-6" />
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Badge variant="outline" className="border-slate-200 text-slate-600">
-                              {agent.category}
-                            </Badge>
-                            <Badge className="bg-slate-900 text-white hover:bg-slate-900">
-                              {agent.automationType}
-                            </Badge>
-                          </div>
-
-                          <h3 className="mt-4 text-2xl font-semibold text-slate-900">{agent.name}</h3>
-                          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                            {agent.description}
-                          </p>
-
-                          <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-                              Caso de uso
-                            </p>
-                            <p className="mt-1 text-sm text-slate-700">{agent.useCase}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex shrink-0 items-center lg:min-h-full">
-                          <span className="inline-flex items-center gap-1 text-sm font-medium text-slate-700">
-                            {agent.isActive ? 'Usar agente' : 'Activar'}
-                            <ArrowRight className="h-4 w-4" />
-                          </span>
-                        </div>
+                        <Icon className="h-5 w-5" />
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      <Badge variant="outline" className="border-slate-200 text-slate-600">
+                        {agent.category}
+                      </Badge>
+                    </div>
 
-              {!filteredAgents.length ? (
-                <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                  No hay agentes para ese filtro. Prueba con otra categoria o tipo de automatizacion.
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-        </div>
+                    <h3 className="mt-4 text-lg font-semibold text-slate-900">{agent.name}</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{agent.description}</p>
+
+                    <div className="mt-4 rounded-2xl bg-slate-50 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Caso de uso
+                      </p>
+                      <p className="mt-1 text-sm text-slate-700">{agent.useCase}</p>
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between">
+                      <Badge className="bg-slate-900 text-white hover:bg-slate-900">
+                        {agent.automationType}
+                      </Badge>
+                      <span className="inline-flex items-center gap-1 text-sm font-medium text-slate-700">
+                        {agent.isActive ? 'Usar agente' : 'Activar'}
+                        <ArrowRight className="h-4 w-4" />
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {!filteredAgents.length ? (
+              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+                No hay agentes disponibles en este momento.
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </section>
+      ) : (
+      <section className="space-y-6">
+        <button
+          type="button"
+          onClick={() => navigate('/nexu-ia')}
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-900"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Regresar
+        </button>
 
         <div className="space-y-6">
           <Card className="overflow-hidden border-slate-200 shadow-sm">
@@ -580,6 +533,7 @@ const NexuIA = () => {
           </Card>
         </div>
       </section>
+      )}
     </div>
   );
 };
