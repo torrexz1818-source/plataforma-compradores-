@@ -66,7 +66,7 @@ const Landing = () => {
           className="max-w-3xl mx-auto text-center"
         >
           <h1 className="text-4xl md:text-5xl font-extrabold text-primary-foreground mb-4 tracking-tight">
-            SUPPLY NEXU GAAAAAAAAAAAAAAAA
+            SUPPLY NEXU 
           </h1>
           <p className="text-primary-foreground/85 text-lg md:text-xl max-w-2xl mx-auto mb-8 leading-relaxed">
             La plataforma donde compradores y proveedores se conectan, aprenden
