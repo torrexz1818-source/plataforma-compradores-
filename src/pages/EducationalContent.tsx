@@ -3,11 +3,83 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import PostCard from '@/components/PostCard';
 import { getHomeFeed } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useHighlight } from '@/hooks/useHighlight';
+import { Post } from '@/types';
+
+interface EducationalPostCardProps {
+  post: Post;
+  index: number;
+  onOpen: () => void;
+}
+
+const formatPostDate = (date: string) =>
+  new Date(date).toLocaleDateString('es-PE', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+const EducationalPostCard = ({ post, index, onOpen }: EducationalPostCardProps) => {
+  const hasMedia = Boolean(post.thumbnailUrl);
+
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.06, duration: 0.35 }}
+      onClick={onOpen}
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-smooth transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-smooth-hover"
+    >
+      <div className="relative aspect-[16/10] overflow-hidden bg-muted">
+        {hasMedia ? (
+          <img
+            src={post.thumbnailUrl}
+            alt={post.title}
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        ) : (
+          <div className="flex h-full w-full items-end bg-[linear-gradient(135deg,hsl(var(--primary))_0%,#244c96_52%,#eef6ff_100%)] px-5 py-5 text-left">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/80">
+                Contenido educativo
+              </p>
+              <p className="mt-2 line-clamp-3 text-base font-semibold leading-tight text-white">
+                {post.title}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {hasMedia && <div className="absolute inset-0 bg-gradient-to-t from-primary/55 via-primary/10 to-transparent" />}
+        <div className="absolute left-4 top-4 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm">
+          {post.mediaType === 'video' || post.videoUrl ? 'Video' : 'Articulo'}
+        </div>
+        {(post.mediaType === 'video' || post.videoUrl) && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 shadow-smooth transition-transform group-hover:scale-110">
+              <Play className="ml-0.5 h-5 w-5 text-primary" />
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col p-5">
+        <h3 className="line-clamp-3 text-xl font-semibold leading-snug text-foreground">
+          {post.title}
+        </h3>
+        <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">
+          {post.description}
+        </p>
+        <div className="mt-auto pt-6">
+          <p className="text-sm text-muted-foreground">{formatPostDate(post.createdAt)}</p>
+        </div>
+      </div>
+    </motion.article>
+  );
+};
 
 const EducationalContent = () => {
   const [search, setSearch] = useState('');
@@ -33,7 +105,7 @@ const EducationalContent = () => {
   );
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="mx-auto max-w-7xl px-6 py-8">
       <div className="mb-8 rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#eef6ff_0%,#ffffff_52%,#f6fbff_100%)] px-6 py-6 shadow-sm">
         <h1 className="text-2xl font-bold text-[#0f2a5e]">Contenido educativo</h1>
         <p className="mt-1 text-sm text-[#4f6b95]">
@@ -53,16 +125,22 @@ const EducationalContent = () => {
 
       <div className="mb-10">
         <h2 className="text-lg font-semibold text-foreground mb-4">Videos y articulos</h2>
-        <div className="space-y-4">
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
           {isLoading && <p className="text-muted-foreground text-sm">Cargando contenido...</p>}
           {isError && <p className="text-destructive text-sm">No se pudo cargar el contenido.</p>}
           {filteredPosts.map((post, index) => (
             <div key={post.id} id={`item-${post.id}`}>
-              <PostCard post={post} index={index} />
+              <EducationalPostCard
+                post={post}
+                index={index}
+                onOpen={() => navigate(`/post/${post.id}`)}
+              />
             </div>
           ))}
           {!isLoading && !isError && filteredPosts.length === 0 && (
-            <p className="text-muted-foreground text-sm text-center py-8">No se encontraron resultados.</p>
+            <p className="py-8 text-center text-sm text-muted-foreground sm:col-span-2 xl:col-span-4">
+              No se encontraron resultados.
+            </p>
           )}
         </div>
       </div>

@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import MainLayout from '@/layouts/MainLayout';
 import { getMonthlyReport } from '@/lib/api';
 import { useHighlight } from '@/hooks/useHighlight';
 import { MonthlyReport } from '@/types';
@@ -22,8 +21,7 @@ const Reports = () => {
   const monthLabel = useMemo(() => month ?? report?.month ?? 'Mes actual', [month, report?.month]);
 
   return (
-    <MainLayout>
-      <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="max-w-6xl mx-auto px-6 py-8">
         <h1 className="text-2xl font-bold text-foreground">Reportes</h1>
         <p className="text-sm text-muted-foreground mt-1 mb-6">Resumen mensual {monthLabel}</p>
 
@@ -75,8 +73,7 @@ const Reports = () => {
             </section>
           </div>
         )}
-      </div>
-    </MainLayout>
+    </div>
   );
 };
 

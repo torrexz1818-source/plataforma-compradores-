@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Bell, Building2, FileText, MessageCircle, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow, isToday, isYesterday, subDays } from 'date-fns';
-import MainLayout from '@/layouts/MainLayout';
 import {
   deleteNotification,
   getNotificationsV2,
@@ -116,8 +115,7 @@ const Notifications = () => {
   };
 
   return (
-    <MainLayout>
-      <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="max-w-5xl mx-auto px-6 py-8">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
@@ -218,8 +216,7 @@ const Notifications = () => {
             </section>
           )
         ))}
-      </div>
-    </MainLayout>
+    </div>
   );
 };
 

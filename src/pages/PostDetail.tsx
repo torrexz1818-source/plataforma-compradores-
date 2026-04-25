@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Image as ImageIcon, Link2, Play } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import MainLayout from '@/layouts/MainLayout';
 import CommentSection from '@/components/CommentSection';
 import { getPostDetail, registerEducationalContentView } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -35,31 +34,28 @@ const PostDetail = () => {
 
   if (!isLoading && !post) {
     return (
-      <MainLayout>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <p className="text-muted-foreground mb-4">Post no encontrado</p>
-            <Button variant="outline" onClick={() => navigate('/home')}>Volver al inicio</Button>
-          </div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">Post no encontrado</p>
+          <Button variant="outline" onClick={() => navigate('/home')}>Volver al inicio</Button>
         </div>
-      </MainLayout>
+      </div>
     );
   }
 
   const progress = lesson?.progress || 65;
 
   return (
-    <MainLayout>
-      <div className="max-w-6xl mx-auto px-6 py-8">
-        {isLoading && <p className="text-muted-foreground mb-4">Cargando post...</p>}
-        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4 text-muted-foreground">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Volver
-        </Button>
+    <div className="max-w-6xl mx-auto px-6 py-8">
+      {isLoading && <p className="text-muted-foreground mb-4">Cargando post...</p>}
+      <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4 text-muted-foreground">
+        <ArrowLeft className="w-4 h-4 mr-1" /> Volver
+      </Button>
 
-        {post && (
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(500px,1fr)]">
-            <div className="min-w-0">
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
+      {post && (
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(500px,1fr)]">
+          <div className="min-w-0">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
                 {(post.videoUrl || post.thumbnailUrl) && (
                   <div className="bg-black rounded-lg h-72 md:h-96 flex items-center justify-center mb-6 relative overflow-hidden">
                     {post.videoUrl ? (
@@ -139,24 +135,23 @@ const PostDetail = () => {
                     </div>
                   </div>
                 )}
-              </motion.div>
-            </div>
+            </motion.div>
+          </div>
 
-            <div className="min-w-0">
-              <div className="bg-card rounded-lg shadow-smooth p-5 sticky top-20">
-                <CommentSection
-                  postId={post.id}
-                  comments={data?.comments ?? []}
-                  onCommentAdded={() => {
-                    void queryClient.invalidateQueries({ queryKey: ['post-detail', id] });
-                  }}
-                />
-              </div>
+          <div className="min-w-0">
+            <div className="bg-card rounded-lg shadow-smooth p-5 sticky top-20">
+              <CommentSection
+                postId={post.id}
+                comments={data?.comments ?? []}
+                onCommentAdded={() => {
+                  void queryClient.invalidateQueries({ queryKey: ['post-detail', id] });
+                }}
+              />
             </div>
           </div>
-        )}
-      </div>
-    </MainLayout>
+        </div>
+      )}
+    </div>
   );
 };
 

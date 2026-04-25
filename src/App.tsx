@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -39,6 +39,7 @@ import NexuExperts from "./expert/NexuExperts.tsx";
 import NexuIA from "./pages/NexuIA.tsx";
 import ExpertCalendarSetup from "./expert/ExpertCalendarSetup.tsx";
 import RegisterExpert from "./expert/RegisterExpert.tsx";
+import MainLayout from "./layouts/MainLayout.tsx";
 
 const queryClient = new QueryClient();
 
@@ -144,7 +145,11 @@ const ProfileLayoutRedirect = () => {
     return <BuyerLayout />;
   }
 
-  return <Navigate to="/admin/dashboard" replace />;
+  return (
+    <MainLayout>
+      <Outlet />
+    </MainLayout>
+  );
 };
 
 const App = () => (
@@ -256,10 +261,46 @@ const App = () => (
               <Route index element={<NexuIA />} />
               <Route path=":id" element={<NexuIA />} />
             </Route>
-            <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
-            <Route path="/notificaciones" element={<RequireAuth><Notifications /></RequireAuth>} />
-            <Route path="/reportes" element={<RequireAuth><Reports /></RequireAuth>} />
-            <Route path="/mensajes" element={<RequireAuth><Messages /></RequireAuth>} />
+            <Route
+              path="/notifications"
+              element={
+                <RequireAuth>
+                  <ProfileLayoutRedirect />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<Notifications />} />
+            </Route>
+            <Route
+              path="/notificaciones"
+              element={
+                <RequireAuth>
+                  <ProfileLayoutRedirect />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<Notifications />} />
+            </Route>
+            <Route
+              path="/reportes"
+              element={
+                <RequireAuth>
+                  <ProfileLayoutRedirect />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<Reports />} />
+            </Route>
+            <Route
+              path="/mensajes"
+              element={
+                <RequireAuth>
+                  <ProfileLayoutRedirect />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<Messages />} />
+            </Route>
             <Route
               path="/directorio-proveedores"
               element={
@@ -294,7 +335,16 @@ const App = () => (
               <Route path=":role/:id" element={<UserProfilePage />} />
               <Route path=":id" element={<UserProfilePage />} />
             </Route>
-            <Route path="/post/:id" element={<RequireAuth><PostDetail /></RequireAuth>} />
+            <Route
+              path="/post/:id"
+              element={
+                <RequireAuth>
+                  <ProfileLayoutRedirect />
+                </RequireAuth>
+              }
+            >
+              <Route index element={<PostDetail />} />
+            </Route>
             <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
             <Route path="/admin/dashboard" element={<RequireAuth><Admin /></RequireAuth>} />
             <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />

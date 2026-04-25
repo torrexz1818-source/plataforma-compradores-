@@ -1,4 +1,4 @@
-import { BookOpen, BriefcaseBusiness, Building2, FileText, LayoutDashboard, LogOut, MessageCircle, Newspaper, Shield, Store } from 'lucide-react';
+import { BookOpen, Bot, BriefcaseBusiness, Building2, FileText, LayoutDashboard, LogOut, MessageCircle, Newspaper, Shield, Store, Users } from 'lucide-react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import NotificationBell from '@/components/NotificationBell';
@@ -15,10 +15,19 @@ const supplierNavItems = [
 
 const buyerNavItems = [
   { to: '/buyer/dashboard', label: 'Inicio comprador', icon: LayoutDashboard },
-  { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
-  { to: '/buyer/sale', label: 'Liquidaciones', icon: FileText },
-  { to: '/contenido-educativo', label: 'Contenido educativo', icon: BookOpen },
   { to: '/community', label: 'Comunidad', icon: MessageCircle },
+  {
+    to: '/contenido-educativo',
+    label: 'Contenido educativo',
+    icon: BookOpen,
+    children: [
+      { to: '/empleabilidad', label: 'Empleabilidad', icon: BriefcaseBusiness },
+      { to: '/nexu-experts', label: 'Nexu Experts', icon: Users },
+    ],
+  },
+  { to: '/buyer/sale', label: 'Liquidaciones', icon: FileText },
+  { to: '/nexu-ia', label: 'Nexu IA', icon: Bot },
+  { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
 ];
 
 const SupplierLayout = () => {
@@ -60,6 +69,22 @@ const SupplierLayout = () => {
       );
     }
 
+    if (path === '/buyer/directory') {
+      return (
+        location.pathname === '/buyer/directory' ||
+        location.pathname.startsWith('/buyer/directory/') ||
+        location.pathname.startsWith('/buyer/supplier/')
+      );
+    }
+
+    if (path === '/community') {
+      return location.pathname === '/community' || location.pathname.startsWith('/post/');
+    }
+
+    if (path === '/buyer/sale') {
+      return location.pathname === '/buyer/sale' || location.pathname.startsWith('/buyer/sale/');
+    }
+
     if (path === '/publicaciones') {
       return (
         location.pathname === '/publicaciones' ||
@@ -73,6 +98,20 @@ const SupplierLayout = () => {
 
     if (path === '/empleabilidad') {
       return location.pathname === '/empleabilidad';
+    }
+
+    if (path === '/contenido-educativo') {
+      return (
+        location.pathname === '/contenido-educativo' ||
+        location.pathname.startsWith('/post/') ||
+        location.pathname === '/empleabilidad' ||
+        location.pathname === '/nexu-experts' ||
+        location.pathname.startsWith('/nexu-experts/')
+      );
+    }
+
+    if (path === '/nexu-ia') {
+      return location.pathname === '/nexu-ia' || location.pathname.startsWith('/nexu-ia/');
     }
 
     return location.pathname === path;
@@ -103,18 +142,50 @@ const SupplierLayout = () => {
                 </p>
               )}
               {section.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive(item.to)
-                      ? 'bg-white text-[#0f2a5e]'
-                      : 'text-white/85 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
-                </NavLink>
+                item.children ? (
+                  <div key={item.label} className="space-y-1">
+                    <NavLink
+                      to={item.to}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive(item.to)
+                          ? 'bg-white text-[#0f2a5e]'
+                          : 'text-white/85 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <item.icon className="w-4 h-4" />
+                      {item.label}
+                    </NavLink>
+                    <div className="ml-4 space-y-1 border-l border-white/10 pl-3">
+                      {item.children.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            isActive(child.to)
+                              ? 'bg-white text-[#0f2a5e]'
+                              : 'text-white/75 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          <child.icon className="w-4 h-4" />
+                          {child.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isActive(item.to)
+                        ? 'bg-white text-[#0f2a5e]'
+                        : 'text-white/85 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                  </NavLink>
+                )
               ))}
             </div>
           ))}

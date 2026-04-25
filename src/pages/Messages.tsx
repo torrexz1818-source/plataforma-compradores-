@@ -2,7 +2,6 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 're
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileUp, ImagePlus, MapPin, Search, Send, X } from 'lucide-react';
-import MainLayout from '@/layouts/MainLayout';
 import {
   createSupplierReview,
   getConversationMessages,
@@ -360,8 +359,7 @@ const Messages = () => {
   };
 
   return (
-    <MainLayout>
-      <div className="max-w-6xl mx-auto px-6 py-8">
+    <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">Mensajeria</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -698,8 +696,7 @@ const Messages = () => {
             )}
           </section>
         </div>
-      </div>
-    </MainLayout>
+    </div>
   );
 };
 

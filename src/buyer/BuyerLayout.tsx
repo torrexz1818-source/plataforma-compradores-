@@ -86,9 +86,15 @@ const BuyerLayout = () => {
     if (path === '/contenido-educativo') {
       return (
         location.pathname === '/contenido-educativo' ||
+        location.pathname.startsWith('/post/') ||
         location.pathname === '/empleabilidad' ||
-        location.pathname === '/nexu-experts'
+        location.pathname === '/nexu-experts' ||
+        location.pathname.startsWith('/nexu-experts/')
       );
+    }
+
+    if (path === '/nexu-ia') {
+      return location.pathname === '/nexu-ia' || location.pathname.startsWith('/nexu-ia/');
     }
 
     return location.pathname === path;

@@ -1,6 +1,8 @@
 import { ReactNode } from 'react';
 import {
   BookOpen,
+  Bot,
+  BriefcaseBusiness,
   Building2,
   FileText,
   LayoutDashboard,
@@ -60,10 +62,19 @@ const MainLayout = ({ children }: MainLayoutProps) => {
 
   const buyerItems = [
     { to: '/buyer/dashboard', label: 'Inicio', icon: LayoutDashboard },
-    { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
-    { to: '/buyer/sale', label: 'Liquidaciones', icon: FileText },
-    { to: '/contenido-educativo', label: 'Contenido educativo', icon: BookOpen },
     { to: '/community', label: 'Comunidad', icon: MessageCircle },
+    {
+      to: '/contenido-educativo',
+      label: 'Contenido educativo',
+      icon: BookOpen,
+      children: [
+        { to: '/empleabilidad', label: 'Empleabilidad', icon: BriefcaseBusiness },
+        { to: '/nexu-experts', label: 'Nexu Experts', icon: Users },
+      ],
+    },
+    { to: '/buyer/sale', label: 'Liquidaciones', icon: FileText },
+    { to: '/nexu-ia', label: 'Nexu IA', icon: Bot },
+    { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
   ];
 
   const navSections = isAdmin
@@ -105,8 +116,22 @@ const MainLayout = ({ children }: MainLayoutProps) => {
       return location.pathname === '/community' || location.pathname.startsWith('/post/');
     }
 
+    if (path === '/buyer/sale') {
+      return location.pathname === '/buyer/sale' || location.pathname.startsWith('/buyer/sale/');
+    }
+
     if (path === '/contenido-educativo') {
-      return location.pathname === '/contenido-educativo';
+      return (
+        location.pathname === '/contenido-educativo' ||
+        location.pathname.startsWith('/post/') ||
+        location.pathname === '/empleabilidad' ||
+        location.pathname === '/nexu-experts' ||
+        location.pathname.startsWith('/nexu-experts/')
+      );
+    }
+
+    if (path === '/nexu-ia') {
+      return location.pathname === '/nexu-ia' || location.pathname.startsWith('/nexu-ia/');
     }
 
     if (path === '/publicaciones') {
@@ -146,18 +171,50 @@ const MainLayout = ({ children }: MainLayoutProps) => {
                 </p>
               )}
               {section.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActive(item.to)
-                      ? 'bg-white text-[#0f2a5e]'
-                      : 'text-white/85 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  <item.icon className="w-4 h-4" />
-                  {item.label}
-                </NavLink>
+                item.children ? (
+                  <div key={item.label} className="space-y-1">
+                    <NavLink
+                      to={item.to}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive(item.to)
+                          ? 'bg-white text-[#0f2a5e]'
+                          : 'text-white/85 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <item.icon className="w-4 h-4" />
+                      {item.label}
+                    </NavLink>
+                    <div className="ml-4 space-y-1 border-l border-white/10 pl-3">
+                      {item.children.map((child) => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to}
+                          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            isActive(child.to)
+                              ? 'bg-white text-[#0f2a5e]'
+                              : 'text-white/75 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          <child.icon className="w-4 h-4" />
+                          {child.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      isActive(item.to)
+                        ? 'bg-white text-[#0f2a5e]'
+                        : 'text-white/85 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                  </NavLink>
+                )
               ))}
             </div>
           ))}
