@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { getHomeFeed } from '@/lib/api';
+import { getHomeFeed, resolveApiAssetUrl } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useHighlight } from '@/hooks/useHighlight';
@@ -36,7 +36,7 @@ const EducationalPostCard = ({ post, index, onOpen }: EducationalPostCardProps) 
       <div className="relative aspect-[16/10] overflow-hidden bg-muted">
         {hasMedia ? (
           <img
-            src={post.thumbnailUrl}
+            src={resolveApiAssetUrl(post.thumbnailUrl)}
             alt={post.title}
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />

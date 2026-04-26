@@ -4,7 +4,7 @@ import { ArrowLeft, FileText, Image as ImageIcon, Link2, Play } from 'lucide-rea
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import CommentSection from '@/components/CommentSection';
-import { getPostDetail, registerEducationalContentView } from '@/lib/api';
+import { getPostDetail, registerEducationalContentView, resolveApiAssetUrl } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/lib/auth';
@@ -60,13 +60,13 @@ const PostDetail = () => {
                   <div className="bg-black rounded-lg h-72 md:h-96 flex items-center justify-center mb-6 relative overflow-hidden">
                     {post.videoUrl ? (
                       <video
-                        src={post.videoUrl}
-                        poster={post.thumbnailUrl}
+                        src={resolveApiAssetUrl(post.videoUrl)}
+                        poster={resolveApiAssetUrl(post.thumbnailUrl)}
                         controls
                         className="h-full w-full object-contain bg-black"
                       />
                     ) : post.thumbnailUrl ? (
-                      <img src={post.thumbnailUrl} alt={post.title} className="h-full w-full object-cover" />
+                      <img src={resolveApiAssetUrl(post.thumbnailUrl)} alt={post.title} className="h-full w-full object-cover" />
                     ) : null}
                   </div>
                 )}
@@ -95,7 +95,7 @@ const PostDetail = () => {
                       {post.resources.map((resource) => (
                         <a
                           key={resource.id}
-                          href={resource.url}
+                          href={resolveApiAssetUrl(resource.url)}
                           target="_blank"
                           rel="noreferrer"
                           className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-4 py-3 hover:bg-muted transition-colors"

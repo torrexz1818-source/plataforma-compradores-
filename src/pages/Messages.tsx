@@ -9,6 +9,7 @@ import {
   getPostDetail,
   getSupplierReviews,
   getSuppliersBySector,
+  resolveApiAssetUrl,
   sendConversationMessage,
   uploadFile,
 } from '@/lib/api';
@@ -53,7 +54,7 @@ function AttachmentPreview({ attachment, compact = false }: { attachment: Messag
       <div className={`overflow-hidden rounded-xl border border-border bg-white ${compact ? 'w-40' : 'w-full max-w-sm'}`}>
         {attachment.thumbnailUrl ? (
           <img
-            src={attachment.thumbnailUrl}
+            src={resolveApiAssetUrl(attachment.thumbnailUrl)}
             alt={attachment.name}
             className={`${compact ? 'h-20' : 'h-36'} w-full object-cover`}
           />
@@ -91,7 +92,7 @@ function AttachmentPreview({ attachment, compact = false }: { attachment: Messag
   if (attachment.kind === 'image' && attachment.url) {
     return (
       <div className={`${compact ? 'w-16 h-16' : 'w-48 h-48'} rounded-xl overflow-hidden border border-border bg-white`}>
-        <img src={attachment.url} alt={attachment.name} className="w-full h-full object-cover" />
+        <img src={resolveApiAssetUrl(attachment.url)} alt={attachment.name} className="w-full h-full object-cover" />
       </div>
     );
   }
