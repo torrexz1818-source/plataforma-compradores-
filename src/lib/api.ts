@@ -1187,3 +1187,81 @@ export async function getMyAgentExecutions() {
   });
   return data.items;
 }
+
+export async function runN8nComparativeWebhook(payload: {
+  agentId: string;
+  agentName: string;
+  uploadedFiles: Array<{
+    url: string;
+    name: string;
+    mimeType?: string;
+    size?: number;
+  }>;
+}) {
+  const webhookUrl = import.meta.env.VITE_N8N_COMPARATIVE_WEBHOOK?.trim();
+  const webhookToken = import.meta.env.VITE_N8N_COMPARATIVE_TOKEN?.trim();
+
+  if (!webhookUrl) {
+    throw new Error(
+      'Falta configurar VITE_N8N_COMPARATIVE_WEBHOOK en el frontend para conectar el flujo de n8n.',
+    );
+  }
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(webhookToken ? { 'x-n8n-token': webhookToken } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    let message = 'No se pudo ejecutar el flujo de n8n.';
+
+    try {
+      const data = (await response.json()) as { message?: string };
+      if (data.message) {
+        message = data.message;
+      }
+    } catch {
+      message = response.statusText || message;
+    }
+
+    throw new Error(message);
+  }
+
+  const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+
+  if (contentType.includes('application/pdf')) {
+    const blob = await response.blob();
+
+    return {
+      pdfUrl: URL.createObjectURL(blob),
+      fileName: 'comparativo-cotizaciones.pdf',
+    } as Record<string, unknown>;
+  }
+
+  const raw = await response.text();
+
+  if (!raw.trim()) {
+    return {};
+  }
+
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  const pdfUrl =
+    typeof parsed.pdfUrl === 'string'
+      ? parsed.pdfUrl
+      : typeof parsed.downloadUrl === 'string'
+        ? parsed.downloadUrl
+        : typeof parsed.fileUrl === 'string'
+          ? parsed.fileUrl
+          : typeof parsed.url === 'string'
+            ? parsed.url
+            : undefined;
+
+  return {
+    ...parsed,
+    ...(pdfUrl ? { pdfUrl } : {}),
+  };
+}

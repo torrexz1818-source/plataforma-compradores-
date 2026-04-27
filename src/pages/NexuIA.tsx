@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -6,6 +6,8 @@ import {
   Bot,
   BrainCircuit,
   CheckCircle2,
+  FileSpreadsheet,
+  FileText,
   FileCheck2,
   Layers3,
   MessagesSquare,
@@ -16,10 +18,19 @@ import {
   Sparkles,
   TrendingUp,
   TriangleAlert,
+  Upload,
   Zap,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { activateAgent, getAgentDetail, getAgents, getMyAgentExecutions, runAgent } from '@/lib/api';
+import {
+  activateAgent,
+  getAgentDetail,
+  getAgents,
+  getMyAgentExecutions,
+  runAgent,
+  runN8nComparativeWebhook,
+  uploadFile,
+} from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,6 +68,8 @@ const NexuIA = () => {
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [selectedAutomationType, setSelectedAutomationType] = useState('Todos');
   const [agentInputs, setAgentInputs] = useState<Record<string, string>>({});
+  const [uploadedComparisonFiles, setUploadedComparisonFiles] = useState<File[]>([]);
+  const [n8nComparativeResult, setN8nComparativeResult] = useState<Record<string, unknown> | null>(null);
 
   const agentsQuery = useQuery({
     queryKey: ['agents'],
@@ -93,6 +106,12 @@ const NexuIA = () => {
       return next;
     });
   }, [detailQuery.data]);
+
+  useEffect(() => {
+    setUploadedComparisonFiles([]);
+    setAgentInputs({});
+    setN8nComparativeResult(null);
+  }, [routeAgentId]);
 
   const activateMutation = useMutation({
     mutationFn: activateAgent,
@@ -132,6 +151,42 @@ const NexuIA = () => {
     },
   });
 
+  const n8nComparativeMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedAgent) {
+        throw new Error('Selecciona un agente.');
+      }
+
+      if (!uploadedComparisonFiles.length) {
+        throw new Error('Sube al menos un PDF, Excel, CSV o documento para enviar a n8n.');
+      }
+
+      const uploadedFiles = await Promise.all(
+        uploadedComparisonFiles.map((file) => uploadFile(file, 'resources')),
+      );
+
+      return runN8nComparativeWebhook({
+        agentId: selectedAgent.id,
+        agentName: selectedAgent.name,
+        uploadedFiles,
+      });
+    },
+    onSuccess: (result) => {
+      setN8nComparativeResult(result);
+      toast({
+        title: 'Flujo n8n ejecutado',
+        description: 'El comparativo fue generado y ya se muestra en esta vista.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'No se pudo ejecutar n8n',
+        description: error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const categories = useMemo(() => {
     const items = new Set((agentsQuery.data ?? []).map((agent) => agent.category));
     return ['Todos', ...items];
@@ -164,6 +219,9 @@ const NexuIA = () => {
     (execution) => execution.agentId === selectedAgent?.id,
   );
   const isDetailView = Boolean(routeAgentId);
+  const isQuoteComparator =
+    selectedAgent?.id === 'agent-quote-comparator' ||
+    selectedAgent?.slug === 'comparador-cotizaciones';
 
   const marketplaceStats = [
     {
@@ -198,6 +256,18 @@ const NexuIA = () => {
       inputData,
     });
   };
+
+  const handleComparisonFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    setUploadedComparisonFiles(files);
+  };
+
+  const comparativePdfUrl =
+    typeof n8nComparativeResult?.pdfUrl === 'string' ? n8nComparativeResult.pdfUrl : '';
+  const comparativePdfFileName =
+    typeof n8nComparativeResult?.fileName === 'string'
+      ? n8nComparativeResult.fileName
+      : 'comparativo-cotizaciones.pdf';
 
   return (
     <div className="space-y-6 pb-8">
@@ -404,38 +474,94 @@ const NexuIA = () => {
                         Inputs requeridos
                       </p>
                       <div className="mt-3 space-y-3">
-                        {selectedAgent.inputs.map((inputLabel) => (
-                          <div key={inputLabel} className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700">{inputLabel}</label>
-                            <Input
-                              value={agentInputs[inputLabel] ?? ''}
+                        {isQuoteComparator ? (
+                          <>
+                            <div className="space-y-2">
+                              <label className="text-sm font-medium text-slate-700">
+                                Archivos de cotizaciones
+                              </label>
+                              <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-400 hover:bg-slate-100">
+                                <Upload className="h-5 w-5 text-slate-600" />
+                                <div>
+                                  <p className="text-sm font-medium text-slate-800">
+                                    Subir PDF, Excel, CSV, Word u otros soportes
+                                  </p>
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    Puedes cargar varios archivos a la vez para tu flujo de n8n.
+                                  </p>
+                                </div>
+                                <input
+                                  type="file"
+                                  multiple
+                                  accept=".pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                                  onChange={handleComparisonFilesChange}
+                                  className="hidden"
+                                />
+                              </label>
+                              {uploadedComparisonFiles.length ? (
+                                <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
+                                  {uploadedComparisonFiles.map((file) => {
+                                    const isSpreadsheet =
+                                      file.name.endsWith('.xls') ||
+                                      file.name.endsWith('.xlsx') ||
+                                      file.name.endsWith('.csv');
+                                    const FileIcon = isSpreadsheet ? FileSpreadsheet : FileText;
+
+                                    return (
+                                      <div
+                                        key={`${file.name}-${file.size}`}
+                                        className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <FileIcon className="h-4 w-4 text-slate-600" />
+                                          <span className="text-sm text-slate-700">{file.name}</span>
+                                        </div>
+                                        <span className="text-xs text-slate-500">
+                                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+                          </>
+                        ) : (
+                          selectedAgent.inputs.map((inputLabel) => (
+                            <div key={inputLabel} className="space-y-1.5">
+                              <label className="text-sm font-medium text-slate-700">{inputLabel}</label>
+                              <Input
+                                value={agentInputs[inputLabel] ?? ''}
+                                onChange={(event) =>
+                                  setAgentInputs((current) => ({
+                                    ...current,
+                                    [inputLabel]: event.target.value,
+                                  }))
+                                }
+                                placeholder={`Ingresa ${inputLabel.toLowerCase()}`}
+                                className="rounded-xl border-slate-200"
+                              />
+                            </div>
+                          ))
+                        )}
+                        {!isQuoteComparator ? (
+                          <div className="space-y-1.5">
+                            <label className="text-sm font-medium text-slate-700">
+                              Contexto adicional
+                            </label>
+                            <Textarea
+                              value={agentInputs['Contexto adicional'] ?? ''}
                               onChange={(event) =>
                                 setAgentInputs((current) => ({
                                   ...current,
-                                  [inputLabel]: event.target.value,
+                                  'Contexto adicional': event.target.value,
                                 }))
                               }
-                              placeholder={`Ingresa ${inputLabel.toLowerCase()}`}
-                              className="rounded-xl border-slate-200"
+                              placeholder="Agrega instrucciones, restricciones o notas para la ejecucion"
+                              className="min-h-[104px] rounded-2xl border-slate-200"
                             />
                           </div>
-                        ))}
-                        <div className="space-y-1.5">
-                          <label className="text-sm font-medium text-slate-700">
-                            Contexto adicional
-                          </label>
-                          <Textarea
-                            value={agentInputs['Contexto adicional'] ?? ''}
-                            onChange={(event) =>
-                              setAgentInputs((current) => ({
-                                ...current,
-                                'Contexto adicional': event.target.value,
-                              }))
-                            }
-                            placeholder="Agrega instrucciones, restricciones o notas para la ejecucion"
-                            className="min-h-[104px] rounded-2xl border-slate-200"
-                          />
-                        </div>
+                        ) : null}
                       </div>
                     </div>
 
@@ -462,24 +588,40 @@ const NexuIA = () => {
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    <Button
-                      type="button"
-                      variant={selectedAgent.isActive ? 'outline' : 'default'}
-                      className={selectedAgent.isActive ? 'rounded-full' : 'rounded-full bg-slate-900 hover:bg-slate-800'}
-                      onClick={() => activateMutation.mutate(selectedAgent.id)}
-                      disabled={activateMutation.isPending}
-                    >
-                      {activateMutation.isPending ? 'Activando...' : selectedAgent.isActive ? 'Reactivar agente' : 'Activar'}
-                    </Button>
-                    <Button
-                      type="button"
-                      className="rounded-full bg-slate-900 hover:bg-slate-800"
-                      onClick={handleRunAgent}
-                      disabled={runMutation.isPending}
-                    >
-                      <PlayCircle className="mr-2 h-4 w-4" />
-                      {runMutation.isPending ? 'Ejecutando...' : 'Ejecutar agente'}
-                    </Button>
+                    {isQuoteComparator ? (
+                      <Button
+                        type="button"
+                        className="rounded-full bg-slate-900 hover:bg-slate-800"
+                        onClick={() => n8nComparativeMutation.mutate()}
+                        disabled={n8nComparativeMutation.isPending}
+                      >
+                        <PlayCircle className="mr-2 h-4 w-4" />
+                        {n8nComparativeMutation.isPending
+                          ? 'Enviando a n8n...'
+                          : 'Ejecutar'}
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          variant={selectedAgent.isActive ? 'outline' : 'default'}
+                          className={selectedAgent.isActive ? 'rounded-full' : 'rounded-full bg-slate-900 hover:bg-slate-800'}
+                          onClick={() => activateMutation.mutate(selectedAgent.id)}
+                          disabled={activateMutation.isPending}
+                        >
+                          {activateMutation.isPending ? 'Activando...' : selectedAgent.isActive ? 'Reactivar agente' : 'Activar'}
+                        </Button>
+                        <Button
+                          type="button"
+                          className="rounded-full bg-slate-900 hover:bg-slate-800"
+                          onClick={handleRunAgent}
+                          disabled={runMutation.isPending}
+                        >
+                          <PlayCircle className="mr-2 h-4 w-4" />
+                          {runMutation.isPending ? 'Ejecutando...' : 'Ejecutar agente'}
+                        </Button>
+                      </>
+                    )}
                   </div>
 
                   {runMutation.data?.execution.agentId === selectedAgent.id ? (
@@ -491,6 +633,34 @@ const NexuIA = () => {
                       <p className="mt-2 text-xs text-emerald-700">
                         Ejecutado el {formatDateTime(runMutation.data.execution.executedAt)}
                       </p>
+                    </div>
+                  ) : null}
+
+                  {isQuoteComparator && comparativePdfUrl ? (
+                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+                      <p className="text-sm font-semibold text-slate-900">PDF comparativo generado</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                        El flujo generó el comparativo final en PDF.
+                      </p>
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        <a
+                          href={comparativePdfUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                        >
+                          <FileText className="h-4 w-4" />
+                          Ver PDF
+                        </a>
+                        <a
+                          href={comparativePdfUrl}
+                          download={comparativePdfFileName}
+                          className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                        >
+                          <ArrowRight className="h-4 w-4" />
+                          Descargar PDF
+                        </a>
+                      </div>
                     </div>
                   ) : null}
                 </>
