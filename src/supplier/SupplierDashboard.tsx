@@ -65,8 +65,8 @@ const SupplierDashboard = () => {
                   return (
                     <div key={item.sector} className="grid grid-cols-[130px_1fr_42px] items-center gap-3">
                       <span className="text-sm text-foreground">{item.sector}</span>
-                      <div className="h-3 rounded-full bg-slate-200 overflow-hidden">
-                        <div className="h-full rounded-full bg-blue-500" style={{ width: `${widthPercent}%` }} />
+                      <div className="h-3 rounded-full bg-primary/15 overflow-hidden">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${widthPercent}%` }} />
                       </div>
                       <span className="text-sm text-foreground text-right">{item.count}</span>
                     </div>
@@ -83,10 +83,10 @@ const SupplierDashboard = () => {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left border-b border-border">
-                      <th className="py-2 pr-4 font-semibold">Nombre</th>
-                      <th className="py-2 pr-4 font-semibold">Empresa</th>
-                      <th className="py-2 pr-4 font-semibold">Sector</th>
-                      <th className="py-2 pr-0 font-semibold">Rol</th>
+                      <th className="py-2 pr-4 font-medium">Nombre</th>
+                      <th className="py-2 pr-4 font-medium">Empresa</th>
+                      <th className="py-2 pr-4 font-medium">Sector</th>
+                      <th className="py-2 pr-0 font-medium">Rol</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -99,8 +99,8 @@ const SupplierDashboard = () => {
                           <Badge
                             className={
                               user.role === 'buyer'
-                                ? 'bg-blue-100 text-blue-700 hover:bg-blue-100'
-                                : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+                                ? 'bg-primary/15 text-primary hover:bg-primary/15'
+                                : 'bg-success/25 text-success-foreground hover:bg-success/25'
                             }
                           >
                             {user.role === 'buyer' ? 'Comprador' : 'Proveedor'}

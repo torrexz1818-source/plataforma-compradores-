@@ -14,7 +14,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -75,8 +75,8 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       boxShadow: {
-        smooth: "0 0 0 1px rgba(0,0,0,.05), 0 2px 4px rgba(0,0,0,.05)",
-        "smooth-hover": "0 0 0 1px rgba(0,0,0,.05), 0 4px 12px rgba(0,0,0,.08)",
+        smooth: "var(--shadow-soft)",
+        "smooth-hover": "var(--shadow-card)",
       },
       keyframes: {
         "accordion-down": {

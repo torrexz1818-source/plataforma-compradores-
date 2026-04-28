@@ -1,0 +1,56 @@
+@layer utilities {
+  .shadow-smooth {
+    box-shadow: var(--shadow-soft);
+  }
+
+  .shadow-smooth-hover {
+    box-shadow: var(--shadow-card);
+  }
+
+  .gradient-primary {
+    background: var(--gradient-brand);
+  }
+
+  .gradient-cta {
+    background: var(--gradient-cta);
+  }
+
+  .text-gradient {
+    color: var(--color-blue-buyer);
+  }
+
+  .text-muted-brand {
+    color: var(--text-muted);
+  }
+
+  .bg-brand-soft {
+    background: rgba(14, 16, 158, 0.08);
+  }
+
+  .bg-purple-soft {
+    background: rgba(90, 49, 213, 0.10);
+  }
+
+  .bg-success-soft {
+    background: rgba(178, 235, 74, 0.18);
+  }
+
+  .bg-danger-soft {
+    background: rgba(243, 49, 63, 0.10);
+  }
+}
+
+@keyframes bounce-r {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  50% {
+    transform: translateX(5px);
+  }
+}
+
+.news-bounce-arrow {
+  animation: bounce-r 1.4s ease-in-out infinite;
+}

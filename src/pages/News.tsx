@@ -52,11 +52,11 @@ const CommentBranch = ({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3">
+      <div className="rounded-2xl border border-primary/15 bg-white/80 px-4 py-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-900">{comment.user.fullName}</p>
-            <p className="text-xs text-slate-500">
+            <p className="text-sm font-medium text-foreground">{comment.user.fullName}</p>
+            <p className="text-xs text-muted-foreground/70">
               {comment.user.company} · {formatRelativeTime(comment.createdAt)}
             </p>
           </div>
@@ -64,17 +64,17 @@ const CommentBranch = ({
             <button
               type="button"
               onClick={() => setReplyOpen((current) => !current)}
-              className="text-xs font-medium text-slate-600 transition-colors hover:text-slate-900"
+              className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Responder
             </button>
           )}
         </div>
-        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{comment.content}</p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/80">{comment.content}</p>
       </div>
 
       {replyOpen && isAdmin && (
-        <div className="ml-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+        <div className="ml-4 rounded-2xl border border-primary/15 bg-primary/5 p-3">
           <Textarea
             value={replyText}
             onChange={(event) => setReplyText(event.target.value)}
@@ -100,11 +100,11 @@ const CommentBranch = ({
       )}
 
       {comment.replies.map((reply) => (
-        <div key={reply.id} className="ml-4 border-l border-slate-200 pl-4">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-sm font-semibold text-slate-900">{reply.user.fullName}</p>
-            <p className="text-xs text-slate-500">{formatRelativeTime(reply.createdAt)}</p>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{reply.content}</p>
+        <div key={reply.id} className="ml-4 border-l border-primary/15 pl-4">
+          <div className="rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
+            <p className="text-sm font-medium text-foreground">{reply.user.fullName}</p>
+            <p className="text-xs text-muted-foreground/70">{formatRelativeTime(reply.createdAt)}</p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/80">{reply.content}</p>
           </div>
         </div>
       ))}
@@ -139,35 +139,35 @@ const NewsCard = ({
       layout
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`overflow-hidden rounded-[28px] border bg-white/90 shadow-[0_18px_50px_rgba(15,23,42,0.08)] ${
-        highlighted ? 'border-blue-400 ring-4 ring-blue-100' : 'border-white/70'
+      className={`overflow-hidden rounded-[28px] border bg-white/90 shadow-[0_18px_50px_rgba(14, 16, 158, 0.10)] ${
+        highlighted ? 'border-primary/40 ring-4 ring-primary/20' : 'border-white/70'
       }`}
     >
       {post.imageUrl && (
-        <div className="aspect-[16/8] overflow-hidden bg-slate-100">
+        <div className="aspect-[16/8] overflow-hidden bg-primary/10">
           <img src={resolveApiAssetUrl(post.imageUrl)} alt={post.title} className="h-full w-full object-cover" />
         </div>
       )}
 
       <div className="space-y-5 p-6 md:p-8">
         <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">Novedades</p>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-500">
+          <p className="text-xs font-medium uppercase tracking-[0.28em] text-muted-foreground/70">Novedades</p>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground/70">
             <span>{formatRelativeTime(post.timestamp)}</span>
-            <span className="rounded-full bg-slate-100 px-3 py-1">{post.commentsCount} comentarios</span>
+            <span className="rounded-full bg-primary/10 px-3 py-1">{post.commentsCount} comentarios</span>
           </div>
-          <h2 className="text-2xl font-black tracking-tight text-slate-950 md:text-4xl">{post.title}</h2>
-          {post.body && <p className="max-w-3xl whitespace-pre-wrap text-base leading-7 text-slate-700">{post.body}</p>}
+          <h2 className="text-2xl font-bold tracking-tight text-foreground md:text-4xl">{post.title}</h2>
+          {post.body && <p className="max-w-3xl whitespace-pre-wrap text-base leading-7 text-foreground/80">{post.body}</p>}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
+        <div className="flex flex-wrap items-center gap-3 border-t border-primary/15 pt-4">
           <button
             type="button"
             onClick={() => void onToggleLike(post.id)}
             className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
               post.isLiked
-                ? 'border-rose-200 bg-rose-50 text-rose-600'
-                : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                ? 'border-destructive/20 bg-destructive/10 text-destructive'
+                : 'border-primary/15 text-muted-foreground hover:bg-primary/5'
             }`}
           >
             <Heart className={`h-4 w-4 ${post.isLiked ? 'fill-current' : ''}`} />
@@ -176,7 +176,7 @@ const NewsCard = ({
           <button
             type="button"
             onClick={() => setCommentsOpen((current) => !current)}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+            className="inline-flex items-center gap-2 rounded-full border border-primary/15 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-primary/5"
           >
             <MessageCircle className="h-4 w-4" />
             Comentar
@@ -191,8 +191,8 @@ const NewsCard = ({
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden"
             >
-              <div className="space-y-5 border-t border-slate-200 pt-5">
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <div className="space-y-5 border-t border-primary/15 pt-5">
+                <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
                   <Textarea
                     value={commentText}
                     onChange={(event) => setCommentText(event.target.value)}
@@ -216,7 +216,7 @@ const NewsCard = ({
 
                 <div className="space-y-4">
                   {post.comments.length === 0 && (
-                    <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                    <p className="rounded-2xl border border-dashed border-primary/15 bg-primary/5 px-4 py-6 text-center text-sm text-muted-foreground/70">
                       Todavia no hay comentarios en esta publicacion.
                     </p>
                   )}
@@ -300,30 +300,30 @@ const News = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(191,219,254,0.7),_transparent_42%),linear-gradient(180deg,_#f8fbff_0%,_#eef4ff_48%,_#f8fafc_100%)]">
+    <div className="min-h-screen bg-[var(--gradient-soft)]">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="rounded-[32px] border border-white/70 bg-white/65 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur md:p-8">
+        <div className="rounded-[32px] border border-white/70 bg-white/65 p-6 shadow-[0_20px_60px_rgba(14, 16, 158, 0.10)] backdrop-blur md:p-8">
           <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="max-w-3xl">
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-blue-700">Pantalla de bienvenida</p>
-              <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 md:text-5xl">Novedades</h1>
-              <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
+              <p className="text-sm font-medium uppercase tracking-[0.3em] text-primary">Pantalla de bienvenida</p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-foreground md:text-5xl">Novedades</h1>
+              <p className="mt-3 text-base leading-7 text-muted-foreground md:text-lg">
                 Un espacio donde encontar las las novedades del mundo de compras, para mantenerte siempre informado.
               </p>
             </div>
-            <div className="rounded-2xl bg-slate-950 px-5 py-4 text-white shadow-lg">
+            <div className="rounded-2xl bg-primary px-5 py-4 text-white shadow-lg">
               <p className="text-xs uppercase tracking-[0.25em] text-white/70">Sesion activa</p>
-              <p className="mt-1 text-lg font-semibold">{user?.fullName ?? 'Usuario'}</p>
+              <p className="mt-1 text-lg font-medium">{user?.fullName ?? 'Usuario'}</p>
             </div>
           </div>
         </div>
 
         {isAdmin && (
-          <section className="mt-8 rounded-[28px] border border-slate-200 bg-white/90 p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+          <section className="mt-8 rounded-[28px] border border-primary/15 bg-white/90 p-6 shadow-[0_18px_50px_rgba(14, 16, 158, 0.10)]">
             <div className="mb-5">
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-700">Panel administrativo</p>
-              <h2 className="mt-2 text-2xl font-bold text-slate-950">Publicar novedad</h2>
-              <p className="mt-2 text-sm text-slate-600">Solo admins ven este formulario y tambien pueden responder comentarios de los usuarios.</p>
+              <p className="text-sm font-medium uppercase tracking-[0.24em] text-destructive">Panel administrativo</p>
+              <h2 className="mt-2 text-2xl font-bold text-foreground">Publicar novedad</h2>
+              <p className="mt-2 text-sm text-muted-foreground">Solo admins ven este formulario y tambien pueden responder comentarios de los usuarios.</p>
             </div>
 
             <form onSubmit={handleCreate} className="space-y-4">
@@ -339,16 +339,16 @@ const News = () => {
                 placeholder="Cuerpo de la publicacion"
                 className="min-h-[140px] rounded-2xl"
               />
-              <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 transition-colors hover:bg-slate-100">
-                <div className="flex items-center gap-3 text-sm text-slate-600">
+              <label className="flex cursor-pointer items-center justify-between rounded-2xl border border-dashed border-primary/25 bg-primary/5 px-4 py-4 transition-colors hover:bg-primary/10">
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
                   <ImagePlus className="h-5 w-5" />
                   <span>{imageName || 'Adjuntar imagen opcional'}</span>
                 </div>
-                <span className="text-xs font-medium uppercase tracking-[0.2em] text-slate-500">Seleccionar</span>
+                <span className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground/70">Seleccionar</span>
                 <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
               </label>
               {createMutation.error && (
-                <p className="text-sm text-red-600">
+                <p className="text-sm text-destructive">
                   {createMutation.error instanceof Error ? createMutation.error.message : 'No se pudo publicar la novedad.'}
                 </p>
               )}
@@ -363,12 +363,12 @@ const News = () => {
 
         <section className="mt-8 space-y-6">
           {newsQuery.isLoading && (
-            <div className="rounded-[28px] border border-slate-200 bg-white/90 px-6 py-10 text-center text-slate-500">
+            <div className="rounded-[28px] border border-primary/15 bg-white/90 px-6 py-10 text-center text-muted-foreground/70">
               Cargando novedades...
             </div>
           )}
           {newsQuery.error && (
-            <div className="rounded-[28px] border border-red-200 bg-red-50 px-6 py-10 text-center text-red-600">
+            <div className="rounded-[28px] border border-destructive/20 bg-destructive/10 px-6 py-10 text-center text-destructive">
               {newsQuery.error instanceof Error ? newsQuery.error.message : 'No se pudo cargar el modulo.'}
             </div>
           )}
@@ -387,7 +387,7 @@ const News = () => {
             />
           ))}
           {!newsQuery.isLoading && !newsQuery.error && (newsQuery.data ?? []).length === 0 && (
-            <div className="rounded-[28px] border border-dashed border-slate-300 bg-white/75 px-6 py-12 text-center text-slate-500">
+            <div className="rounded-[28px] border border-dashed border-primary/25 bg-white/75 px-6 py-12 text-center text-muted-foreground/70">
               Aun no hay publicaciones en Novedades.
             </div>
           )}
@@ -398,7 +398,7 @@ const News = () => {
         type="button"
         onClick={() => navigate(dashboardPath)}
         aria-label="Ir al dashboard"
-        className="fixed right-4 top-1/2 z-20 inline-flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-slate-950 text-white shadow-[0_20px_40px_rgba(15,23,42,0.25)] transition-transform hover:scale-105"
+        className="fixed right-4 top-1/2 z-20 inline-flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-white shadow-[0_20px_40px_rgba(14, 16, 158, 0.22)] transition-transform hover:scale-105"
       >
         <span className="news-bounce-arrow inline-flex">
           <ArrowRight className="h-6 w-6" />
@@ -408,7 +408,7 @@ const News = () => {
       <button
         type="button"
         onClick={() => navigate(dashboardPath)}
-        className="fixed bottom-4 right-4 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-lg transition-colors hover:bg-slate-50 sm:hidden"
+        className="fixed bottom-4 right-4 rounded-full bg-white px-4 py-2 text-sm font-medium text-foreground/80 shadow-lg transition-colors hover:bg-primary/5 sm:hidden"
       >
         Ir al panel
       </button>

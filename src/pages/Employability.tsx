@@ -327,17 +327,17 @@ const Employability = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <section className="overflow-hidden rounded-[30px] border border-sky-100 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.15),transparent_34%),linear-gradient(135deg,#eef6ff_0%,#ffffff_48%,#f3f9ff_100%)] text-slate-900 shadow-sm">
+      <section className="overflow-hidden rounded-[30px] border border-secondary/15 bg-[var(--gradient-soft)] text-foreground shadow-sm">
         <div className="grid gap-8 px-6 py-8 md:grid-cols-[1.3fr_0.95fr] md:px-8 lg:px-10">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-700 shadow-sm">
-              <Sparkles className="h-3.5 w-3.5 text-sky-600" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-secondary/25 bg-white/90 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-secondary shadow-sm">
+              <Sparkles className="h-3.5 w-3.5 text-secondary" />
               Modulo Empleabilidad
             </div>
-            <h1 className="mt-5 max-w-2xl text-3xl font-bold tracking-tight text-[#0f2a5e] md:text-4xl">
+            <h1 className="mt-5 max-w-2xl text-3xl font-bold tracking-tight text-primary md:text-4xl">
               Empleo, talento y crecimiento profesional en una sola vista.
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-[#4f6b95] md:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
               Publica vacantes, encuentra profesionales disponibles.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
@@ -346,8 +346,8 @@ const Employability = () => {
                 variant="outline"
                 className={`rounded-2xl ${
                   activeSection === 'jobs'
-                    ? 'border-[#0f2a5e] bg-[#0f2a5e] text-white hover:bg-[#12306a] hover:text-white'
-                    : 'border-sky-200 bg-sky-50/70 text-[#0f2a5e] hover:bg-sky-100'
+                    ? 'border-primary bg-primary text-white hover:bg-secondary hover:text-white'
+                    : 'border-secondary/25 bg-secondary/10 text-primary hover:bg-secondary/15'
                 }`}
                 onClick={() => {
                   setActiveSection('jobs');
@@ -362,8 +362,8 @@ const Employability = () => {
                 variant="outline"
                 className={`rounded-2xl ${
                   activeSection === 'talent'
-                    ? 'border-[#0f2a5e] bg-[#0f2a5e] text-white hover:bg-[#12306a] hover:text-white'
-                    : 'border-sky-200 bg-sky-50/70 text-[#0f2a5e] hover:bg-sky-100'
+                    ? 'border-primary bg-primary text-white hover:bg-secondary hover:text-white'
+                    : 'border-secondary/25 bg-secondary/10 text-primary hover:bg-secondary/15'
                 }`}
                 onClick={() => {
                   setActiveSection('talent');
@@ -377,25 +377,25 @@ const Employability = () => {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-1">
-            <Card className="rounded-[26px] border-sky-100 bg-white/90 text-slate-900 shadow-none">
+            <Card className="rounded-[26px] border-secondary/15 bg-white/90 text-foreground shadow-none">
               <CardContent className="p-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Vacantes activas</p>
-                <p className="mt-3 text-4xl font-bold text-[#0f2a5e]">{feedQuery.data?.stats.jobs ?? 0}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">Publicaciones listas para recibir postulaciones.</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">Vacantes activas</p>
+                <p className="mt-3 text-4xl font-bold text-primary">{feedQuery.data?.stats.jobs ?? 0}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">Publicaciones listas para recibir postulaciones.</p>
               </CardContent>
             </Card>
-            <Card className="rounded-[26px] border-sky-100 bg-white/90 text-slate-900 shadow-none">
+            <Card className="rounded-[26px] border-secondary/15 bg-white/90 text-foreground shadow-none">
               <CardContent className="p-6">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Talento visible</p>
-                <p className="mt-3 text-4xl font-bold text-[#0f2a5e]">{feedQuery.data?.stats.talentProfiles ?? 0}</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">Profesionales mostrando skills y experiencia.</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">Talento visible</p>
+                <p className="mt-3 text-4xl font-bold text-primary">{feedQuery.data?.stats.talentProfiles ?? 0}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">Profesionales mostrando skills y experiencia.</p>
               </CardContent>
             </Card>
           </div>
         </div>
       </section>
 
-      <Card className="rounded-[28px] border-sky-100 bg-white shadow-sm">
+      <Card className="rounded-[28px] border-secondary/15 bg-white shadow-sm">
         <CardContent className="p-5">
           {activeSection === 'jobs' ? (
             <div className="relative w-full">
@@ -404,11 +404,11 @@ const Employability = () => {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar por cargo, empresa o skill"
-                className="h-11 rounded-2xl border-slate-200 bg-slate-50 pl-10"
+                className="h-11 rounded-2xl border-primary/15 bg-primary/5 pl-10"
               />
             </div>
           ) : (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <div className="rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
               Explora perfiles publicados y crea el tuyo dentro de esta sección.
             </div>
           )}
@@ -417,7 +417,7 @@ const Employability = () => {
 
       {showJobForm && canPublishJob && activeSection === 'jobs' && (
         <div ref={jobFormRef}>
-        <Card className="rounded-[28px] border-slate-200 shadow-sm">
+        <Card className="rounded-[28px] border-primary/15 shadow-sm">
           <CardHeader>
             <CardTitle className="text-xl">{editingJobId ? 'Editar empleo' : 'Publicar empleo'}</CardTitle>
             <CardDescription>
@@ -507,14 +507,14 @@ const Employability = () => {
       <section id="publicaciones-laborales" className="space-y-5">
         <div className="flex items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">Vacantes</p>
+            <p className="text-xs font-medium uppercase tracking-[0.2em] text-secondary">Vacantes</p>
             <h2 className="mt-2 text-2xl font-bold text-foreground">Publicaciones laborales</h2>
             <p className="text-sm text-muted-foreground">
               Explora oportunidades abiertas y postula en un clic.
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Badge variant="outline" className="hidden rounded-full border-sky-200 bg-sky-50 px-3 py-1 text-sky-700 md:inline-flex">
+            <Badge variant="outline" className="hidden rounded-full border-secondary/25 bg-secondary/10 px-3 py-1 text-secondary md:inline-flex">
               {jobs.length} resultados
             </Badge>
             {canPublishJob && (
@@ -541,7 +541,7 @@ const Employability = () => {
         </div>
 
         {feedQuery.isLoading && (
-          <Card className="rounded-3xl border-dashed border-slate-300">
+          <Card className="rounded-3xl border-dashed border-primary/25">
             <CardContent className="p-10 text-center text-sm text-muted-foreground">
               Cargando vacantes y talento disponible...
             </CardContent>
@@ -549,7 +549,7 @@ const Employability = () => {
         )}
 
         {feedQuery.isError && (
-          <Card className="rounded-3xl border-dashed border-red-200">
+          <Card className="rounded-3xl border-dashed border-destructive/20">
             <CardContent className="p-10 text-center text-sm text-destructive">
               No se pudo cargar el modulo de empleabilidad.
             </CardContent>
@@ -559,38 +559,38 @@ const Employability = () => {
         {!feedQuery.isLoading && !feedQuery.isError && (
           <div className="grid gap-4">
             {jobs.map((job) => (
-              <Card key={job.id} className="rounded-[28px] border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+              <Card key={job.id} className="rounded-[28px] border-primary/15 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="p-6">
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-4">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-xl font-semibold text-foreground">{job.title}</h3>
-                          <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-700">
+                          <h3 className="text-xl font-medium text-foreground">{job.title}</h3>
+                          <Badge variant="outline" className="border-secondary/25 bg-secondary/10 text-secondary">
                             {job.applicants} postulaciones
                           </Badge>
                         </div>
-                        <p className="mt-1 text-sm font-medium text-slate-700">{job.company}</p>
+                        <p className="mt-1 text-sm font-medium text-foreground/80">{job.company}</p>
                         <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
                           <MapPin className="h-4 w-4" />
                           {job.location}
                         </div>
                       </div>
 
-                      <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-muted-foreground">{job.description}</p>
+                      <p className="rounded-2xl bg-primary/5 px-4 py-3 text-sm leading-6 text-muted-foreground">{job.description}</p>
 
                       <div className="space-y-2">
-                        <p className="text-sm font-semibold text-foreground">Requisitos (skills)</p>
+                        <p className="text-sm font-medium text-foreground">Requisitos (skills)</p>
                         <div className="flex flex-wrap gap-2">
                           {job.skillsRequired.map((skill) => (
-                            <Badge key={skill} variant="secondary" className="bg-slate-100 text-slate-700">
+                            <Badge key={skill} variant="secondary" className="bg-primary/10 text-foreground/80">
                               {skill}
                             </Badge>
                           ))}
                         </div>
                       </div>
 
-                      <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-sm font-medium text-emerald-700">
+                      <div className="inline-flex items-center gap-2 rounded-full bg-success/15 px-3 py-1 text-sm font-medium text-success-foreground">
                         <BriefcaseBusiness className="h-4 w-4" />
                         {job.experienceRequired}
                       </div>
@@ -628,7 +628,7 @@ const Employability = () => {
             ))}
 
             {jobs.length === 0 && (
-              <Card className="rounded-3xl border-dashed border-slate-300">
+              <Card className="rounded-3xl border-dashed border-primary/25">
                 <CardContent className="p-10 text-center text-sm text-muted-foreground">
                   No encontramos vacantes con ese criterio de busqueda.
                 </CardContent>
@@ -644,7 +644,7 @@ const Employability = () => {
         <div className="space-y-5">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">Talento</p>
+              <p className="text-xs font-medium uppercase tracking-[0.2em] text-secondary">Talento</p>
               <h2 className="mt-2 text-2xl font-bold text-foreground">Busco empleo</h2>
               <p className="text-sm text-muted-foreground">
                 Profesionales mostrando experiencia, skills y certificaciones.
@@ -653,7 +653,7 @@ const Employability = () => {
             <Button
               type="button"
               variant="outline"
-              className="rounded-2xl border-sky-200 bg-white px-5 text-[#0f2a5e] hover:bg-sky-50"
+              className="rounded-2xl border-secondary/25 bg-white px-5 text-primary hover:bg-secondary/10"
               onClick={() => {
                 setIsEditingTalent(false);
                 setTalentForm({
@@ -673,7 +673,7 @@ const Employability = () => {
 
           {showTalentForm && (
             <div ref={talentFormRef}>
-            <Card className="rounded-[28px] border-slate-200 shadow-sm">
+            <Card className="rounded-[28px] border-primary/15 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-xl">
                   {isEditingTalent ? 'Editar perfil profesional' : 'Publicarme como profesional'}
@@ -752,36 +752,36 @@ const Employability = () => {
 
           <div className="grid gap-4 xl:grid-cols-2">
             {talentProfiles.map((profile) => (
-              <Card key={profile.id} className="rounded-[28px] border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+              <Card key={profile.id} className="rounded-[28px] border-primary/15 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
                 <CardContent className="p-6">
                   <div className="flex flex-col gap-5">
                     <div className="space-y-4">
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-semibold text-foreground">{profile.user.fullName}</h3>
-                          <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                          <h3 className="text-lg font-medium text-foreground">{profile.user.fullName}</h3>
+                          <Badge variant="outline" className="border-success/25 bg-success/15 text-success-foreground">
                             {profile.availability}
                           </Badge>
                           {profile.isOwner && (
-                            <Badge variant="secondary" className="bg-sky-100 text-sky-700">
+                            <Badge variant="secondary" className="bg-secondary/15 text-secondary">
                               Tu perfil
                             </Badge>
                           )}
                         </div>
-                        <p className="text-sm font-medium text-slate-700">{profile.headline}</p>
-                        <p className="text-xs text-slate-500">
+                        <p className="text-sm font-medium text-foreground/80">{profile.headline}</p>
+                        <p className="text-xs text-muted-foreground/70">
                           {profile.user.position}
                           {profile.user.company ? ` · ${profile.user.company}` : ''}
                         </p>
                       </div>
 
-                      <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-muted-foreground">{profile.description}</p>
+                      <p className="rounded-2xl bg-primary/5 px-4 py-3 text-sm leading-6 text-muted-foreground">{profile.description}</p>
 
                       <div>
-                        <p className="text-sm font-semibold text-foreground">Skills</p>
+                        <p className="text-sm font-medium text-foreground">Skills</p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           {profile.skills.map((skill) => (
-                            <Badge key={skill} variant="secondary" className="bg-slate-100 text-slate-700">
+                            <Badge key={skill} variant="secondary" className="bg-primary/10 text-foreground/80">
                               {skill}
                             </Badge>
                           ))}
@@ -789,12 +789,12 @@ const Employability = () => {
                       </div>
 
                       <div className="grid gap-3 md:grid-cols-2">
-                        <div className="rounded-2xl bg-slate-50 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Experiencia</p>
-                          <p className="mt-2 text-sm text-slate-700">{profile.experience}</p>
+                        <div className="rounded-2xl bg-primary/5 p-4">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">Experiencia</p>
+                          <p className="mt-2 text-sm text-foreground/80">{profile.experience}</p>
                         </div>
-                        <div className="rounded-2xl bg-slate-50 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Certificaciones</p>
+                        <div className="rounded-2xl bg-primary/5 p-4">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">Certificaciones</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {profile.certifications.length > 0 ? (
                               profile.certifications.map((certification) => (
@@ -846,7 +846,7 @@ const Employability = () => {
             ))}
 
             {!feedQuery.isLoading && !feedQuery.isError && talentProfiles.length === 0 && (
-              <Card className="rounded-3xl border-dashed border-slate-300">
+              <Card className="rounded-3xl border-dashed border-primary/25">
                 <CardContent className="p-10 text-center text-sm text-muted-foreground">
                   Aun no hay perfiles profesionales publicados.
                 </CardContent>

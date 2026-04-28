@@ -5,10 +5,10 @@ set "ROOT_DIR=%~dp0"
 set "FRONTEND_DIR=%ROOT_DIR%"
 set "BACKEND_DIR=%ROOT_DIR%backend"
 
-echo Abriendo frontend y backend de Supply Nexu...
+echo Abriendo frontend y backend de BUYER NODUS...
 
-start "Supply Nexu Backend" cmd /k "cd /d "%BACKEND_DIR%" && npm.cmd run build && npm.cmd run start:prod"
-start "Supply Nexu Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && npm.cmd run dev -- --host 127.0.0.1"
+start "BUYER NODUS Backend" cmd /k "cd /d "%BACKEND_DIR%" && npm.cmd run build && npm.cmd run start:prod"
+start "BUYER NODUS Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && npm.cmd run dev -- --host 127.0.0.1"
 
 echo.
 echo Frontend y backend iniciados en ventanas separadas.

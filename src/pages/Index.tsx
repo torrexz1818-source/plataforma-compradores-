@@ -35,7 +35,7 @@ const Index = () => {
           transition={{ duration: 0.5 }}
           className="gradient-primary rounded-lg p-8 mb-8"
         >
-          <h1 className="text-3xl font-bold text-primary-foreground mb-2">SUPPLY NEXU</h1>
+          <h1 className="text-3xl font-bold text-primary-foreground mb-2">BUYER NODUS</h1>
           <p className="text-primary-foreground/80 text-base max-w-xl mb-6">
             La plataforma donde compradores y proveedores B2B aprenden, comparten experiencias y generan oportunidades.
           </p>
@@ -64,7 +64,7 @@ const Index = () => {
         </div>
 
         <div className="mb-10">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Contenido Educativo</h2>
+          <h2 className="text-lg font-medium text-foreground mb-4">Contenido Educativo</h2>
           <div className="space-y-4">
             {isLoading && <p className="text-muted-foreground text-sm">Cargando contenido...</p>}
             {isError && <p className="text-destructive text-sm">No se pudo cargar el contenido.</p>}
@@ -78,7 +78,7 @@ const Index = () => {
         </div>
 
         <div id="continue-watching">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Continuar Viendo</h2>
+          <h2 className="text-lg font-medium text-foreground mb-4">Continuar Viendo</h2>
           <div className="grid md:grid-cols-3 gap-4">
             {continueWatching.map((lesson, i) => (
               <motion.div
@@ -95,7 +95,7 @@ const Index = () => {
                   </div>
                 </div>
                 <div className="p-4">
-                  <h3 className="text-sm font-semibold text-foreground mb-1 line-clamp-1">{lesson.title}</h3>
+                  <h3 className="text-sm font-medium text-foreground mb-1 line-clamp-1">{lesson.title}</h3>
                   <p className="text-xs text-muted-foreground mb-3">{lesson.duration}</p>
                   <div className="flex items-center gap-2">
                     <Progress value={lesson.progress} className="h-1.5 flex-1" />

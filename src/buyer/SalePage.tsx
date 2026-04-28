@@ -161,32 +161,32 @@ const SalePage = () => {
       <motion.section
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="overflow-hidden rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#eef6ff_0%,#ffffff_48%,#f3f9ff_100%)] text-slate-900 shadow-sm mb-6"
+        className="overflow-hidden rounded-3xl border border-secondary/15 bg-[var(--gradient-soft)] text-foreground shadow-sm mb-6"
       >
         <div className="grid gap-4 px-6 py-8 md:grid-cols-[1.25fr_0.9fr] md:px-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-[#0f2a5e]">
+            <h1 className="text-3xl font-bold tracking-tight text-primary">
               Liquidaciones de inventario
             </h1>
-            <p className="mt-3 max-w-2xl text-sm text-[#4f6b95] md:text-base">
+            <p className="mt-3 max-w-2xl text-sm text-muted-foreground md:text-base">
               Publica oportunidades de stock y encuentra liquidaciones activas en una vista clara.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-1">
-            <Card className="border-sky-100 bg-white/85 text-slate-900 shadow-none">
+            <Card className="border-secondary/15 bg-white/85 text-foreground shadow-none">
               <CardContent className="p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Publicaciones</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">Publicaciones</p>
                 <p className="mt-2 text-3xl font-bold">{filtered.length}</p>
-                <p className="mt-1 text-sm text-slate-600">Liquidaciones visibles en el feed actual.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Liquidaciones visibles en el feed actual.</p>
               </CardContent>
             </Card>
-            <Card className="border-sky-100 bg-white/85 text-slate-900 shadow-none">
+            <Card className="border-secondary/15 bg-white/85 text-foreground shadow-none">
               <CardContent className="p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Accion rapida</p>
-                <p className="mt-2 text-lg font-bold text-[#0f2a5e]">
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">Accion rapida</p>
+                <p className="mt-2 text-lg font-bold text-primary">
                   {canPublishLiquidation ? 'Puedes publicar' : 'Explora oportunidades'}
                 </p>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-1 text-sm text-muted-foreground">
                   {canPublishLiquidation
                     ? 'Comparte una liquidacion con titulo, descripcion e imagen.'
                     : 'Revisa el inventario disponible y solicita mas informacion.'}
@@ -208,9 +208,9 @@ const SalePage = () => {
       </div>
 
       {canPublishLiquidation && (
-        <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-6 rounded-3xl border border-primary/15 bg-white p-5 shadow-sm">
           <div className="mb-4">
-            <h2 className="mb-1 text-lg font-semibold text-foreground">Publicar liquidacion</h2>
+            <h2 className="mb-1 text-lg font-medium text-foreground">Publicar liquidacion</h2>
             <p className="text-sm text-muted-foreground">
             Comparte una oportunidad disponible manteniendo la misma estructura del feed.
             </p>
@@ -271,7 +271,7 @@ const SalePage = () => {
       )}
 
       {feedback && (
-        <p className="mb-4 text-sm rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-2">
+        <p className="mb-4 text-sm rounded-md border border-success/25 bg-success/15 text-success-foreground px-3 py-2">
           {feedback}
         </p>
       )}
@@ -286,7 +286,7 @@ const SalePage = () => {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
-            className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden"
+            className="bg-white rounded-3xl border border-primary/15 shadow-sm overflow-hidden"
           >
             <div className="p-5">
               <div className="flex items-center gap-3 mb-3">
@@ -297,7 +297,7 @@ const SalePage = () => {
                   <button
                     type="button"
                     onClick={() => navigate(`/perfil/${post.author.role}/${post.author.id}`)}
-                    className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
+                    className="text-sm font-medium text-foreground hover:text-primary transition-colors"
                   >
                     {post.author.company}
                   </button>
@@ -310,7 +310,7 @@ const SalePage = () => {
 
             {post.thumbnailUrl && (
               <div
-                className="w-full max-h-[220px] border-y border-border overflow-hidden bg-[#f8f8f7] flex items-center justify-center"
+                className="w-full max-h-[220px] border-y border-border overflow-hidden bg-primary/5 flex items-center justify-center"
               >
                 <img
                   src={resolveApiAssetUrl(post.thumbnailUrl)}
@@ -322,7 +322,7 @@ const SalePage = () => {
             )}
 
             <div className="p-5">
-              <h3 className="text-base font-semibold text-foreground mb-1">{post.title}</h3>
+              <h3 className="text-base font-medium text-foreground mb-1">{post.title}</h3>
               <p
                 className="text-sm text-foreground leading-relaxed mb-3"
                 style={{
@@ -381,7 +381,7 @@ const SalePage = () => {
                 onClick={() =>
                   navigate(user?.role === 'supplier' ? `/supplier/sale/${post.id}` : `/buyer/sale/${post.id}`)
                 }
-                className="flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 transition-colors font-medium"
+                className="flex items-center gap-1.5 text-sm text-success-foreground hover:text-success-foreground transition-colors font-medium"
               >
                 <Info className="w-4 h-4" /> Mas informacion
               </button>

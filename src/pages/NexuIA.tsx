@@ -266,27 +266,27 @@ const NexuIA = () => {
 
   return (
     <div className="space-y-6 pb-8">
-      <section className="overflow-hidden rounded-[32px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,#f8fafc_0%,#ffffff_42%,#f7f7f5_100%)]">
+      <section className="overflow-hidden rounded-[32px] border border-primary/15 bg-[var(--gradient-soft)]">
         <div className="grid gap-8 px-6 py-8 lg:grid-cols-[1.35fr_0.95fr] lg:px-8">
           <div>
-            <Badge variant="outline" className="border-slate-300 bg-white/80 text-slate-700">
+            <Badge variant="outline" className="border-primary/25 bg-white/80 text-foreground/80">
               NEXU AI MARKETPLACE
             </Badge>
-            <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
+            <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight text-foreground md:text-4xl">
               Tienda de agentes IA y automatizaciones para compras
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
               Explora agentes especializados, activa automatizaciones y ejecuta flujos de compras
               en un entorno simple, visual y escalable para sourcing, riesgo, logistica y
               negociacion.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm text-slate-700">
-                <Bot className="h-4 w-4 text-slate-600" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white/80 px-4 py-2 text-sm text-foreground/80">
+                <Bot className="h-4 w-4 text-muted-foreground" />
                 Catalogo listo para usar
               </div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-sm text-slate-700">
-                <Zap className="h-4 w-4 text-slate-600" />
+              <div className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white/80 px-4 py-2 text-sm text-foreground/80">
+                <Zap className="h-4 w-4 text-muted-foreground" />
                 Ejecucion bajo demanda
               </div>
             </div>
@@ -299,11 +299,11 @@ const NexuIA = () => {
               return (
                 <Card key={item.label} className="border-white/70 bg-white/80 shadow-sm">
                   <CardHeader className="pb-3">
-                    <CardDescription className="flex items-center gap-2 text-slate-500">
-                      <Icon className="h-4 w-4 text-slate-600" />
+                    <CardDescription className="flex items-center gap-2 text-muted-foreground/70">
+                      <Icon className="h-4 w-4 text-muted-foreground" />
                       {item.label}
                     </CardDescription>
-                    <CardTitle className="text-3xl text-slate-900">{item.value}</CardTitle>
+                    <CardTitle className="text-3xl text-foreground">{item.value}</CardTitle>
                   </CardHeader>
                 </Card>
               );
@@ -314,21 +314,21 @@ const NexuIA = () => {
 
       {!isDetailView ? (
       <section className="space-y-6">
-        <Card className="border-slate-200 shadow-sm">
+        <Card className="border-primary/15 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-xl text-slate-900">Marketplace de agentes IA</CardTitle>
+            <CardTitle className="text-xl text-foreground">Marketplace de agentes IA</CardTitle>
             <CardDescription>
               Filtra por categoria o automatizacion y abre la ficha completa de cada agente.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="relative">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
               <Input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Buscar por nombre, caso de uso o descripcion"
-                className="h-11 rounded-2xl border-slate-200 pl-11"
+                className="h-11 rounded-2xl border-primary/15 pl-11"
               />
             </div>
 
@@ -344,37 +344,37 @@ const NexuIA = () => {
                     onClick={() => navigate(`/nexu-ia/${agent.id}`)}
                     className={`rounded-[26px] border p-5 text-left transition-all ${
                       isSelected
-                        ? 'border-slate-300 bg-[linear-gradient(145deg,#fafaf9_0%,#f3f4f6_100%)] shadow-md'
-                        : 'border-slate-200 bg-white hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm'
+                        ? 'border-primary/25 bg-[var(--gradient-soft)] shadow-md'
+                        : 'border-primary/15 bg-white hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-sm'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div
                         className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-sm"
-                        style={{ backgroundColor: '#111827' }}
+                        style={{ backgroundColor: 'var(--color-blue-buyer)' }}
                       >
                         <Icon className="h-5 w-5" />
                       </div>
-                      <Badge variant="outline" className="border-slate-200 text-slate-600">
+                      <Badge variant="outline" className="border-primary/15 text-muted-foreground">
                         {agent.category}
                       </Badge>
                     </div>
 
-                    <h3 className="mt-4 text-lg font-semibold text-slate-900">{agent.name}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{agent.description}</p>
+                    <h3 className="mt-4 text-lg font-medium text-foreground">{agent.name}</h3>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{agent.description}</p>
 
-                    <div className="mt-4 rounded-2xl bg-slate-50 p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="mt-4 rounded-2xl bg-primary/5 p-3">
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Caso de uso
                       </p>
-                      <p className="mt-1 text-sm text-slate-700">{agent.useCase}</p>
+                      <p className="mt-1 text-sm text-foreground/80">{agent.useCase}</p>
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">
-                      <Badge className="bg-slate-900 text-white hover:bg-slate-900">
+                      <Badge className="bg-primary text-white hover:bg-primary">
                         {agent.automationType}
                       </Badge>
-                      <span className="inline-flex items-center gap-1 text-sm font-medium text-slate-700">
+                      <span className="inline-flex items-center gap-1 text-sm font-medium text-foreground/80">
                         {agent.isActive ? 'Usar agente' : 'Activar'}
                         <ArrowRight className="h-4 w-4" />
                       </span>
@@ -385,7 +385,7 @@ const NexuIA = () => {
             </div>
 
             {!filteredAgents.length ? (
-              <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+              <div className="rounded-[24px] border border-dashed border-primary/15 bg-primary/5 p-6 text-sm text-muted-foreground/70">
                 No hay agentes disponibles en este momento.
               </div>
             ) : null}
@@ -397,65 +397,65 @@ const NexuIA = () => {
         <button
           type="button"
           onClick={() => navigate('/nexu-ia')}
-          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:text-slate-900"
+          className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white px-4 py-2 text-sm font-medium text-foreground/80 transition hover:border-primary/25 hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Regresar
         </button>
 
         <div className="space-y-6">
-          <Card className="overflow-hidden border-slate-200 shadow-sm">
-            <CardHeader className="border-b border-slate-100 bg-[linear-gradient(145deg,#fafaf9_0%,#ffffff_100%)]">
+          <Card className="overflow-hidden border-primary/15 shadow-sm">
+            <CardHeader className="border-b border-primary/10 bg-[var(--gradient-soft)]">
               <CardDescription>Vista detalle del agente</CardDescription>
-              <CardTitle className="text-xl text-slate-900">
+              <CardTitle className="text-xl text-foreground">
                 {selectedAgent ? selectedAgent.name : 'Selecciona un agente'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6 p-6">
               {detailQuery.isLoading ? (
-                <p className="text-sm text-slate-500">Cargando detalle del agente...</p>
+                <p className="text-sm text-muted-foreground/70">Cargando detalle del agente...</p>
               ) : selectedAgent ? (
                 <>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Badge variant="outline" className="border-slate-200 text-slate-600">
+                    <Badge variant="outline" className="border-primary/15 text-muted-foreground">
                       {selectedAgent.category}
                     </Badge>
-                    <Badge className="bg-slate-900 text-white hover:bg-slate-900">
+                    <Badge className="bg-primary text-white hover:bg-primary">
                       {selectedAgent.automationType}
                     </Badge>
                     <Badge
                       variant="outline"
-                      className={selectedAgent.isActive ? 'border-emerald-200 text-emerald-700' : 'border-amber-200 text-amber-700'}
+                      className={selectedAgent.isActive ? 'border-success/25 text-success-foreground' : 'border-destructive/20 text-destructive'}
                     >
                       {selectedAgent.isActive ? 'Activo' : 'Disponible para activar'}
                     </Badge>
                   </div>
 
-                  <p className="text-sm leading-6 text-slate-600">{selectedAgent.longDescription}</p>
+                  <p className="text-sm leading-6 text-muted-foreground">{selectedAgent.longDescription}</p>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Funcionalidades
                       </p>
                       <div className="mt-3 space-y-2">
                         {selectedAgent.functionalities.map((item) => (
-                          <div key={item} className="flex items-start gap-2 text-sm text-slate-700">
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+                          <div key={item} className="flex items-start gap-2 text-sm text-foreground/80">
+                            <CheckCircle2 className="mt-0.5 h-4 w-4 text-success-foreground" />
                             <span>{item}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Beneficios
                       </p>
                       <div className="mt-3 space-y-2">
                         {selectedAgent.benefits.map((item) => (
-                          <div key={item} className="flex items-start gap-2 text-sm text-slate-700">
-                            <Sparkles className="mt-0.5 h-4 w-4 text-slate-600" />
+                          <div key={item} className="flex items-start gap-2 text-sm text-foreground/80">
+                            <Sparkles className="mt-0.5 h-4 w-4 text-muted-foreground" />
                             <span>{item}</span>
                           </div>
                         ))}
@@ -464,24 +464,24 @@ const NexuIA = () => {
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-[24px] border border-slate-200 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-[24px] border border-primary/15 p-4">
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Inputs requeridos
                       </p>
                       <div className="mt-3 space-y-3">
                         {isQuoteComparator ? (
                           <>
                             <div className="space-y-2">
-                              <label className="text-sm font-medium text-slate-700">
+                              <label className="text-sm font-medium text-foreground/80">
                                 Archivos de cotizaciones
                               </label>
-                              <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-400 hover:bg-slate-100">
-                                <Upload className="h-5 w-5 text-slate-600" />
+                              <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-primary/5 px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
+                                <Upload className="h-5 w-5 text-muted-foreground" />
                                 <div>
-                                  <p className="text-sm font-medium text-slate-800">
+                                  <p className="text-sm font-medium text-foreground">
                                     Subir PDF, Excel, CSV, Word u otros soportes
                                   </p>
-                                  <p className="mt-1 text-xs text-slate-500">
+                                  <p className="mt-1 text-xs text-muted-foreground/70">
                                     Puedes cargar varios archivos a la vez para tu flujo de n8n.
                                   </p>
                                 </div>
@@ -494,7 +494,7 @@ const NexuIA = () => {
                                 />
                               </label>
                               {uploadedComparisonFiles.length ? (
-                                <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-3">
+                                <div className="space-y-2 rounded-2xl border border-primary/15 bg-white p-3">
                                   {uploadedComparisonFiles.map((file) => {
                                     const isSpreadsheet =
                                       file.name.endsWith('.xls') ||
@@ -505,13 +505,13 @@ const NexuIA = () => {
                                     return (
                                       <div
                                         key={`${file.name}-${file.size}`}
-                                        className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2"
+                                        className="flex items-center justify-between gap-3 rounded-xl bg-primary/5 px-3 py-2"
                                       >
                                         <div className="flex items-center gap-2">
-                                          <FileIcon className="h-4 w-4 text-slate-600" />
-                                          <span className="text-sm text-slate-700">{file.name}</span>
+                                          <FileIcon className="h-4 w-4 text-muted-foreground" />
+                                          <span className="text-sm text-foreground/80">{file.name}</span>
                                         </div>
-                                        <span className="text-xs text-slate-500">
+                                        <span className="text-xs text-muted-foreground/70">
                                           {(file.size / 1024 / 1024).toFixed(2)} MB
                                         </span>
                                       </div>
@@ -524,7 +524,7 @@ const NexuIA = () => {
                         ) : (
                           selectedAgent.inputs.map((inputLabel) => (
                             <div key={inputLabel} className="space-y-1.5">
-                              <label className="text-sm font-medium text-slate-700">{inputLabel}</label>
+                              <label className="text-sm font-medium text-foreground/80">{inputLabel}</label>
                               <Input
                                 value={agentInputs[inputLabel] ?? ''}
                                 onChange={(event) =>
@@ -534,14 +534,14 @@ const NexuIA = () => {
                                   }))
                                 }
                                 placeholder={`Ingresa ${inputLabel.toLowerCase()}`}
-                                className="rounded-xl border-slate-200"
+                                className="rounded-xl border-primary/15"
                               />
                             </div>
                           ))
                         )}
                         {!isQuoteComparator ? (
                           <div className="space-y-1.5">
-                            <label className="text-sm font-medium text-slate-700">
+                            <label className="text-sm font-medium text-foreground/80">
                               Contexto adicional
                             </label>
                             <Textarea
@@ -553,31 +553,31 @@ const NexuIA = () => {
                                 }))
                               }
                               placeholder="Agrega instrucciones, restricciones o notas para la ejecucion"
-                              className="min-h-[104px] rounded-2xl border-slate-200"
+                              className="min-h-[104px] rounded-2xl border-primary/15"
                             />
                           </div>
                         ) : null}
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-slate-200 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-[24px] border border-primary/15 p-4">
+                      <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Output esperado
                       </p>
                       <div className="mt-3 space-y-2">
                         {selectedAgent.outputs.map((item) => (
-                          <div key={item} className="flex items-start gap-2 text-sm text-slate-700">
-                            <ArrowRight className="mt-0.5 h-4 w-4 text-slate-600" />
+                          <div key={item} className="flex items-start gap-2 text-sm text-foreground/80">
+                            <ArrowRight className="mt-0.5 h-4 w-4 text-muted-foreground" />
                             <span>{item}</span>
                           </div>
                         ))}
                       </div>
 
-                      <div className="mt-6 rounded-[20px] bg-slate-50 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                      <div className="mt-6 rounded-[20px] bg-primary/5 p-4">
+                        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                           Caso de uso principal
                         </p>
-                        <p className="mt-2 text-sm leading-6 text-slate-700">{selectedAgent.useCase}</p>
+                        <p className="mt-2 text-sm leading-6 text-foreground/80">{selectedAgent.useCase}</p>
                       </div>
                     </div>
                   </div>
@@ -586,7 +586,7 @@ const NexuIA = () => {
                     {isQuoteComparator ? (
                       <Button
                         type="button"
-                        className="rounded-full bg-slate-900 hover:bg-slate-800"
+                        className="rounded-full bg-primary hover:bg-primary"
                         onClick={() => n8nComparativeMutation.mutate()}
                         disabled={n8nComparativeMutation.isPending}
                       >
@@ -600,7 +600,7 @@ const NexuIA = () => {
                         <Button
                           type="button"
                           variant={selectedAgent.isActive ? 'outline' : 'default'}
-                          className={selectedAgent.isActive ? 'rounded-full' : 'rounded-full bg-slate-900 hover:bg-slate-800'}
+                          className={selectedAgent.isActive ? 'rounded-full' : 'rounded-full bg-primary hover:bg-primary'}
                           onClick={() => activateMutation.mutate(selectedAgent.id)}
                           disabled={activateMutation.isPending}
                         >
@@ -608,7 +608,7 @@ const NexuIA = () => {
                         </Button>
                         <Button
                           type="button"
-                          className="rounded-full bg-slate-900 hover:bg-slate-800"
+                          className="rounded-full bg-primary hover:bg-primary"
                           onClick={handleRunAgent}
                           disabled={runMutation.isPending}
                         >
@@ -620,21 +620,21 @@ const NexuIA = () => {
                   </div>
 
                   {runMutation.data?.execution.agentId === selectedAgent.id ? (
-                    <div className="rounded-[24px] border border-emerald-100 bg-emerald-50/70 p-4">
-                      <p className="text-sm font-semibold text-emerald-900">Resultado mas reciente</p>
-                      <p className="mt-2 text-sm text-emerald-800">
+                    <div className="rounded-[24px] border border-success/15 bg-success/15 p-4">
+                      <p className="text-sm font-medium text-success-foreground">Resultado mas reciente</p>
+                      <p className="mt-2 text-sm text-success-foreground">
                         {String(runMutation.data.execution.outputData.summary ?? 'Ejecucion completada')}
                       </p>
-                      <p className="mt-2 text-xs text-emerald-700">
+                      <p className="mt-2 text-xs text-success-foreground">
                         Ejecutado el {formatDateTime(runMutation.data.execution.executedAt)}
                       </p>
                     </div>
                   ) : null}
 
                   {isQuoteComparator && comparativePdfUrl ? (
-                    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-                      <p className="text-sm font-semibold text-slate-900">PDF comparativo generado</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">
+                    <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                      <p className="text-sm font-medium text-foreground">PDF comparativo generado</p>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
                         El flujo generó el comparativo final en PDF.
                       </p>
                       <div className="mt-4 flex flex-wrap gap-3">
@@ -642,7 +642,7 @@ const NexuIA = () => {
                           href={comparativePdfUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                          className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary"
                         >
                           <FileText className="h-4 w-4" />
                           Ver PDF
@@ -650,7 +650,7 @@ const NexuIA = () => {
                         <a
                           href={comparativePdfUrl}
                           download={comparativePdfFileName}
-                          className="inline-flex items-center gap-2 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:text-slate-900"
+                          className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-white px-4 py-2 text-sm font-medium text-foreground/80 transition hover:border-primary/35 hover:text-foreground"
                         >
                           <ArrowRight className="h-4 w-4" />
                           Descargar PDF
@@ -660,37 +660,37 @@ const NexuIA = () => {
                   ) : null}
                 </>
               ) : (
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground/70">
                   Elige un agente del catalogo para ver descripcion completa, beneficios e inputs.
                 </p>
               )}
             </CardContent>
           </Card>
 
-          <Card className="border-slate-200 shadow-sm">
+          <Card className="border-primary/15 shadow-sm">
             <CardHeader>
               <CardDescription>Historial de ejecuciones</CardDescription>
-              <CardTitle className="text-xl text-slate-900">Automatizaciones recientes</CardTitle>
+              <CardTitle className="text-xl text-foreground">Automatizaciones recientes</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {executionsQuery.isLoading ? (
-                <p className="text-sm text-slate-500">Cargando historial...</p>
+                <p className="text-sm text-muted-foreground/70">Cargando historial...</p>
               ) : selectedAgentExecutions.length ? (
                 selectedAgentExecutions.slice(0, 4).map((execution) => (
-                  <div key={execution.id} className="rounded-[22px] border border-slate-200 p-4">
+                  <div key={execution.id} className="rounded-[22px] border border-primary/15 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-slate-900">{execution.agentName}</p>
-                      <Badge variant="outline" className="border-slate-200 text-slate-600">
+                      <p className="text-sm font-medium text-foreground">{execution.agentName}</p>
+                      <Badge variant="outline" className="border-primary/15 text-muted-foreground">
                         {formatDateTime(execution.executedAt)}
                       </Badge>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {String(execution.outputData.summary ?? 'Ejecucion completada')}
                     </p>
                   </div>
                 ))
               ) : (
-                <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+                <div className="rounded-[24px] border border-dashed border-primary/15 bg-primary/5 p-6 text-sm text-muted-foreground/70">
                   Aun no hay ejecuciones para este agente. Ejecutalo para generar el primer historial.
                 </div>
               )}

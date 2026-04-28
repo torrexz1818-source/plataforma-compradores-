@@ -37,12 +37,12 @@ const SupplierLayout = () => {
     ? {
         label: 'Administrador',
         icon: Shield,
-        className: 'bg-amber-500/25 border border-amber-300/40 text-amber-100',
+        className: 'bg-destructive/20 border border-destructive/30 text-white/90',
       }
     : {
         label: 'Proveedor',
         icon: Store,
-        className: 'bg-[#0F6E56]/25 border border-[#0F6E56]/50 text-emerald-100',
+        className: 'bg-success/20 border border-success/40 text-white/90',
       };
 
   const navSections = isAdmin
@@ -122,10 +122,10 @@ const SupplierLayout = () => {
 
   return (
     <div className="h-screen bg-background flex overflow-hidden">
-      <aside className="w-72 h-screen bg-[#0f2a5e] text-white flex flex-col overflow-hidden">
+      <aside className="w-72 h-screen sidebar-shell flex flex-col overflow-hidden">
         <div className="px-4 py-4 border-b border-white/15">
-          <p className="text-xl font-bold tracking-tight">Supply Nexu</p>
-          <span className={`inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-semibold ${roleBadge.className}`}>
+          <p className="text-xl font-bold tracking-tight">BUYER NODUS</p>
+          <span className={`inline-flex items-center gap-1 mt-3 px-2.5 py-1 rounded-full text-xs font-medium ${roleBadge.className}`}>
             <roleBadge.icon className="w-3 h-3" />
             {roleBadge.label}
           </span>
@@ -146,8 +146,8 @@ const SupplierLayout = () => {
                       to={item.to}
                       className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         isActive(item.to)
-                          ? 'bg-white text-[#0f2a5e]'
-                          : 'text-white/85 hover:bg-white/10 hover:text-white'
+                          ? 'sidebar-link-active'
+                          : 'sidebar-link'
                       }`}
                     >
                       <item.icon className="w-4 h-4" />
@@ -160,8 +160,8 @@ const SupplierLayout = () => {
                           to={child.to}
                           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                             isActive(child.to)
-                              ? 'bg-white text-[#0f2a5e]'
-                              : 'text-white/75 hover:bg-white/10 hover:text-white'
+                              ? 'sidebar-link-active'
+                              : 'sidebar-link'
                           }`}
                         >
                           <child.icon className="w-4 h-4" />
@@ -176,8 +176,8 @@ const SupplierLayout = () => {
                     to={item.to}
                     className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       isActive(item.to)
-                        ? 'bg-white text-[#0f2a5e]'
-                        : 'text-white/85 hover:bg-white/10 hover:text-white'
+                        ? 'sidebar-link-active'
+                        : 'sidebar-link'
                     }`}
                   >
                     <item.icon className="w-4 h-4" />

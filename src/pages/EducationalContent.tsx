@@ -41,12 +41,12 @@ const EducationalPostCard = ({ post, index, onOpen }: EducationalPostCardProps) 
             className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full w-full items-end bg-[linear-gradient(135deg,hsl(var(--primary))_0%,#244c96_52%,#eef6ff_100%)] px-5 py-5 text-left">
+          <div className="flex h-full w-full items-end bg-[var(--gradient-brand)] px-5 py-5 text-left">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/80">
+              <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/80">
                 Contenido educativo
               </p>
-              <p className="mt-2 line-clamp-3 text-base font-semibold leading-tight text-white">
+              <p className="mt-2 line-clamp-3 text-base font-medium leading-tight text-white">
                 {post.title}
               </p>
             </div>
@@ -54,7 +54,7 @@ const EducationalPostCard = ({ post, index, onOpen }: EducationalPostCardProps) 
         )}
 
         {hasMedia && <div className="absolute inset-0 bg-gradient-to-t from-primary/55 via-primary/10 to-transparent" />}
-        <div className="absolute left-4 top-4 rounded-full bg-primary px-3 py-1 text-[11px] font-semibold text-primary-foreground shadow-sm">
+        <div className="absolute left-4 top-4 rounded-full bg-primary px-3 py-1 text-[11px] font-medium text-primary-foreground shadow-sm">
           {post.mediaType === 'video' || post.videoUrl ? 'Video' : 'Articulo'}
         </div>
         {(post.mediaType === 'video' || post.videoUrl) && (
@@ -67,7 +67,7 @@ const EducationalPostCard = ({ post, index, onOpen }: EducationalPostCardProps) 
       </div>
 
       <div className="flex flex-1 flex-col p-5">
-        <h3 className="line-clamp-3 text-xl font-semibold leading-snug text-foreground">
+        <h3 className="line-clamp-3 text-xl font-medium leading-snug text-foreground">
           {post.title}
         </h3>
         <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground">
@@ -106,9 +106,9 @@ const EducationalContent = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8">
-      <div className="mb-8 rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#eef6ff_0%,#ffffff_52%,#f6fbff_100%)] px-6 py-6 shadow-sm">
-        <h1 className="text-2xl font-bold text-[#0f2a5e]">Contenido educativo</h1>
-        <p className="mt-1 text-sm text-[#4f6b95]">
+      <div className="mb-8 rounded-3xl border border-secondary/15 bg-[var(--gradient-soft)] px-6 py-6 shadow-sm">
+        <h1 className="text-2xl font-bold text-primary">Contenido educativo</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Educación especializada en compras: tips, guías, casos reales y tecnología aplicada para una formación continua y estratégica.
         </p>
       </div>
@@ -124,7 +124,7 @@ const EducationalContent = () => {
       </div>
 
       <div className="mb-10">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Videos y articulos</h2>
+        <h2 className="text-lg font-medium text-foreground mb-4">Videos y articulos</h2>
         <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
           {isLoading && <p className="text-muted-foreground text-sm">Cargando contenido...</p>}
           {isError && <p className="text-destructive text-sm">No se pudo cargar el contenido.</p>}
@@ -146,7 +146,7 @@ const EducationalContent = () => {
       </div>
 
       <div id="continue-watching">
-        <h2 className="text-lg font-semibold text-foreground mb-4">Continuar viendo</h2>
+        <h2 className="text-lg font-medium text-foreground mb-4">Continuar viendo</h2>
         <div className="grid md:grid-cols-3 gap-4">
           {continueWatching.map((lesson, index) => (
             <motion.div
@@ -163,7 +163,7 @@ const EducationalContent = () => {
                 </div>
               </div>
               <div className="p-4">
-                <h3 className="text-sm font-semibold text-foreground mb-1 line-clamp-1">{lesson.title}</h3>
+                <h3 className="text-sm font-medium text-foreground mb-1 line-clamp-1">{lesson.title}</h3>
                 <p className="text-xs text-muted-foreground mb-3">{lesson.duration}</p>
                 <div className="flex items-center gap-2">
                   <Progress value={lesson.progress} className="h-1.5 flex-1" />

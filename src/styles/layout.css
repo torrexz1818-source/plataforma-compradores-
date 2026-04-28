@@ -1,0 +1,45 @@
+@layer components {
+  .app-shell {
+    background: var(--app-bg);
+    color: var(--text-on-light);
+  }
+
+  .sidebar-shell {
+    background: var(--sidebar-bg);
+    color: var(--text-on-dark);
+  }
+
+  .sidebar-link {
+    color: rgba(255, 255, 255, 0.86);
+    transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+  }
+
+  .sidebar-link:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-on-dark);
+  }
+
+  .sidebar-link-active {
+    background: var(--color-white);
+    color: var(--color-blue-buyer);
+    box-shadow: inset 4px 0 0 var(--color-red-nodus);
+  }
+
+  .topbar-shell {
+    background: var(--topbar-bg);
+    color: var(--text-on-light);
+    border-bottom: 1px solid var(--border-soft);
+  }
+
+  .hero-brand {
+    background: var(--gradient-brand);
+    color: var(--text-on-dark);
+    box-shadow: var(--shadow-purple);
+  }
+
+  .surface-soft {
+    background: var(--gradient-soft);
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-soft);
+  }
+}

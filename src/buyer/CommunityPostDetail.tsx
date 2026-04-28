@@ -63,7 +63,7 @@ const CommunityPostDetail = () => {
             <button
               type="button"
               onClick={() => navigate(`/perfil/${post.author.role}/${post.author.id}`)}
-              className="flex h-12 w-12 items-center justify-center rounded-full gradient-primary text-sm font-semibold text-primary-foreground shadow-sm"
+              className="flex h-12 w-12 items-center justify-center rounded-full gradient-primary text-sm font-medium text-primary-foreground shadow-sm"
               aria-label={`Ver perfil de ${post.author.fullName}`}
             >
               {initials}
@@ -73,7 +73,7 @@ const CommunityPostDetail = () => {
                 <button
                   type="button"
                   onClick={() => navigate(`/perfil/${post.author.role}/${post.author.id}`)}
-                  className="text-left text-base font-semibold text-foreground transition-colors hover:text-primary sm:text-lg"
+                  className="text-left text-base font-medium text-foreground transition-colors hover:text-primary sm:text-lg"
                 >
                   {post.author.fullName}
                 </button>
@@ -166,7 +166,7 @@ const CommunityPostDetail = () => {
       </div>
 
       {!!feedback && (
-        <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+        <p className="mt-4 rounded-md border border-success/25 bg-success/15 px-3 py-2 text-sm text-success-foreground">
           {feedback}
         </p>
       )}

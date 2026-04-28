@@ -108,7 +108,7 @@ const UserProfilePage = () => {
           <h1 className="text-2xl font-bold text-foreground">
             {'name' in profile ? profile.name : sessionUser?.fullName ?? 'Usuario'}
           </h1>
-          <Badge className={profileRole === 'supplier' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}>
+          <Badge className={profileRole === 'supplier' ? 'bg-success/25 text-success-foreground' : 'bg-primary/15 text-primary'}>
             {profileRole === 'supplier' ? 'Proveedor' : 'Comprador'}
           </Badge>
         </div>
@@ -156,7 +156,7 @@ const UserProfilePage = () => {
         )}
 
         {!!feedback && (
-          <p className="text-sm rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-2">
+          <p className="text-sm rounded-md border border-success/25 bg-success/15 text-success-foreground px-3 py-2">
             {feedback}
           </p>
         )}

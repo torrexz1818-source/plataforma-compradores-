@@ -119,7 +119,7 @@ const SupplierProfile = () => {
                   key={s}
                   className={`w-4 h-4 ${
                     s <= ratingDisplay
-                      ? 'fill-yellow-400 text-yellow-400'
+                      ? 'fill-success text-success'
                       : 'text-muted-foreground'
                   }`}
                 />
@@ -128,7 +128,7 @@ const SupplierProfile = () => {
           </div>
           <Badge
             variant="outline"
-            className="text-xs border-green-500 text-green-600 bg-green-50"
+            className="text-xs border-success text-success-foreground bg-success/15"
           >
             Proveedor
           </Badge>
@@ -166,24 +166,24 @@ const SupplierProfile = () => {
         </div>
 
         <div>
-          <p className="text-sm font-semibold text-foreground mb-1">Descripcion</p>
+          <p className="text-sm font-medium text-foreground mb-1">Descripcion</p>
           <p className="text-sm text-muted-foreground">{supplier.description}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-card border border-border rounded-xl p-5">
-          <p className="text-sm font-semibold text-foreground mb-4">
+          <p className="text-sm font-medium text-foreground mb-4">
             Comentarios de compradores
           </p>
           <div className="flex flex-col gap-4">
             {comments.map((c) => (
               <div key={c.id} className="flex items-start gap-3">
-                <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground flex-shrink-0">
+                <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-shrink-0">
                   {c.buyer.name.charAt(0)}
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-foreground leading-tight">
+                  <p className="text-sm font-medium text-foreground leading-tight">
                     {c.buyer.name}
                   </p>
                   <p className="text-xs text-muted-foreground mb-0.5">{c.buyer.company}</p>
@@ -201,7 +201,7 @@ const SupplierProfile = () => {
 
         <div className="flex flex-col gap-4">
           <div className="bg-card border border-border rounded-xl p-5">
-            <p className="text-sm font-semibold text-foreground mb-3">
+            <p className="text-sm font-medium text-foreground mb-3">
               Contactar proveedor
             </p>
             <>
@@ -230,7 +230,7 @@ const SupplierProfile = () => {
           </div>
 
           <div className="bg-card border border-border rounded-xl p-5">
-            <p className="text-sm font-semibold text-foreground mb-1">
+            <p className="text-sm font-medium text-foreground mb-1">
               Dejar comentario y estrellas
             </p>
             <p className="text-xs text-muted-foreground mb-3">
@@ -252,7 +252,7 @@ const SupplierProfile = () => {
                   <Star
                     className={`w-5 h-5 transition-colors ${
                       s <= (starHover || starSelected)
-                        ? 'fill-yellow-400 text-yellow-400'
+                        ? 'fill-success text-success'
                         : 'text-muted-foreground'
                     }`}
                   />
@@ -270,7 +270,7 @@ const SupplierProfile = () => {
             />
 
             {comentarioEnviado && (
-              <p className="text-xs text-green-600 mb-2">
+              <p className="text-xs text-success-foreground mb-2">
                 Comentario enviado correctamente.
               </p>
             )}
@@ -293,7 +293,7 @@ const SupplierProfile = () => {
       </div>
 
       {!!feedback && (
-        <p className="mt-4 text-sm rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-2">
+        <p className="mt-4 text-sm rounded-md border border-success/25 bg-success/15 text-success-foreground px-3 py-2">
           {feedback}
         </p>
       )}

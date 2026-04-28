@@ -46,9 +46,9 @@ const Community = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-6 rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#eef6ff_0%,#ffffff_52%,#f6fbff_100%)] px-6 py-6 shadow-sm">
-        <h1 className="mb-1 text-2xl font-bold text-[#0f2a5e]">Comunidad B2B</h1>
-        <p className="text-sm text-[#4f6b95]">
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="mb-6 rounded-3xl border border-secondary/15 bg-[var(--gradient-soft)] px-6 py-6 shadow-sm">
+        <h1 className="mb-1 text-2xl font-bold text-primary">Comunidad B2B</h1>
+        <p className="text-sm text-muted-foreground">
           Espacio exclusivo para compradores comparte, pregunta y aprende de tus pares.
         </p>
       </motion.div>

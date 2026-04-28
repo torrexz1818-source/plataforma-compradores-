@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -149,7 +149,7 @@ const EditSupplierPublication = () => {
         </label>
 
         {feedback && (
-          <p className="text-sm text-emerald-700 mb-4">{feedback}</p>
+          <p className="text-sm text-success-foreground mb-4">{feedback}</p>
         )}
 
         <div className="flex items-center gap-2">

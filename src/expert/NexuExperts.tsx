@@ -289,16 +289,16 @@ const NexuExperts = () => {
 
   return (
     <div className="space-y-6 pb-8">
-      <section className="overflow-hidden rounded-[28px] border border-sky-100 bg-[linear-gradient(135deg,#eef6ff_0%,#ffffff_38%,#e6f4ff_100%)]">
+      <section className="overflow-hidden rounded-[28px] border border-secondary/15 bg-[var(--gradient-soft)]">
         <div className="grid gap-6 px-6 py-8 lg:grid-cols-[1.4fr_0.9fr] lg:px-8">
           <div>
-            <Badge variant="outline" className="border-sky-200 bg-white/80 text-sky-700">
+            <Badge variant="outline" className="border-secondary/25 bg-white/80 text-secondary">
               NEXU EXPERTS
             </Badge>
-            <h1 className="mt-4 max-w-2xl text-3xl font-bold tracking-tight text-slate-900 md:text-4xl">
+            <h1 className="mt-4 max-w-2xl text-3xl font-bold tracking-tight text-foreground md:text-4xl">
               Conecta con expertos del sector
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-base">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground md:text-base">
               Descubre perfiles completos, valida disponibilidad en tiempo real, agenda tu cita y
               genera automaticamente tu reunion en Google Meet, con confirmacion directa a tu
               correo.
@@ -309,7 +309,7 @@ const NexuExperts = () => {
             <Card className="border-white/70 bg-white/80 shadow-sm">
               <CardHeader className="pb-3">
                 <CardDescription>Expertos activos</CardDescription>
-                <CardTitle className="text-3xl text-slate-900">
+                <CardTitle className="text-3xl text-foreground">
                   {expertsQuery.data?.length ?? 0}
                 </CardTitle>
               </CardHeader>
@@ -317,7 +317,7 @@ const NexuExperts = () => {
             <Card className="border-white/70 bg-white/80 shadow-sm">
               <CardHeader className="pb-3">
                 <CardDescription>Tus citas programadas</CardDescription>
-                <CardTitle className="text-3xl text-slate-900">{dashboardItems.length}</CardTitle>
+                <CardTitle className="text-3xl text-foreground">{dashboardItems.length}</CardTitle>
               </CardHeader>
             </Card>
           </div>
@@ -325,26 +325,26 @@ const NexuExperts = () => {
       </section>
 
       <section className="grid gap-6">
-        <Card className="overflow-hidden border-sky-100 bg-[linear-gradient(135deg,#eef6ff_0%,#ffffff_52%,#f4f9ff_100%)] text-slate-900 shadow-sm">
+        <Card className="overflow-hidden border-secondary/15 bg-[var(--gradient-soft)] text-foreground shadow-sm">
           <CardHeader>
-            <CardDescription className="text-[#4f6b95]">Sincronizacion</CardDescription>
-            <CardTitle className="text-xl text-[#0f2a5e]">Google Calendar</CardTitle>
+            <CardDescription className="text-muted-foreground">Sincronizacion</CardDescription>
+            <CardTitle className="text-xl text-primary">Google Calendar</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-[24px] border border-[#cfe0ff] bg-[linear-gradient(135deg,#ffffff_0%,#f5f9ff_65%,#edf5ff_100%)] p-5 shadow-sm">
+            <div className="rounded-[24px] border border-primary/20 bg-[var(--gradient-soft)] p-5 shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-3">
                   {calendarConnected ? (
-                    <div className="inline-flex items-center gap-2 rounded-full border border-[#d9e7ff] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#2f6fed]">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-secondary">
                       <Sparkles className="h-3.5 w-3.5" />
                       Sincronizacion activa
                     </div>
                   ) : null}
                   <div>
-                    <p className="text-lg font-semibold text-[#0f2a5e]">
+                    <p className="text-lg font-medium text-primary">
                       Reuniones conectadas con Google Calendar
                     </p>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[#38527a]">
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                       Cada cita crea el evento en Google Calendar y deja lista la sincronizacion para comprador y experto.
                     </p>
                   </div>
@@ -354,7 +354,7 @@ const NexuExperts = () => {
                   <button
                     type="button"
                     onClick={() => navigate('/calendar-setup')}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0f6ea8] px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#0d5f90]"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-secondary px-5 py-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-primary"
                   >
                     <Link2 className="h-4 w-4" />
                     Conecta tu Google calendario para poder agendar
@@ -364,23 +364,23 @@ const NexuExperts = () => {
             </div>
 
             {orderedMeetings.length ? (
-              <div className="rounded-2xl border border-[#bfd6ff] bg-[#eef5ff] p-4">
+              <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4">
                 <button
                   type="button"
                   onClick={() => setIsMeetingsOpen((current) => !current)}
                   className="flex w-full items-start justify-between gap-3 text-left"
                 >
                   <div>
-                    <div className="flex items-center gap-2 text-sm font-semibold text-[#1a4fa3]">
+                    <div className="flex items-center gap-2 text-sm font-medium text-secondary">
                       <CheckCircle2 className="h-4 w-4" />
                       Mis reuniones
                     </div>
-                    <p className="mt-1 text-sm text-[#0f2a5e]">
+                    <p className="mt-1 text-sm text-primary">
                       {orderedMeetings.length} reuniones guardadas en la plataforma
                     </p>
                   </div>
                   <ChevronDown
-                    className={`mt-0.5 h-5 w-5 text-[#1a4fa3] transition-transform ${
+                    className={`mt-0.5 h-5 w-5 text-secondary transition-transform ${
                       isMeetingsOpen ? 'rotate-180' : ''
                     }`}
                   />
@@ -390,16 +390,16 @@ const NexuExperts = () => {
                     {orderedMeetings.map((meeting) => (
                       <div
                         key={meeting.id}
-                        className="rounded-2xl border border-[#d6e4fb] bg-white/80 p-4"
+                        className="rounded-2xl border border-primary/20 bg-white/80 p-4"
                       >
                         <div className="grid gap-2">
-                          <p className="text-sm text-[#38527a]">Experto: {meeting.expertName}</p>
-                          <p className="text-sm text-[#38527a]">Comprador: {meeting.buyerName}</p>
-                          <p className="text-sm text-[#38527a]">
+                          <p className="text-sm text-muted-foreground">Experto: {meeting.expertName}</p>
+                          <p className="text-sm text-muted-foreground">Comprador: {meeting.buyerName}</p>
+                          <p className="text-sm text-muted-foreground">
                             Fecha: {formatDateTime(meeting.startsAt)}
                           </p>
-                          <p className="text-sm text-[#38527a]">Tema: {meeting.topic}</p>
-                          <p className="text-sm text-[#38527a]">
+                          <p className="text-sm text-muted-foreground">Tema: {meeting.topic}</p>
+                          <p className="text-sm text-muted-foreground">
                             Correo de confirmacion: {meeting.emailSent ? 'enviado' : 'pendiente'}
                           </p>
                         </div>
@@ -409,7 +409,7 @@ const NexuExperts = () => {
                               href={meeting.googleMeetLink}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-2 rounded-full bg-[#0f2a5e] px-3 py-1.5 text-xs font-semibold text-white"
+                              className="inline-flex items-center gap-2 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-white"
                             >
                               <Video className="h-3.5 w-3.5" />
                               Enlace de la reunion
@@ -423,7 +423,7 @@ const NexuExperts = () => {
                               }
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center gap-2 rounded-full border border-[#b7ccf3] bg-white px-3 py-1.5 text-xs font-semibold text-[#0f2a5e]"
+                              className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-white px-3 py-1.5 text-xs font-medium text-primary"
                             >
                               <CalendarDays className="h-3.5 w-3.5" />
                               Ver en tu Calendar
@@ -431,7 +431,7 @@ const NexuExperts = () => {
                           ) : null}
                         </div>
                         {!meeting.emailSent && meeting.emailError ? (
-                          <p className="mt-3 text-xs text-amber-700">{meeting.emailError}</p>
+                          <p className="mt-3 text-xs text-destructive">{meeting.emailError}</p>
                         ) : null}
                       </div>
                     ))}
@@ -440,7 +440,7 @@ const NexuExperts = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                <p className="text-sm text-[#38527a]">
+                <p className="text-sm text-muted-foreground">
                   Cuando confirmes una cita, aqui veras el resumen de lo coordinado y la trazabilidad de la sincronizacion.
                 </p>
               </div>
@@ -451,26 +451,26 @@ const NexuExperts = () => {
 
       {isExpert ? (
         <section className="grid gap-6">
-          <Card className="border-slate-200">
+          <Card className="border-primary/15">
             <button
               type="button"
               onClick={() => setIsAvailabilityOpen((current) => !current)}
               className="flex w-full items-center justify-between px-6 py-5 text-left"
             >
               <div>
-                <p className="text-xl font-semibold text-slate-900">
+                <p className="text-xl font-medium text-foreground">
                   Configura tu disponibilidad semanal
                 </p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-muted-foreground/70">
                   Define que dias atiendes y agrega uno o varios horarios por dia.
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="outline" className="border-sky-200 text-sky-700">
+                <Badge variant="outline" className="border-secondary/25 text-secondary">
                   {weeklyAvailability.filter((item) => item.enabled).length} dias activos
                 </Badge>
                 <ChevronDown
-                  className={`h-5 w-5 text-slate-500 transition-transform ${
+                  className={`h-5 w-5 text-muted-foreground/70 transition-transform ${
                     isAvailabilityOpen ? 'rotate-180' : ''
                   }`}
                 />
@@ -486,7 +486,7 @@ const NexuExperts = () => {
                       {weeklyAvailability.map((item) => (
                         <div
                           key={item.day}
-                          className="rounded-2xl border border-slate-200 bg-white p-4"
+                          className="rounded-2xl border border-primary/15 bg-white p-4"
                         >
                           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div className="flex items-center gap-3">
@@ -496,21 +496,21 @@ const NexuExperts = () => {
                                 onChange={(event) =>
                                   handleAvailabilityChange(item.day, 'enabled', event.target.checked)
                                 }
-                                className="h-4 w-4 rounded border-slate-300 text-sky-600"
+                                className="h-4 w-4 rounded border-primary/25 text-secondary"
                               />
                               <div>
-                                <p className="text-sm font-semibold text-slate-900">{item.day}</p>
-                                <p className="text-xs text-slate-500">
+                                <p className="text-sm font-medium text-foreground">{item.day}</p>
+                                <p className="text-xs text-muted-foreground/70">
                                   {item.enabled ? 'Disponible para citas' : 'No disponible'}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                              <p className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                            <div className="rounded-2xl bg-primary/5 px-4 py-3">
+                              <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground/70">
                                 Vista comprador
                               </p>
-                              <p className="mt-2 text-sm text-slate-700">{formatBuyerView(item)}</p>
+                              <p className="mt-2 text-sm text-foreground/80">{formatBuyerView(item)}</p>
                             </div>
                           </div>
 
@@ -518,10 +518,10 @@ const NexuExperts = () => {
                             {item.slots.map((slot) => (
                               <div
                                 key={slot.id}
-                                className="grid gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-3 md:grid-cols-[1fr_1fr_auto]"
+                                className="grid gap-3 rounded-2xl border border-primary/10 bg-primary/5 p-3 md:grid-cols-[1fr_1fr_auto]"
                               >
                                 <div>
-                                  <label className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+                                  <label className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
                                     <Clock3 className="h-3.5 w-3.5" />
                                     Desde
                                   </label>
@@ -531,7 +531,7 @@ const NexuExperts = () => {
                                     onChange={(event) =>
                                       handleSlotChange(item.day, slot.id, 'startTime', event.target.value)
                                     }
-                                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
+                                    className="h-10 w-full rounded-md border border-primary/15 bg-white px-3 text-sm text-foreground/80 disabled:bg-primary/10 disabled:text-muted-foreground/60"
                                   >
                                     {TIME_OPTIONS.map((time) => (
                                       <option key={time} value={time}>
@@ -542,7 +542,7 @@ const NexuExperts = () => {
                                 </div>
 
                                 <div>
-                                  <label className="mb-2 block text-xs font-medium uppercase tracking-[0.14em] text-slate-500">
+                                  <label className="mb-2 block text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">
                                     Hasta
                                   </label>
                                   <select
@@ -551,7 +551,7 @@ const NexuExperts = () => {
                                     onChange={(event) =>
                                       handleSlotChange(item.day, slot.id, 'endTime', event.target.value)
                                     }
-                                    className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
+                                    className="h-10 w-full rounded-md border border-primary/15 bg-white px-3 text-sm text-foreground/80 disabled:bg-primary/10 disabled:text-muted-foreground/60"
                                   >
                                     {TIME_OPTIONS.map((time) => (
                                       <option key={time} value={time}>
@@ -566,7 +566,7 @@ const NexuExperts = () => {
                                     type="button"
                                     disabled={item.slots.length === 1}
                                     onClick={() => removeSlot(item.day, slot.id)}
-                                    className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="inline-flex h-10 items-center gap-2 rounded-md border border-primary/15 bg-white px-3 text-sm font-medium text-muted-foreground disabled:cursor-not-allowed disabled:opacity-40"
                                   >
                                     <Trash2 className="h-4 w-4" />
                                     Quitar
@@ -580,7 +580,7 @@ const NexuExperts = () => {
                             <button
                               type="button"
                               onClick={() => addSlot(item.day)}
-                              className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-4 py-2 text-sm font-semibold text-sky-700"
+                              className="inline-flex items-center gap-2 rounded-full border border-secondary/25 bg-secondary/10 px-4 py-2 text-sm font-medium text-secondary"
                             >
                               <Plus className="h-4 w-4" />
                               Agregar horario
@@ -592,7 +592,7 @@ const NexuExperts = () => {
 
                     <div className="flex justify-end">
                       <Button
-                        className="bg-slate-900 hover:bg-slate-800"
+                        className="bg-primary hover:bg-primary"
                         disabled={saveAvailabilityMutation.isPending}
                         onClick={() =>
                           saveAvailabilityMutation.mutate({
@@ -616,9 +616,9 @@ const NexuExperts = () => {
 
       <section className="grid gap-6">
         {!isDetailView ? (
-          <Card className="border-slate-200">
+          <Card className="border-primary/15">
             <CardHeader>
-              <CardTitle className="text-xl text-slate-900">Listado de expertos</CardTitle>
+              <CardTitle className="text-xl text-foreground">Listado de expertos</CardTitle>
               <CardDescription>
                 Cards modernas con experiencia, especialidad y acceso directo a agenda.
               </CardDescription>
@@ -634,8 +634,8 @@ const NexuExperts = () => {
                     onClick={() => setSelectedExpertId(expert.id)}
                     className={`rounded-[24px] border p-4 text-left transition-all ${
                       selectedExpertId === expert.id
-                        ? 'border-cyan-400 bg-cyan-50/70 shadow-md'
-                        : 'border-slate-200 bg-white hover:border-cyan-200 hover:shadow-sm'
+                        ? 'border-secondary/40 bg-secondary/10 shadow-md'
+                        : 'border-primary/15 bg-white hover:border-secondary/20 hover:shadow-sm'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -645,28 +645,28 @@ const NexuExperts = () => {
                         className="h-16 w-16 rounded-2xl object-cover"
                       />
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{expert.fullName}</p>
-                        <p className="text-xs text-slate-500">{expert.specialty}</p>
-                        <p className="mt-1 text-xs text-slate-500">{expert.industry}</p>
+                        <p className="text-sm font-medium text-foreground">{expert.fullName}</p>
+                        <p className="text-xs text-muted-foreground/70">{expert.specialty}</p>
+                        <p className="mt-1 text-xs text-muted-foreground/70">{expert.industry}</p>
                       </div>
                     </div>
-                    <p className="mt-4 text-sm leading-6 text-slate-600">{expert.shortBio}</p>
+                    <p className="mt-4 text-sm leading-6 text-muted-foreground">{expert.shortBio}</p>
                     <div className="mt-4 flex flex-wrap gap-2">
                       {expert.skills.slice(0, 3).map((skill) => (
-                        <Badge key={skill} variant="outline" className="border-slate-200 text-slate-600">
+                        <Badge key={skill} variant="outline" className="border-primary/15 text-muted-foreground">
                           {skill}
                         </Badge>
                       ))}
                     </div>
                     <div className="mt-4 flex items-center justify-between">
-                      <span className="text-xs text-slate-500">{expert.experience}</span>
+                      <span className="text-xs text-muted-foreground/70">{expert.experience}</span>
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
                           navigate(`/nexu-experts/${expert.id}#agendar`);
                         }}
-                        className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white"
+                        className="rounded-full bg-primary px-3 py-1 text-xs font-medium text-white"
                       >
                         Agendar
                       </button>
@@ -683,14 +683,14 @@ const NexuExperts = () => {
           <button
             type="button"
             onClick={() => navigate('/nexu-experts')}
-            className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:border-sky-200 hover:text-sky-700"
+            className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white px-4 py-2 text-sm font-medium text-foreground/80 transition-colors hover:border-secondary/25 hover:text-secondary"
           >
             <ArrowLeft className="h-4 w-4" />
             Volver al listado
           </button>
-          <Card ref={scheduleCardRef} className="border-slate-200">
+          <Card ref={scheduleCardRef} className="border-primary/15">
             <CardHeader>
-              <CardTitle className="text-xl text-slate-900">Perfil del experto</CardTitle>
+              <CardTitle className="text-xl text-foreground">Perfil del experto</CardTitle>
               <CardDescription>Vista detallada con disponibilidad y propuesta de valor.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -706,21 +706,21 @@ const NexuExperts = () => {
                     />
                     <div className="space-y-2">
                       <div>
-                        <h2 className="text-2xl font-semibold text-slate-900">
+                        <h2 className="text-2xl font-medium text-foreground">
                           {expertProfileQuery.data.fullName}
                         </h2>
-                        <p className="text-sm text-slate-500">
+                        <p className="text-sm text-muted-foreground/70">
                           {expertProfileQuery.data.professionalProfile}
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Badge className="bg-slate-900 text-white">
+                        <Badge className="bg-primary text-white">
                           {expertProfileQuery.data.specialty}
                         </Badge>
-                        <Badge variant="outline" className="border-cyan-200 text-cyan-700">
+                        <Badge variant="outline" className="border-secondary/20 text-secondary">
                           {expertProfileQuery.data.industry}
                         </Badge>
-                        <Badge variant="outline" className="border-emerald-200 text-emerald-700">
+                        <Badge variant="outline" className="border-success/25 text-success-foreground">
                           {expertProfileQuery.data.upcomingMeetings} citas activas
                         </Badge>
                       </div>
@@ -728,19 +728,19 @@ const NexuExperts = () => {
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-2xl bg-primary/5 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                         Experiencia
                       </p>
-                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                      <p className="mt-2 text-sm leading-6 text-foreground/80">
                         {expertProfileQuery.data.experience}
                       </p>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 p-4">
-                      <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                    <div className="rounded-2xl bg-primary/5 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                         Disponibilidad
                       </p>
-                      <p className="mt-2 text-sm leading-6 text-slate-700">
+                      <p className="mt-2 text-sm leading-6 text-foreground/80">
                         {expertProfileQuery.data.weeklyAvailability
                           .filter((item) => item.enabled)
                           .map(
@@ -755,55 +755,55 @@ const NexuExperts = () => {
                   </div>
 
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">Descripcion profesional</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                    <p className="text-sm font-medium text-foreground">Descripcion profesional</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
                       {expertProfileQuery.data.biography || expertProfileQuery.data.description}
                     </p>
                   </div>
 
                   <div className="grid gap-4 md:grid-cols-3">
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">Empresas</p>
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="text-sm font-medium text-foreground">Empresas</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {expertProfileQuery.data.companies || 'No especificado'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">Educacion</p>
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="text-sm font-medium text-foreground">Educacion</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {expertProfileQuery.data.education || 'No especificado'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-slate-900">Logros</p>
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="text-sm font-medium text-foreground">Logros</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
                         {expertProfileQuery.data.achievements || 'No especificado'}
                       </p>
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4">
-                    <p className="text-sm font-semibold text-slate-900">Servicio ofrecido</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-700">
+                  <div className="rounded-2xl border border-secondary/10 bg-secondary/10 p-4">
+                    <p className="text-sm font-medium text-foreground">Servicio ofrecido</p>
+                    <p className="mt-2 text-sm leading-6 text-foreground/80">
                       {expertProfileQuery.data.service || 'Servicio de consultoria y acompanamiento.'}
                     </p>
                   </div>
 
                   {isBuyer ? (
-                    <div className="space-y-4 rounded-[24px] border border-slate-200 bg-white p-5">
+                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-white p-5">
                       <div>
-                        <p className="text-xl font-semibold text-slate-900">Agendar cita</p>
-                        <p className="mt-1 text-sm text-slate-500">
+                        <p className="text-xl font-medium text-foreground">Agendar cita</p>
+                        <p className="mt-1 text-sm text-muted-foreground/70">
                           Fecha, hora y descripcion del tema a tratar. Confirmacion automatica con Meet.
                         </p>
-                        <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/80 px-4 py-3 text-sm text-sky-900">
+                        <div className="mt-3 rounded-2xl border border-secondary/15 bg-secondary/10 px-4 py-3 text-sm text-primary">
                           Las reuniones son grupales de hasta 3 personas por horario. Si deseas una sesion 1 a 1, esta disponible con membresia en la plataforma.
                         </div>
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
                         <div>
-                          <label className="mb-2 block text-sm font-medium text-slate-700">Fecha</label>
+                          <label className="mb-2 block text-sm font-medium text-foreground/80">Fecha</label>
                           <Input
                             type="date"
                             min={new Date().toISOString().slice(0, 10)}
@@ -811,21 +811,21 @@ const NexuExperts = () => {
                             onChange={(event) => setSelectedDate(event.target.value)}
                           />
                         </div>
-                        <div className="rounded-2xl bg-slate-50 p-4">
-                          <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                        <div className="rounded-2xl bg-primary/5 p-4">
+                          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground/70">
                             Experto seleccionado
                           </p>
-                          <p className="mt-2 text-sm font-semibold text-slate-900">
+                          <p className="mt-2 text-sm font-medium text-foreground">
                             {selectedExpert?.fullName || 'Selecciona un experto'}
                           </p>
-                          <p className="text-sm text-slate-500">
+                          <p className="text-sm text-muted-foreground/70">
                             {selectedExpert?.specialty || 'Sin especialidad'}
                           </p>
                         </div>
                       </div>
 
                       <div>
-                        <p className="mb-2 text-sm font-medium text-slate-700">Horarios disponibles</p>
+                        <p className="mb-2 text-sm font-medium text-foreground/80">Horarios disponibles</p>
                         {availabilityQuery.isLoading ? (
                           <p className="text-sm text-muted-foreground">Consultando disponibilidad...</p>
                         ) : (
@@ -838,10 +838,10 @@ const NexuExperts = () => {
                                 onClick={() => setSelectedSlot(slot.startsAt)}
                                 className={`rounded-full border px-3 py-2 text-sm transition-colors ${
                                   selectedSlot === slot.startsAt
-                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                    ? 'border-primary bg-primary text-white'
                                     : slot.available
-                                      ? 'border-slate-200 bg-white text-slate-700 hover:border-cyan-300'
-                                      : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'
+                                      ? 'border-primary/15 bg-white text-foreground/80 hover:border-secondary/30'
+                                      : 'cursor-not-allowed border-primary/15 bg-primary/10 text-muted-foreground/60'
                                 }`}
                               >
                                 {slot.label} · {slot.remainingSpots} cupos
@@ -850,14 +850,14 @@ const NexuExperts = () => {
                           </div>
                         )}
                         {availabilityQuery.data?.weekday ? (
-                          <p className="mt-2 text-xs text-slate-500">
+                          <p className="mt-2 text-xs text-muted-foreground/70">
                             Disponibilidad consultada para {availabilityQuery.data.weekday}. Cada horario admite hasta 3 participantes.
                           </p>
                         ) : null}
                       </div>
 
                       <div>
-                        <label className="mb-2 block text-sm font-medium text-slate-700">
+                        <label className="mb-2 block text-sm font-medium text-foreground/80">
                           Descripcion del tema a tratar
                         </label>
                         <Textarea
@@ -869,7 +869,7 @@ const NexuExperts = () => {
                       </div>
 
                       <Button
-                        className="w-full bg-slate-900 hover:bg-slate-800"
+                        className="w-full bg-primary hover:bg-primary"
                         disabled={
                           !selectedExpertId ||
                           !selectedSlot ||

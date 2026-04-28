@@ -83,7 +83,7 @@ const CreatePostModal = ({ isOpen, onClose, categories, onCreated }: CreatePostM
             className="bg-card rounded-lg shadow-smooth-hover w-full max-w-lg"
           >
             <div className="flex items-center justify-between p-5 border-b border-border">
-              <h2 className="text-lg font-semibold text-foreground">Nuevo Post</h2>
+              <h2 className="text-lg font-medium text-foreground">Nuevo Post</h2>
               <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
                 <X className="w-5 h-5" />
               </button>

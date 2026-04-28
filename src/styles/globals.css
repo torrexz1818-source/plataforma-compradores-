@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: var(--font-main);
+    background: var(--app-bg);
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    color: var(--text-on-light);
+    font-family: var(--font-main);
+    font-size: var(--text-base-size);
+    font-weight: var(--font-weight-regular);
+    line-height: var(--line-height-base);
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    color: var(--text-on-light);
+    font-family: var(--font-main);
+    font-weight: var(--font-weight-bold);
+    letter-spacing: 0;
+  }
+
+  p,
+  span,
+  li,
+  td,
+  th,
+  label,
+  input,
+  textarea,
+  select,
+  button {
+    font-family: var(--font-main);
+  }
+
+  a {
+    color: var(--color-purple-innovation);
+    transition: color var(--transition-fast);
+  }
+
+  a:hover {
+    color: var(--color-red-nodus);
+  }
+
+  ::selection {
+    color: var(--text-on-dark);
+    background: var(--color-purple-innovation);
+  }
+}

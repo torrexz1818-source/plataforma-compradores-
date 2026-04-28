@@ -41,14 +41,14 @@ function getGroupLabel(dateString?: string) {
 }
 
 function getTypeBadge(type?: string) {
-  if (!type) return 'bg-slate-100 text-slate-700';
-  if (type.includes('LIKE')) return 'bg-pink-100 text-pink-700';
-  if (type.includes('COMMENT') || type.includes('MESSAGE')) return 'bg-blue-100 text-blue-700';
-  if (type.includes('NEW_BUYER') || type.includes('NEW_SUPPLIER')) return 'bg-emerald-100 text-emerald-700';
-  if (type.includes('PROFILE')) return 'bg-amber-100 text-amber-700';
-  if (type.includes('EDUCATIONAL')) return 'bg-green-100 text-green-800';
-  if (type.includes('REPORT') || type.includes('MONTHLY')) return 'bg-slate-100 text-slate-700';
-  return 'bg-slate-100 text-slate-700';
+  if (!type) return 'bg-primary/10 text-foreground/80';
+  if (type.includes('LIKE')) return 'bg-secondary/15 text-secondary';
+  if (type.includes('COMMENT') || type.includes('MESSAGE')) return 'bg-primary/15 text-primary';
+  if (type.includes('NEW_BUYER') || type.includes('NEW_SUPPLIER')) return 'bg-success/25 text-success-foreground';
+  if (type.includes('PROFILE')) return 'bg-destructive/15 text-destructive';
+  if (type.includes('EDUCATIONAL')) return 'bg-success/25 text-success-foreground';
+  if (type.includes('REPORT') || type.includes('MONTHLY')) return 'bg-primary/10 text-foreground/80';
+  return 'bg-primary/10 text-foreground/80';
 }
 
 function matchesFilter(item: NotificationItem, filter: string) {
@@ -161,7 +161,7 @@ const Notifications = () => {
         {(['Hoy', 'Ayer', 'Esta semana', 'Este mes'] as const).map((group) => (
           grouped[group].length > 0 && (
             <section key={group} className="mb-6">
-              <h2 className="text-sm font-semibold text-foreground mb-2">{group}</h2>
+              <h2 className="text-sm font-medium text-foreground mb-2">{group}</h2>
               <div className="space-y-2">
                 {grouped[group].map((item) => {
                   const Icon = iconMap[item.icon] ?? Bell;
@@ -170,12 +170,12 @@ const Notifications = () => {
                     <article
                       key={item.id}
                       className={`rounded-lg border px-3 py-3 bg-card hover:bg-muted/50 transition-colors ${
-                        (item.type ?? '').includes('REPORT') ? 'border-l-2 border-l-slate-400' : ''
+                        (item.type ?? '').includes('REPORT') ? 'border-l-2 border-l-primary/40' : ''
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="pt-1">
-                          {unread && <span className="block w-2 h-2 rounded-full bg-blue-600" />}
+                          {unread && <span className="block w-2 h-2 rounded-full bg-primary" />}
                         </div>
                         <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0">
                           <Icon className="w-4 h-4 text-muted-foreground" />

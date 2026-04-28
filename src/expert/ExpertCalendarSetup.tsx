@@ -135,7 +135,7 @@ const ExpertCalendarSetup = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] px-4 py-10">
+    <div className="min-h-screen bg-background px-4 py-10">
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
@@ -144,14 +144,14 @@ const ExpertCalendarSetup = () => {
       >
         <div className="rounded-3xl border border-border/60 bg-card p-7 shadow-sm">
           <div className="mb-6 flex items-start gap-4">
-            <div className="rounded-2xl bg-cyan-50 p-3 text-cyan-700">
+            <div className="rounded-2xl bg-secondary/10 p-3 text-secondary">
               <CalendarDays className="h-6 w-6" />
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
+              <p className="text-xs font-medium uppercase tracking-[0.24em] text-secondary">
                 {roleLabel}
               </p>
-              <h1 className="mt-1 text-2xl font-semibold text-foreground">
+              <h1 className="mt-1 text-2xl font-medium text-foreground">
                 {pageTitle}
               </h1>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
@@ -166,12 +166,12 @@ const ExpertCalendarSetup = () => {
             </div>
           ) : connection?.connected ? (
             <div className="space-y-4">
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-5">
-                <div className="flex items-center gap-2 text-emerald-800">
+              <div className="rounded-2xl border border-success/25 bg-success/15 p-5">
+                <div className="flex items-center gap-2 text-success-foreground">
                   <CheckCircle2 className="h-5 w-5" />
-                  <p className="text-sm font-semibold">Google Calendar conectado</p>
+                  <p className="text-sm font-medium">Google Calendar conectado</p>
                 </div>
-                <div className="mt-3 space-y-2 text-sm text-emerald-900/90">
+                <div className="mt-3 space-y-2 text-sm text-success-foreground/90">
                   <p>Correo: {connection.googleEmail ?? 'No disponible'}</p>
                   <p>Calendario: {connection.calendarName ?? connection.calendarId ?? 'primary'}</p>
                   <p>Zona horaria: {connection.timezone ?? DEFAULT_TIMEZONE}</p>
@@ -181,7 +181,7 @@ const ExpertCalendarSetup = () => {
               <div className="flex flex-wrap gap-3">
                 <Button
                   type="button"
-                  className="bg-cyan-600 hover:bg-cyan-700"
+                  className="bg-secondary hover:bg-secondary"
                   onClick={() => navigate('/buyer/dashboard', { replace: true })}
                 >
                   Continuar
@@ -213,7 +213,7 @@ const ExpertCalendarSetup = () => {
 
               <div className="rounded-2xl border border-border bg-background p-4 text-sm text-muted-foreground">
                 <div className="flex items-start gap-2">
-                  <Link2 className="mt-0.5 h-4 w-4 text-cyan-700" />
+                  <Link2 className="mt-0.5 h-4 w-4 text-secondary" />
                   <p>
                     El backend completa la autorizacion con Google y solo despues guarda la conexion del calendario en tu cuenta.
                   </p>
@@ -229,7 +229,7 @@ const ExpertCalendarSetup = () => {
               <div className="flex flex-wrap gap-3">
                 <Button
                   type="button"
-                  className="bg-cyan-600 hover:bg-cyan-700"
+                  className="bg-secondary hover:bg-secondary"
                   onClick={handleConnect}
                   disabled={isSaving}
                 >

@@ -49,7 +49,7 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
         <button
           type="button"
           onClick={() => navigate(`/perfil/${comment.user.role}/${comment.user.id}`)}
-          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full gradient-primary text-xs font-semibold text-primary-foreground shadow-sm"
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full gradient-primary text-xs font-medium text-primary-foreground shadow-sm"
           aria-label={`Ver perfil de ${comment.user.fullName}`}
         >
           {initials}
@@ -61,7 +61,7 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
                 <button
                   type="button"
                   onClick={() => navigate(`/perfil/${comment.user.role}/${comment.user.id}`)}
-                  className="break-words text-left text-sm font-semibold text-foreground transition-colors hover:text-primary"
+                  className="break-words text-left text-sm font-medium text-foreground transition-colors hover:text-primary"
                 >
                   {comment.user.fullName}
                 </button>
@@ -107,7 +107,7 @@ const CommentItem = ({ comment, onReply, isReply = false }: CommentItemProps) =>
 
           {showReply && (
             <div className="mt-3 flex min-w-0 gap-3">
-              <div className="h-8 w-8 flex-shrink-0 rounded-full bg-slate-200" />
+              <div className="h-8 w-8 flex-shrink-0 rounded-full bg-primary/15" />
               <div className="min-w-0 flex-1 rounded-2xl border border-border bg-background p-3">
                 <Textarea
                   value={replyText}
@@ -183,7 +183,7 @@ const CommentSection = ({
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h3 className="text-lg font-semibold text-foreground">{title} ({totalComments})</h3>
+        <h3 className="text-lg font-medium text-foreground">{title} ({totalComments})</h3>
         <div className="flex gap-1">
           {(['voted', 'newest'] as const).map((sortValue) => (
             <button
@@ -200,7 +200,7 @@ const CommentSection = ({
       </div>
 
       <div className="mb-6 flex min-w-0 gap-3">
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full gradient-primary text-xs font-semibold text-primary-foreground shadow-sm">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full gradient-primary text-xs font-medium text-primary-foreground shadow-sm">
           {initials}
         </div>
         <div className="min-w-0 flex-1 rounded-[24px] border border-border bg-background p-3 shadow-sm">

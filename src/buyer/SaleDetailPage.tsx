@@ -191,14 +191,14 @@ const SaleDetailPage = () => {
 
         <div className="bg-card border border-border rounded-xl overflow-hidden flex flex-col">
           <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm flex-shrink-0">
+            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-medium text-sm flex-shrink-0">
               {selectedPost.author.company.charAt(0)}
             </div>
             <div>
               <button
                 type="button"
                 onClick={() => navigate(`/perfil/${selectedPost.author.role}/${selectedPost.author.id}`)}
-                className="text-sm font-semibold text-foreground leading-tight hover:text-primary"
+                className="text-sm font-medium text-foreground leading-tight hover:text-primary"
               >
                 {selectedPost.author.company}
               </button>
@@ -267,7 +267,7 @@ const SaleDetailPage = () => {
             >
               <Heart
                 className={`w-4 h-4 ${
-                  selectedPost.isLiked ? 'fill-red-500 text-red-500' : ''
+                  selectedPost.isLiked ? 'fill-destructive text-white0' : ''
                 }`}
               />
               <span className="font-medium text-foreground">
@@ -285,7 +285,7 @@ const SaleDetailPage = () => {
             <button
               type="button"
               onClick={() => navigate(`/perfil/${selectedPost.author.role}/${selectedPost.author.id}`)}
-              className="font-semibold text-foreground mb-1 hover:text-primary"
+              className="font-medium text-foreground mb-1 hover:text-primary"
             >
               {selectedPost.author.company}
             </button>
@@ -302,7 +302,7 @@ const SaleDetailPage = () => {
               </Badge>
               {isSupplierAuthor && authorProfile && 'averageRating' in authorProfile && 'reviewsCount' in authorProfile && (
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <Star className="w-3.5 h-3.5 fill-destructive text-destructive" />
                   <span className="font-medium text-foreground">{authorProfile.averageRating ?? 0}</span>
                   <span>({authorProfile.reviewsCount ?? 0})</span>
                 </div>
@@ -311,7 +311,7 @@ const SaleDetailPage = () => {
           </div>
 
           <div className="bg-card border border-border rounded-xl p-4">
-            <p className="text-sm font-semibold text-foreground mb-3">
+            <p className="text-sm font-medium text-foreground mb-3">
               {isSupplierAuthor ? 'Comentarios de compradores' : 'Comentarios de la publicacion'}
             </p>
             <div className="flex flex-col gap-3">
@@ -327,7 +327,7 @@ const SaleDetailPage = () => {
                             {c.buyer.name}
                           </p>
                           <div className="flex items-center gap-0.5 flex-shrink-0">
-                            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                            <Star className="w-3 h-3 fill-destructive text-destructive" />
                             <span className="text-xs text-muted-foreground">{c.rating}.0</span>
                           </div>
                         </div>
@@ -390,7 +390,7 @@ const SaleDetailPage = () => {
       </div>
 
       {!!feedback && (
-        <p className="mt-4 text-sm rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-3 py-2">
+        <p className="mt-4 text-sm rounded-md border border-success/25 bg-success/15 text-success-foreground px-3 py-2">
           {feedback}
         </p>
       )}

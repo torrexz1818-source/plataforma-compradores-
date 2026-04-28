@@ -105,7 +105,7 @@ const NotificationBell = () => {
       >
         <Bell className="w-4 h-4 text-foreground" />
         {count > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-[10px] font-semibold flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-destructive text-white text-[10px] font-medium flex items-center justify-center">
             {formattedCount}
           </span>
         )}
@@ -114,7 +114,7 @@ const NotificationBell = () => {
       {open && (
         <div className="absolute right-0 mt-2 w-[360px] rounded-lg border border-border bg-card shadow-lg z-50">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-            <p className="text-sm font-semibold text-foreground">Notificaciones</p>
+            <p className="text-sm font-medium text-foreground">Notificaciones</p>
             <button
               type="button"
               onClick={onOpenAll}

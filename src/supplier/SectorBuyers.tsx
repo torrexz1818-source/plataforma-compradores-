@@ -71,27 +71,27 @@ const SectorBuyers = () => {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#eef6ff_0%,#ffffff_48%,#f3f9ff_100%)] shadow-sm">
+      <section className="overflow-hidden rounded-3xl border border-secondary/15 bg-[var(--gradient-soft)] shadow-sm">
         <div className="grid gap-4 px-6 py-8 md:grid-cols-[1.25fr_0.9fr] md:px-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-[#0f2a5e]">Compradores del sector {sector}</h1>
-            <p className="mt-3 text-sm text-[#4f6b95] md:text-base">
+            <h1 className="text-3xl font-bold tracking-tight text-primary">Compradores del sector {sector}</h1>
+            <p className="mt-3 text-sm text-muted-foreground md:text-base">
               Revisa perfiles y conecta con compradores activos usando el mismo estilo visual del modulo.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-1">
-            <Card className="border-sky-100 bg-white/85 text-slate-900 shadow-none">
+            <Card className="border-secondary/15 bg-white/85 text-foreground shadow-none">
               <CardContent className="p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Resultados</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">Resultados</p>
                 <p className="mt-2 text-3xl font-bold">{buyersQuery.data?.length ?? 0}</p>
-                <p className="mt-1 text-sm text-slate-600">Compradores cargados para este sector.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Compradores cargados para este sector.</p>
               </CardContent>
             </Card>
-            <Card className="border-sky-100 bg-white/85 text-slate-900 shadow-none">
+            <Card className="border-secondary/15 bg-white/85 text-foreground shadow-none">
               <CardContent className="p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Sector</p>
-                <p className="mt-2 text-lg font-bold text-[#0f2a5e]">{sector}</p>
-                <p className="mt-1 text-sm text-slate-600">Vista agrupada para prospeccion comercial.</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">Sector</p>
+                <p className="mt-2 text-lg font-bold text-primary">{sector}</p>
+                <p className="mt-1 text-sm text-muted-foreground">Vista agrupada para prospeccion comercial.</p>
               </CardContent>
             </Card>
           </div>
@@ -109,7 +109,7 @@ const SectorBuyers = () => {
       )}
 
       {!!feedback && (
-        <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2">
+        <p className="text-sm text-success-foreground bg-success/15 border border-success/25 rounded-md px-3 py-2">
           {feedback}
         </p>
       )}
@@ -120,10 +120,10 @@ const SectorBuyers = () => {
             <article
               id={`item-${buyer.id}`}
               key={buyer.id}
-              className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+              className="rounded-3xl border border-primary/15 bg-white p-5 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4"
             >
               <div>
-                <p className="text-base font-semibold text-foreground">
+                <p className="text-base font-medium text-foreground">
                   {buyer.name} · {buyer.company}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">{buyer.description}</p>
@@ -137,8 +137,8 @@ const SectorBuyers = () => {
                   <span
                     className={`px-2 py-1 rounded-full ${
                       buyer.isActiveBuyer
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        ? 'bg-success/15 text-success-foreground border border-success/25'
+                        : 'bg-destructive/10 text-destructive border border-destructive/20'
                     }`}
                   >
                     {buyer.isActiveBuyer ? 'Comprador activo' : 'Estado pendiente'}
@@ -163,7 +163,7 @@ const SectorBuyers = () => {
         <div className="fixed inset-0 z-50">
           <button
             type="button"
-            className="absolute inset-0 bg-black/40"
+            className="absolute inset-0 bg-primary/40"
             onClick={() => {
               setSelectedBuyerId(null);
               setContactOpen(false);
@@ -171,7 +171,7 @@ const SectorBuyers = () => {
           />
           <aside className="absolute right-0 top-0 h-full w-full max-w-md bg-background border-l border-border shadow-xl p-6 overflow-y-auto">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Perfil del comprador</h2>
+              <h2 className="text-lg font-medium">Perfil del comprador</h2>
               <button
                 type="button"
                 onClick={() => {
@@ -203,7 +203,7 @@ const SectorBuyers = () => {
                 <button
                   type="button"
                   onClick={() => setContactOpen(true)}
-                  className="mt-2 inline-flex rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+                  className="mt-2 inline-flex rounded-md bg-success px-4 py-2 text-sm font-medium text-white hover:bg-success"
                 >
                   Contactar
                 </button>
@@ -212,18 +212,18 @@ const SectorBuyers = () => {
 
             {contactOpen && selectedBuyer && (
               <div className="mt-5 rounded-xl border border-border p-4">
-                <h3 className="font-semibold text-sm">Enviar mensaje a {selectedBuyer.company}</h3>
+                <h3 className="font-medium text-sm">Enviar mensaje a {selectedBuyer.company}</h3>
                 <form onSubmit={onSendMessage} className="mt-3 space-y-3">
                   <textarea
                     value={message}
                     onChange={(event) => setMessage(event.target.value)}
                     placeholder="Escribe tu mensaje..."
-                    className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-700/20"
+                    className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-success/20"
                   />
                   <button
                     type="submit"
                     disabled={isSending || !message.trim()}
-                    className="inline-flex rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                    className="inline-flex rounded-md bg-success px-4 py-2 text-sm font-medium text-white hover:bg-success disabled:opacity-60"
                   >
                     {isSending ? 'Enviando...' : 'Enviar mensaje'}
                   </button>

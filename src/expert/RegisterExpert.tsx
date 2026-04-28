@@ -48,7 +48,7 @@ const BENEFITS = [
   {
     icon: Sparkles,
     title: 'Mayor visibilidad',
-    description: 'Posiciona tu perfil como referente dentro del ecosistema de compras de Supply Nexu.',
+    description: 'Posiciona tu perfil como referente dentro del ecosistema de compras de BUYER NODUS.',
   },
   {
     icon: Network,
@@ -58,7 +58,7 @@ const BENEFITS = [
 ];
 
 function SectionTitle({ children }: { children: string }) {
-  return <p className="mb-3 mt-6 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">{children}</p>;
+  return <p className="mb-3 mt-6 text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60">{children}</p>;
 }
 
 function Field({
@@ -196,7 +196,7 @@ const RegisterExpert = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] px-4 py-10">
+    <div className="min-h-screen bg-background px-4 py-10">
       <motion.div
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
@@ -204,8 +204,8 @@ const RegisterExpert = () => {
         className="mx-auto w-full max-w-[680px]"
       >
         <div className="mb-6 text-center">
-          <h1 className="mb-1 text-2xl font-bold text-gradient">SUPPLY NEXU</h1>
-          <h2 className="text-xl font-semibold text-foreground">Conviertete en Experto Nexu</h2>
+          <h1 className="mb-1 text-2xl font-bold text-gradient">BUYER NODUS</h1>
+          <h2 className="text-xl font-medium text-foreground">Conviertete en Experto Nexu</h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
             Comparte tu experiencia, genera nuevas oportunidades y forma parte de la red de especialistas de la plataforma.
           </p>
@@ -216,22 +216,22 @@ const RegisterExpert = () => {
             <div className="grid gap-4 md:grid-cols-3">
               {BENEFITS.map((benefit) => (
                 <div key={benefit.title} className="rounded-xl border border-border bg-muted/20 p-4">
-                  <benefit.icon className="mb-3 h-5 w-5 text-cyan-600" />
-                  <h3 className="text-sm font-semibold text-foreground">{benefit.title}</h3>
+                  <benefit.icon className="mb-3 h-5 w-5 text-secondary" />
+                  <h3 className="text-sm font-medium text-foreground">{benefit.title}</h3>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{benefit.description}</p>
                 </div>
               ))}
             </div>
 
-            <div className="mt-6 rounded-xl border border-cyan-100 bg-cyan-50/60 p-5">
-              <p className="text-sm font-semibold text-foreground">Requisitos</p>
+            <div className="mt-6 rounded-xl border border-secondary/10 bg-secondary/10 p-5">
+              <p className="text-sm font-medium text-foreground">Requisitos</p>
               <div className="mt-3 space-y-2 text-sm text-foreground/85">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-cyan-600" />
+                  <CheckCircle2 className="h-4 w-4 text-secondary" />
                   <span>+3 anos de experiencia</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-cyan-600" />
+                  <CheckCircle2 className="h-4 w-4 text-secondary" />
                   <span>Especializacion en compras</span>
                 </div>
               </div>
@@ -239,7 +239,7 @@ const RegisterExpert = () => {
 
             <Button
               type="button"
-              className="mt-6 w-full bg-cyan-600 hover:bg-cyan-700"
+              className="mt-6 w-full bg-secondary hover:bg-secondary"
               onClick={() => setShowForm(true)}
             >
               Postular como Experto
@@ -327,11 +327,11 @@ const RegisterExpert = () => {
                 <Textarea value={form.achievements} onChange={(e) => setValue('achievements', e.target.value)} rows={3} />
               </Field>
               <Field label="Foto">
-                <label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-cyan-200 bg-cyan-50/40 px-4 py-5 text-center transition hover:border-cyan-300 hover:bg-cyan-50">
+                <label className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border border-dashed border-secondary/20 bg-secondary/5 px-4 py-5 text-center transition hover:border-secondary/30 hover:bg-secondary/10">
                   {photoPreview ? (
                     <img src={photoPreview} alt="Vista previa de la foto" className="h-24 w-24 rounded-full object-cover shadow-sm" />
                   ) : (
-                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-cyan-600 shadow-sm">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-secondary shadow-sm">
                       <Upload className="h-6 w-6" />
                     </div>
                   )}
@@ -366,7 +366,7 @@ const RegisterExpert = () => {
                       onClick={() => toggleDay(day)}
                       className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
                         form.availabilityDays.includes(day)
-                          ? 'border-cyan-400 bg-cyan-50 font-medium text-cyan-800'
+                          ? 'border-secondary/40 bg-secondary/10 font-medium text-secondary'
                           : 'border-border text-muted-foreground hover:bg-muted/50'
                       }`}
                     >
@@ -380,7 +380,7 @@ const RegisterExpert = () => {
             <SectionTitle>Integracion</SectionTitle>
             <div className="rounded-xl border border-border bg-muted/20 p-4">
               <div className="flex items-start gap-3">
-                <CalendarDays className="mt-0.5 h-5 w-5 text-cyan-600" />
+                <CalendarDays className="mt-0.5 h-5 w-5 text-secondary" />
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     La conexion real de Google Calendar se hace en el siguiente paso
@@ -398,7 +398,7 @@ const RegisterExpert = () => {
               </p>
             )}
 
-            <Button type="submit" className="mt-6 w-full bg-cyan-600 hover:bg-cyan-700" disabled={isSubmitting}>
+            <Button type="submit" className="mt-6 w-full bg-secondary hover:bg-secondary" disabled={isSubmitting}>
               {isSubmitting ? 'Creando cuenta...' : 'Crear cuenta como Experto Nexu'}
             </Button>
 

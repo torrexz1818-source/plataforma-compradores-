@@ -185,8 +185,8 @@ const SupplierPosts = () => {
           <input type="file" accept="image/*" className="hidden" onChange={handleImagen} />
         </label>
 
-        {published && <p className="text-sm text-green-600 mb-3">Liquidacion publicada exitosamente.</p>}
-        {feedback && !published && <p className="text-sm text-emerald-700 mb-3">{feedback}</p>}
+        {published && <p className="text-sm text-success-foreground mb-3">Liquidacion publicada exitosamente.</p>}
+        {feedback && !published && <p className="text-sm text-success-foreground mb-3">{feedback}</p>}
 
         <Button
           onClick={handlePublicar}
@@ -198,7 +198,7 @@ const SupplierPosts = () => {
         </Button>
       </div>
 
-      <h2 className="text-sm font-semibold text-foreground mb-4 tracking-wide uppercase">
+      <h2 className="text-sm font-medium text-foreground mb-4 tracking-wide uppercase">
         Liquidaciones anteriores
       </h2>
 
@@ -223,7 +223,7 @@ const SupplierPosts = () => {
             <article id={`item-${publication.id}`} key={publication.id} className="bg-card border border-border rounded-xl p-5">
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <p className="text-base font-semibold text-foreground">{publication.title}</p>
+                  <p className="text-base font-medium text-foreground">{publication.title}</p>
                   <p className="text-sm text-muted-foreground mt-1">{publication.content}</p>
                   {publication.url && (
                     <a
@@ -257,7 +257,7 @@ const SupplierPosts = () => {
 
               {messageCount > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
                     Mensajes
                   </p>
 
@@ -266,7 +266,7 @@ const SupplierPosts = () => {
                       <div key={message.id} className="rounded-lg border border-border p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-sm font-semibold text-foreground">
+                            <p className="text-sm font-medium text-foreground">
                               {message.buyerName}
                             </p>
                             <p className="text-xs text-muted-foreground mb-1">
@@ -332,7 +332,7 @@ const SupplierPosts = () => {
                             <div key={message.id} className="rounded-lg border border-border p-3">
                               <div className="flex items-start justify-between gap-3">
                                 <div>
-                                  <p className="text-sm font-semibold text-foreground">
+                                  <p className="text-sm font-medium text-foreground">
                                     {message.buyerName}
                                   </p>
                                   <p className="text-xs text-muted-foreground mb-1">

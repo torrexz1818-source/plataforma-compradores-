@@ -130,29 +130,29 @@ export default function SectorSuppliers() {
     <div className="max-w-6xl mx-auto animate-fade-in">
       <BackButton fallback="/buyer/directory" className="mb-4" />
 
-      <section className="mb-8 overflow-hidden rounded-3xl border border-sky-100 bg-[linear-gradient(135deg,#eef6ff_0%,#ffffff_48%,#f3f9ff_100%)] shadow-sm">
+      <section className="mb-8 overflow-hidden rounded-3xl border border-secondary/15 bg-[var(--gradient-soft)] shadow-sm">
         <div className="grid gap-4 px-6 py-8 md:grid-cols-[1.25fr_0.9fr] md:px-8">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-[#0f2a5e]">
+            <h1 className="text-3xl font-bold tracking-tight text-primary">
               Proveedores del sector {sector}
             </h1>
-            <p className="mt-3 text-sm text-[#4f6b95] md:text-base">
+            <p className="mt-3 text-sm text-muted-foreground md:text-base">
               Busca, filtra y compara proveedores con una experiencia visual alineada al resto del modulo.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-1">
-            <Card className="border-sky-100 bg-white/85 text-slate-900 shadow-none">
+            <Card className="border-secondary/15 bg-white/85 text-foreground shadow-none">
               <CardContent className="p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Resultados</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">Resultados</p>
                 <p className="mt-2 text-3xl font-bold">{filtrados.length}</p>
-                <p className="mt-1 text-sm text-slate-600">Proveedores visibles con los filtros actuales.</p>
+                <p className="mt-1 text-sm text-muted-foreground">Proveedores visibles con los filtros actuales.</p>
               </CardContent>
             </Card>
-            <Card className="border-sky-100 bg-white/85 text-slate-900 shadow-none">
+            <Card className="border-secondary/15 bg-white/85 text-foreground shadow-none">
               <CardContent className="p-5">
-                <p className="text-xs uppercase tracking-[0.2em] text-sky-600">Sector</p>
-                <p className="mt-2 text-lg font-bold text-[#0f2a5e]">{sector}</p>
-                <p className="mt-1 text-sm text-slate-600">Navegacion enfocada por categoria.</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-secondary">Sector</p>
+                <p className="mt-2 text-lg font-bold text-primary">{sector}</p>
+                <p className="mt-1 text-sm text-muted-foreground">Navegacion enfocada por categoria.</p>
               </CardContent>
             </Card>
           </div>
@@ -232,22 +232,22 @@ export default function SectorSuppliers() {
       )}
 
       {!!feedback && (
-        <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mb-4">
+        <p className="text-sm text-success-foreground bg-success/15 border border-success/25 rounded-md px-3 py-2 mb-4">
           {feedback}
         </p>
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filtrados.map((p) => (
-          <Card id={`item-${p.id}`} key={p.id} className="rounded-3xl border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+          <Card id={`item-${p.id}`} key={p.id} className="rounded-3xl border-primary/15 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <h3 className="font-semibold text-foreground">{p.nombre}</h3>
+                  <h3 className="font-medium text-foreground">{p.nombre}</h3>
                   <p className="text-sm text-muted-foreground">{p.servicio}</p>
                 </div>
                 <div className="flex items-center gap-1 bg-secondary px-2 py-1 rounded-md">
-                  <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                  <Star className="h-3.5 w-3.5 fill-destructive text-destructive" />
                   <span className="text-sm font-medium">{p.rating.toFixed(1)}</span>
                 </div>
               </div>

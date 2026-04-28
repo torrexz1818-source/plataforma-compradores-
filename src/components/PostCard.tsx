@@ -92,14 +92,14 @@ const PostCard = ({ post, index = 0 }: PostCardProps) => {
             <button
               type="button"
               onClick={openAuthorProfile}
-              className="flex h-11 w-11 items-center justify-center rounded-full gradient-primary text-sm font-semibold text-primary-foreground shadow-sm"
+              className="flex h-11 w-11 items-center justify-center rounded-full gradient-primary text-sm font-medium text-primary-foreground shadow-sm"
               aria-label={`Ver perfil de ${post.author.fullName}`}
             >
               {initials}
             </button>
             <button type="button" onClick={openAuthorProfile} className="min-w-0 flex-1 text-left">
               <div className="flex flex-wrap items-center gap-2 pr-20">
-                <h4 className="text-sm font-semibold text-foreground transition-colors hover:text-primary">
+                <h4 className="text-sm font-medium text-foreground transition-colors hover:text-primary">
                   {post.author.fullName}
                 </h4>
               </div>
@@ -109,7 +109,7 @@ const PostCard = ({ post, index = 0 }: PostCardProps) => {
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-lg font-semibold leading-snug text-foreground">{post.title}</h3>
+            <h3 className="text-lg font-medium leading-snug text-foreground">{post.title}</h3>
             <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground/85">
               {post.description}
             </p>
@@ -132,7 +132,7 @@ const PostCard = ({ post, index = 0 }: PostCardProps) => {
           {post.thumbnailUrl ? (
             <>
               <img src={resolveApiAssetUrl(post.thumbnailUrl)} alt={post.title} className="absolute inset-0 h-full w-full object-cover" />
-              {isEducational && <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />}
+              {isEducational && <div className="absolute inset-0 bg-gradient-to-t from-primary/45 via-primary/10 to-transparent" />}
             </>
           ) : null}
           <div
@@ -149,7 +149,7 @@ const PostCard = ({ post, index = 0 }: PostCardProps) => {
           {isEducational && (
             <div className="absolute bottom-4 left-4 right-4 z-10">
               <p className="mb-1 text-xs uppercase tracking-[0.16em] text-white/90">Ver contenido</p>
-              <p className="line-clamp-1 text-base font-semibold text-white">{post.title}</p>
+              <p className="line-clamp-1 text-base font-medium text-white">{post.title}</p>
             </div>
           )}
         </div>

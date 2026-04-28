@@ -53,7 +53,7 @@ export function AppSidebar() {
       <SidebarContent className="bg-sidebar">
         <div className={`p-4 ${collapsed ? 'px-2' : 'px-5'}`}>
           <h1 className={`font-bold text-sidebar-foreground ${collapsed ? 'text-xs text-center' : 'text-lg'}`}>
-            {collapsed ? 'SN' : 'SUPPLY NEXU'}
+            {collapsed ? 'BN' : 'BUYER NODUS'}
           </h1>
         </div>
 
@@ -104,7 +104,7 @@ export function AppSidebar() {
 
       <SidebarFooter className="bg-sidebar border-t border-sidebar-border">
         <div className={`flex items-center gap-3 p-3 ${collapsed ? 'justify-center' : ''}`}>
-          <div className="w-9 h-9 rounded-full bg-sidebar-accent flex items-center justify-center text-sidebar-foreground text-sm font-semibold flex-shrink-0">
+          <div className="w-9 h-9 rounded-full bg-sidebar-accent flex items-center justify-center text-sidebar-foreground text-sm font-medium flex-shrink-0">
             {initials}
           </div>
           {!collapsed && (

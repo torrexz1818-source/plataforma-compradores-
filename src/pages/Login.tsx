@@ -63,7 +63,7 @@ const Login = () => {
         className="w-full max-w-sm"
       >
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gradient mb-1">SUPPLY NEXU</h1>
+          <h1 className="text-2xl font-bold text-gradient mb-1">BUYER NODUS</h1>
           <p className="text-sm text-muted-foreground">Inicia sesion en tu cuenta</p>
         </div>
 

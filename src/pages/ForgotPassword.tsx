@@ -117,7 +117,7 @@ const ForgotPassword = () => {
         transition={{ duration: 0.35 }}
         className="w-full max-w-md bg-card border border-border rounded-xl shadow-smooth p-6"
       >
-        <h1 className="text-xl font-semibold text-foreground mb-1">
+        <h1 className="text-xl font-medium text-foreground mb-1">
           Recuperar contrasena
         </h1>
         <p className="text-sm text-muted-foreground mb-5">
@@ -206,7 +206,7 @@ const ForgotPassword = () => {
         )}
 
         {message && (
-          <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-md px-3 py-2 mt-4">
+          <p className="text-xs text-success-foreground bg-success/15 border border-success/25 rounded-md px-3 py-2 mt-4">
             {message}
           </p>
         )}

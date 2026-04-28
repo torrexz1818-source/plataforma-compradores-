@@ -114,7 +114,7 @@ const MessageBell = () => {
       >
         <MessageCircle className="w-4 h-4 text-foreground" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-blue-600 text-white text-[10px] font-semibold flex items-center justify-center">
+          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-white text-[10px] font-medium flex items-center justify-center">
             {formattedCount}
           </span>
         )}
@@ -124,7 +124,7 @@ const MessageBell = () => {
         <div className="absolute right-0 mt-2 w-[380px] rounded-2xl border border-border bg-card shadow-lg z-50 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div>
-              <p className="text-sm font-semibold text-foreground">Mensajes</p>
+              <p className="text-sm font-medium text-foreground">Mensajes</p>
               <p className="text-[11px] text-muted-foreground">
                 {user?.role === 'supplier' ? 'Conversaciones con compradores' : 'Conversaciones con proveedores'}
               </p>
@@ -150,7 +150,7 @@ const MessageBell = () => {
                   className="w-full text-left px-4 py-3 border-b border-border/70 hover:bg-muted/60 transition-colors"
                 >
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium shrink-0">
                       {getInitials(name)}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -164,7 +164,7 @@ const MessageBell = () => {
                           {item.lastMessage || 'Abrir conversacion'}
                         </p>
                         {item.unreadCount > 0 && (
-                          <span className="shrink-0 min-w-5 h-5 px-1 rounded-full bg-blue-600 text-white text-[10px] font-semibold flex items-center justify-center">
+                          <span className="shrink-0 min-w-5 h-5 px-1 rounded-full bg-primary text-white text-[10px] font-medium flex items-center justify-center">
                             {item.unreadCount}
                           </span>
                         )}

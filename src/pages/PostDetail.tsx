@@ -57,13 +57,13 @@ const PostDetail = () => {
           <div className="min-w-0">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }}>
                 {(post.videoUrl || post.thumbnailUrl) && (
-                  <div className="bg-black rounded-lg h-72 md:h-96 flex items-center justify-center mb-6 relative overflow-hidden">
+                  <div className="bg-primary rounded-lg h-72 md:h-96 flex items-center justify-center mb-6 relative overflow-hidden">
                     {post.videoUrl ? (
                       <video
                         src={resolveApiAssetUrl(post.videoUrl)}
                         poster={resolveApiAssetUrl(post.thumbnailUrl)}
                         controls
-                        className="h-full w-full object-contain bg-black"
+                        className="h-full w-full object-contain bg-primary"
                       />
                     ) : post.thumbnailUrl ? (
                       <img src={resolveApiAssetUrl(post.thumbnailUrl)} alt={post.title} className="h-full w-full object-cover" />
@@ -90,7 +90,7 @@ const PostDetail = () => {
 
                 {!!post.resources?.length && (
                   <div className="mb-8">
-                    <h3 className="text-base font-semibold text-foreground mb-3">Recursos complementarios</h3>
+                    <h3 className="text-base font-medium text-foreground mb-3">Recursos complementarios</h3>
                     <div className="space-y-3">
                       {post.resources.map((resource) => (
                         <a
@@ -115,7 +115,7 @@ const PostDetail = () => {
 
                 {post.type === 'educational' && (
                   <div className="mb-8">
-                    <h3 className="text-base font-semibold text-foreground mb-3">Mas lecciones</h3>
+                    <h3 className="text-base font-medium text-foreground mb-3">Mas lecciones</h3>
                     <div className="space-y-3">
                       {(data?.relatedPosts ?? []).map((relatedPost) => (
                         <div

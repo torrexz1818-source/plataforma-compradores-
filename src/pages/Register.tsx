@@ -122,11 +122,11 @@ function pwStrength(pw: string): 0 | 1 | 2 | 3 {
   return s as 0 | 1 | 2 | 3;
 }
 const PW_LABELS = ['', 'Muy debil', 'Media', 'Segura'];
-const PW_COLORS = ['', 'bg-red-400', 'bg-amber-400', 'bg-emerald-500'];
+const PW_COLORS = ['', 'bg-destructive', 'bg-destructive', 'bg-success'];
 
 function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mt-6 mb-3">
+    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 mt-6 mb-3">
       {children}
     </p>
   );
@@ -165,9 +165,9 @@ function YNGroup({
   options: { value: string; label: string; color: 'green' | 'amber' | 'red' }[];
 }) {
   const colorMap = {
-    green: 'border-emerald-400 bg-emerald-50 text-emerald-800 font-medium',
-    amber: 'border-amber-400 bg-amber-50 text-amber-800 font-medium',
-    red: 'border-red-300 bg-red-50 text-red-800 font-medium',
+    green: 'border-success/45 bg-success/15 text-success-foreground font-medium',
+    amber: 'border-destructive/40 bg-destructive/10 text-destructive font-medium',
+    red: 'border-destructive/30 bg-destructive/10 text-destructive font-medium',
   };
   return (
     <div className="flex gap-2">
@@ -201,8 +201,8 @@ function TagRow({
 }) {
   const activeClass =
     color === 'blue'
-      ? 'border-blue-400 bg-blue-50 text-blue-800 font-medium'
-      : 'border-emerald-400 bg-emerald-50 text-emerald-800 font-medium';
+      ? 'border-primary/40 bg-primary/10 text-primary font-medium'
+      : 'border-success/45 bg-success/15 text-success-foreground font-medium';
   return (
     <div className="flex flex-wrap gap-2 mt-1">
       {tags.map((tag) => (
@@ -241,7 +241,7 @@ function SocialInput({
     <div className="flex items-center gap-2">
       <span className="w-[88px] shrink-0 flex items-center gap-1.5 text-[12px] text-muted-foreground">
         <span
-          className={`w-5 h-5 rounded flex items-center justify-center text-white text-[11px] font-semibold shrink-0 ${iconBg}`}
+          className={`w-5 h-5 rounded flex items-center justify-center text-white text-[11px] font-medium shrink-0 ${iconBg}`}
         >
           {icon}
         </span>
@@ -285,7 +285,7 @@ function ProgressBar({ form }: { form: FormState }) {
       </div>
       <div className="h-1 bg-muted rounded-full overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${isBuyer ? 'bg-blue-500' : 'bg-emerald-500'}`}
+          className={`h-full rounded-full transition-all duration-500 ${isBuyer ? 'bg-primary' : 'bg-success'}`}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -421,7 +421,7 @@ const Register = () => {
 
     try {
       await navigator.share({
-        title: 'Supply Nexu',
+        title: 'BUYER NODUS',
         text: 'Te comparto la pagina de registro para proveedores.',
         url: sharePageUrl,
       });
@@ -589,7 +589,7 @@ const Register = () => {
   }, [isSupplierFormReadyToShare, shareSessionId]);
 
   return (
-    <div className="min-h-screen flex items-start justify-center bg-[#F8FAFC] p-4 py-10">
+    <div className="min-h-screen flex items-start justify-center bg-background p-4 py-10">
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
@@ -597,8 +597,8 @@ const Register = () => {
         className="w-full max-w-[560px]"
       >
         <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gradient mb-1">SUPPLY NEXU</h1>
-          <h1 className="text-xl font-semibold text-foreground tracking-tight">Crear cuenta</h1>
+          <h1 className="text-2xl font-bold text-gradient mb-1">BUYER NODUS</h1>
+          <h1 className="text-xl font-medium text-foreground tracking-tight">Crear cuenta</h1>
           <p className="text-[13px] text-muted-foreground mt-1">
             Unete a la plataforma de compradores y proveedores
           </p>
@@ -608,8 +608,8 @@ const Register = () => {
           <form onSubmit={handleSubmit} className="space-y-0">
             <div className="flex bg-muted/60 rounded-xl p-1 gap-1 mb-6">
               {[
-                { value: 'buyer', label: 'Soy Comprador', dot: 'bg-blue-500' },
-                { value: 'supplier', label: 'Soy Proveedor', dot: 'bg-emerald-500' },
+                { value: 'buyer', label: 'Soy Comprador', dot: 'bg-primary' },
+                { value: 'supplier', label: 'Soy Proveedor', dot: 'bg-success' },
               ].map((opt) => (
                 <button
                   key={opt.value}
@@ -636,7 +636,7 @@ const Register = () => {
                 className="flex items-center gap-2 pb-4 mb-1 border-b border-border/50"
               >
                 <span
-                  className={`text-[11px] font-semibold px-3 py-1 rounded-full ${isBuyer ? 'bg-blue-50 text-blue-800' : 'bg-emerald-50 text-emerald-800'
+                  className={`text-[11px] font-medium px-3 py-1 rounded-full ${isBuyer ? 'bg-primary/10 text-primary' : 'bg-success/15 text-success-foreground'
                     }`}
                 >
                   {isBuyer ? 'Comprador' : 'Proveedor'}
@@ -733,17 +733,17 @@ const Register = () => {
                       key={t.value}
                       type="button"
                       onClick={() => set('supplierType', t.value)}
-                      className={`border rounded-xl p-3 text-center transition-all ${form.supplierType === t.value ? 'border-emerald-400 bg-emerald-50' : 'border-border hover:bg-muted/50'
+                      className={`border rounded-xl p-3 text-center transition-all ${form.supplierType === t.value ? 'border-success/45 bg-success/15' : 'border-border hover:bg-muted/50'
                         }`}
                     >
                       <span className="text-xl block mb-1.5">{t.icon}</span>
                       <p
-                        className={`text-[13px] font-medium ${form.supplierType === t.value ? 'text-emerald-800' : 'text-foreground'}`}
+                        className={`text-[13px] font-medium ${form.supplierType === t.value ? 'text-success-foreground' : 'text-foreground'}`}
                       >
                         {t.title}
                       </p>
                       <p
-                        className={`text-[11px] mt-0.5 leading-tight ${form.supplierType === t.value ? 'text-emerald-700' : 'text-muted-foreground'}`}
+                        className={`text-[11px] mt-0.5 leading-tight ${form.supplierType === t.value ? 'text-success-foreground' : 'text-muted-foreground'}`}
                       >
                         {t.desc}
                       </p>
@@ -755,10 +755,10 @@ const Register = () => {
 
             <SectionLabel>Presencia digital</SectionLabel>
             <div className="space-y-2">
-              <SocialInput icon="in" prefix="linkedin.com/in/" placeholder="tu-perfil" value={form.linkedin} onChange={(v) => set('linkedin', v)} iconBg="bg-[#0077B5]" />
+              <SocialInput icon="in" prefix="linkedin.com/in/" placeholder="tu-perfil" value={form.linkedin} onChange={(v) => set('linkedin', v)} iconBg="bg-primary" />
               <SocialInput icon="W" prefix="https://" placeholder="www.tuempresa.com" value={form.website} onChange={(v) => set('website', v)} iconBg="bg-foreground" />
-              <SocialInput icon="W" prefix="+51 " placeholder="999 999 999" value={form.whatsapp} onChange={(v) => set('whatsapp', v)} iconBg="bg-[#25D366]" />
-              <SocialInput icon="ig" prefix="@" placeholder="tuempresa" value={form.instagram} onChange={(v) => set('instagram', v)} iconBg="bg-[#E1306C]" />
+              <SocialInput icon="W" prefix="+51 " placeholder="999 999 999" value={form.whatsapp} onChange={(v) => set('whatsapp', v)} iconBg="bg-success" />
+              <SocialInput icon="ig" prefix="@" placeholder="tuempresa" value={form.instagram} onChange={(v) => set('instagram', v)} iconBg="bg-destructive" />
             </div>
 
             {isBuyer && (
@@ -920,33 +920,33 @@ const Register = () => {
             {isSupplier && isSupplierFormReadyToShare && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
                 <SectionLabel>Activa tu cuenta de proveedor</SectionLabel>
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                <div className="rounded-2xl border border-success/25 bg-success/15 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-emerald-900">
+                      <p className="text-sm font-medium text-success-foreground">
                         Comparte esta pagina con {requiredShareCount} personas
                       </p>
-                      <p className="text-xs text-emerald-800/80 mt-1">
+                      <p className="text-xs text-success-foreground/80 mt-1">
                         Cuando completes los {requiredShareCount} compartidos, se habilitara el boton de crear cuenta para proveedor.
                       </p>
                     </div>
-                    <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                    <div className="rounded-full bg-white px-3 py-1 text-xs font-medium text-success-foreground border border-success/25">
                       {shareCount}/{requiredShareCount} compartidos
                     </div>
                   </div>
 
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-emerald-100">
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-success/25">
                     <div
-                      className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                      className="h-full rounded-full bg-success transition-all duration-500"
                       style={{ width: `${Math.min((shareCount / Math.max(requiredShareCount, 1)) * 100, 100)}%` }}
                     />
                   </div>
 
-                  <div className="mt-4 rounded-xl border border-emerald-200/80 bg-white/80 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                  <div className="mt-4 rounded-xl border border-success/30 bg-white/80 p-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-success-foreground">
                       Link para compartir
                     </p>
-                    <div className="mt-2 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-900 break-all">
+                    <div className="mt-2 rounded-lg border border-success/15 bg-success/15 px-3 py-2 text-xs text-success-foreground break-all">
                       {sharePageUrl}
                     </div>
 
@@ -967,8 +967,8 @@ const Register = () => {
                           key={step}
                           className={`flex-1 rounded-lg border px-3 py-2 text-center text-xs font-medium ${
                             shareCount >= step
-                              ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                              : 'border-amber-200 bg-amber-50 text-amber-700'
+                              ? 'border-success/35 bg-success/25 text-success-foreground'
+                              : 'border-destructive/20 bg-destructive/10 text-destructive'
                           }`}
                         >
                           {shareCount >= step ? (
@@ -991,13 +991,13 @@ const Register = () => {
                   )}
 
                   {!shareError && shareFeedback && (
-                    <p className="text-xs text-emerald-700 bg-white border border-emerald-200 rounded-lg px-3 py-2 mt-3">
+                    <p className="text-xs text-success-foreground bg-white border border-success/25 rounded-lg px-3 py-2 mt-3">
                       {shareFeedback}
                     </p>
                   )}
 
                   {!shareError && isPreparingShareSession && (
-                    <p className="text-xs text-emerald-700 bg-white border border-emerald-200 rounded-lg px-3 py-2 mt-3">
+                    <p className="text-xs text-success-foreground bg-white border border-success/25 rounded-lg px-3 py-2 mt-3">
                       Preparando el seguimiento persistente de compartidos...
                     </p>
                   )}
@@ -1006,11 +1006,11 @@ const Register = () => {
             )}
 
             {isSupplier && !isSupplierFormReadyToShare && (
-              <div className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/40 p-4 mt-6">
-                <p className="text-sm font-semibold text-emerald-900">
+              <div className="rounded-2xl border border-dashed border-success/25 bg-success/10 p-4 mt-6">
+                <p className="text-sm font-medium text-success-foreground">
                   Completa los datos del proveedor para activar el compartir
                 </p>
-                <p className="text-xs text-emerald-800/80 mt-1">
+                <p className="text-xs text-success-foreground/80 mt-1">
                   Cuando termines el formulario, aparecera el link para compartir la pagina con {requiredShareCount} personas.
                 </p>
               </div>
@@ -1024,7 +1024,7 @@ const Register = () => {
 
             <Button
               type="submit"
-              className={`w-full mt-5 ${isSupplier ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+              className={`w-full mt-5 ${isSupplier ? 'bg-success hover:bg-success' : ''}`}
               disabled={isSubmitting || !supplierCanSubmit}
             >
               {isSubmitting

@@ -7,8 +7,8 @@ export function useHighlight(id?: string | null) {
     if (!el) return;
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     el.style.transition = 'all 0.3s';
-    el.style.border = '2px solid #378ADD';
-    el.style.background = '#E6F1FB';
+    el.style.border = '2px solid var(--color-purple-innovation)';
+    el.style.background = 'rgba(90, 49, 213, 0.10)';
     setTimeout(() => {
       el.style.border = '';
       el.style.background = '';

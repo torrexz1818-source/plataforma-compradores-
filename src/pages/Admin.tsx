@@ -270,7 +270,7 @@ const Admin = () => {
     <section className="bg-card rounded-lg border border-border p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">{roleLabel}</h2>
+          <h2 className="text-lg font-medium text-foreground">{roleLabel}</h2>
           <p className="text-sm text-muted-foreground">
             {roleLabel === 'Compradores'
               ? 'Datos completos del registro de compradores.'
@@ -302,7 +302,7 @@ const Admin = () => {
                     onClick={() =>
                       setSelectedUserId((current) => (current === managedUser.id ? null : managedUser.id))
                     }
-                    className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
+                    className="text-sm font-medium text-foreground hover:text-primary transition-colors"
                   >
                     {managedUser.fullName}
                   </button>
@@ -489,7 +489,7 @@ const Admin = () => {
                   <span className="text-sm text-foreground">{item.sector}</span>
                   <div className="h-3 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-blue-500"
+                      className="h-full rounded-full bg-primary"
                       style={{ width: `${Math.max((item.count / maxSectorCount) * 100, 8)}%` }}
                     />
                   </div>
@@ -511,10 +511,10 @@ const Admin = () => {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="py-2 pr-4 text-left font-semibold text-foreground">Nombre</th>
-                    <th className="py-2 pr-4 text-left font-semibold text-foreground">Empresa</th>
-                    <th className="py-2 pr-4 text-left font-semibold text-foreground">Sector</th>
-                    <th className="py-2 text-left font-semibold text-foreground">Rol</th>
+                    <th className="py-2 pr-4 text-left font-medium text-foreground">Nombre</th>
+                    <th className="py-2 pr-4 text-left font-medium text-foreground">Empresa</th>
+                    <th className="py-2 pr-4 text-left font-medium text-foreground">Sector</th>
+                    <th className="py-2 text-left font-medium text-foreground">Rol</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -525,10 +525,10 @@ const Admin = () => {
                       <td className="py-3 pr-4 text-foreground">{item.sector || 'General'}</td>
                       <td className="py-4">
                         <Badge
-                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
                             item.role === 'supplier'
-                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
-                              : 'bg-blue-100 text-blue-700 hover:bg-blue-100'
+                              ? 'bg-success/25 text-success-foreground hover:bg-success/25'
+                              : 'bg-primary/15 text-primary hover:bg-primary/15'
                           }`}
                         >
                           {item.role === 'supplier' ? 'Proveedor' : 'Comprador'}
@@ -545,7 +545,7 @@ const Admin = () => {
         <section className="grid lg:grid-cols-[1.2fr,0.8fr] gap-6">
           <div className="bg-card rounded-lg border border-border p-5 space-y-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Crear contenido</h2>
+              <h2 className="text-lg font-medium text-foreground">Crear contenido</h2>
               <p className="text-sm text-muted-foreground">
                 Publica material educativo con vista previa antes de subirlo y agrega recursos complementarios.
               </p>
@@ -590,11 +590,11 @@ const Admin = () => {
                 <div>
                   <div className="flex items-center gap-2">
                     {form.mediaType === 'video' ? (
-                      <Video className="h-4 w-4 text-blue-500" />
+                      <Video className="h-4 w-4 text-primary" />
                     ) : (
-                      <FileText className="h-4 w-4 text-blue-500" />
+                      <FileText className="h-4 w-4 text-primary" />
                     )}
-                    <h3 className="text-[15px] font-semibold">
+                    <h3 className="text-[15px] font-medium">
                       {form.mediaType === 'video' ? 'Video y vista previa' : 'Articulo y vista previa'}
                     </h3>
                   </div>
@@ -648,7 +648,7 @@ const Admin = () => {
                 ) : null}
                 {((form.mediaType === 'video' && !videoPreview) || (form.mediaType === 'image' && !thumbnailPreview)) && (
                   <div className="flex flex-col items-center justify-center gap-3 px-6 py-12 text-center text-muted-foreground">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-50 text-blue-500">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary">
                       {form.mediaType === 'video' ? <Video className="h-7 w-7" /> : <FileText className="h-7 w-7" />}
                     </div>
                     <p className="text-sm">
@@ -659,7 +659,7 @@ const Admin = () => {
               </div>
 
               <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700">
+                <div className="inline-flex max-w-full items-center gap-2 rounded-full bg-primary/15 px-3 py-1.5 text-xs font-medium text-primary">
                   {form.mediaType === 'video' ? <Video className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                   <span className="truncate">
                     {form.mediaType === 'video'
@@ -676,7 +676,7 @@ const Admin = () => {
             <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground">Recursos complementarios</h3>
+                  <h3 className="text-sm font-medium text-foreground">Recursos complementarios</h3>
                   <p className="text-xs text-muted-foreground mt-1">
                     Puedes agregar imagenes, archivos o links URL para descargar o consultar despues.
                   </p>
@@ -850,7 +850,7 @@ const Admin = () => {
           </div>
 
           <div className="bg-card rounded-lg border border-border p-5">
-            <h2 className="text-lg font-semibold text-foreground mb-3">Categorias activas</h2>
+            <h2 className="text-lg font-medium text-foreground mb-3">Categorias activas</h2>
             <div className="space-y-2">
               {categoryCommentCounts.map((category) => (
                 <button
@@ -884,7 +884,7 @@ const Admin = () => {
 
         <section className="grid lg:grid-cols-2 gap-6">
           <div className="bg-card rounded-lg border border-border p-5">
-            <h2 className="text-lg font-semibold text-foreground mb-4">Publicaciones de proveedores</h2>
+            <h2 className="text-lg font-medium text-foreground mb-4">Publicaciones de proveedores</h2>
             {isLoading && <p className="text-sm text-muted-foreground">Cargando contenido...</p>}
             {isError && <p className="text-sm text-destructive">No se pudo cargar el panel.</p>}
             <div className="space-y-3">
@@ -892,7 +892,7 @@ const Admin = () => {
                 <div key={post.id} className="rounded-lg border border-border p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-foreground">{post.title}</p>
+                      <p className="text-sm font-medium text-foreground">{post.title}</p>
                       <p className="text-xs text-muted-foreground">
                         {post.type === 'educational'
                           ? 'Video educativo'
@@ -920,7 +920,7 @@ const Admin = () => {
           <div id="admin-category-comments" className="bg-card rounded-lg border border-border p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-foreground">
+                <h2 className="text-lg font-medium text-foreground">
                   {selectedCategory ? `Comentarios en ${selectedCategory.name}` : 'Comunidad'}
                 </h2>
                 <p className="text-sm text-muted-foreground">
@@ -940,7 +940,7 @@ const Admin = () => {
                 <div key={comment.id} className="rounded-lg border border-border p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-foreground">{comment.user.fullName}</p>
+                      <p className="text-sm font-medium text-foreground">{comment.user.fullName}</p>
                       <p className="text-xs text-muted-foreground">
                         En {comment.postTitle} - {postsById.get(comment.postId)?.category.name ?? 'Sin categoria'} -{' '}
                         {comment.repliesCount} respuestas
@@ -973,7 +973,7 @@ const Admin = () => {
         </section>
 
         {false && <section className="bg-card rounded-lg border border-border p-5">
-          <h2 className="text-lg font-semibold text-foreground mb-4">Usuarios</h2>
+          <h2 className="text-lg font-medium text-foreground mb-4">Usuarios</h2>
           <div className="space-y-3">
             {(data?.users ?? []).map((managedUser) => (
               <div key={managedUser.id} className="rounded-lg border border-border p-4">
@@ -984,7 +984,7 @@ const Admin = () => {
                       onClick={() =>
                         setSelectedUserId((current) => (current === managedUser.id ? null : managedUser.id))
                       }
-                      className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
+                      className="text-sm font-medium text-foreground hover:text-primary transition-colors"
                     >
                       {managedUser.fullName}
                     </button>

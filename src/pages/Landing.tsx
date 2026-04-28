@@ -46,7 +46,7 @@ const Landing = () => {
     <div className="min-h-screen bg-background">
       <nav className="sticky top-0 z-50 bg-card/80 backdrop-blur-md border-b border-border">
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <span className="text-lg font-bold text-gradient">SUPPLY NEXU</span>
+          <span className="text-lg font-bold text-gradient">BUYER NODUS</span>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate('/login')}>
               Iniciar sesion
@@ -65,8 +65,8 @@ const Landing = () => {
           transition={{ duration: 0.6 }}
           className="max-w-3xl mx-auto text-center"
         >
-          <h1 className="text-4xl md:text-5xl font-extrabold text-primary-foreground mb-4 tracking-tight">
-            SUPPLY NEXU 
+          <h1 className="text-4xl md:text-5xl font-bold text-primary-foreground mb-4 tracking-tight">
+            BUYER NODUS 
           </h1>
           <p className="text-primary-foreground/85 text-lg md:text-xl max-w-2xl mx-auto mb-8 leading-relaxed">
             La plataforma donde compradores y proveedores se conectan, aprenden
@@ -77,7 +77,7 @@ const Landing = () => {
               size="lg"
               variant="secondary"
               onClick={() => navigate('/register')}
-              className="font-semibold"
+              className="font-medium"
             >
               Registrarse <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
@@ -85,7 +85,7 @@ const Landing = () => {
               size="lg"
               variant="outline"
               onClick={() => navigate('/login')}
-              className="bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 hover:bg-primary-foreground/20 font-semibold"
+              className="bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 hover:bg-primary-foreground/20 font-medium"
             >
               Iniciar sesion
             </Button>
@@ -101,10 +101,10 @@ const Landing = () => {
             viewport={{ once: true }}
           >
             <h2 className="text-2xl font-bold text-foreground mb-4">
-              Que es Supply Nexu?
+              Que es BUYER NODUS?
             </h2>
             <p className="text-muted-foreground text-base leading-relaxed">
-              Supply Nexu es una plataforma B2B donde los compradores
+              BUYER NODUS es una plataforma B2B donde los compradores
               encuentran proveedores confiables, aprenden mejores practicas de
               compras y toman decisiones mas inteligentes.
             </p>
@@ -154,7 +154,7 @@ const Landing = () => {
                 <div className="w-12 h-12 rounded-full gradient-primary text-primary-foreground flex items-center justify-center text-lg font-bold mx-auto mb-4">
                   {step.number}
                 </div>
-                <h3 className="text-lg font-semibold text-foreground mb-2">
+                <h3 className="text-lg font-medium text-foreground mb-2">
                   {step.title}
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
@@ -170,7 +170,7 @@ const Landing = () => {
         <div className="max-w-2xl mx-auto text-center">
           <CheckCircle2 className="w-10 h-10 text-primary-foreground/80 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-primary-foreground mb-3">
-            Unete a Supply Nexu hoy
+            Unete a BUYER NODUS hoy
           </h2>
           <p className="text-primary-foreground/80 mb-6">
             Empieza a conectar con la comunidad B2B mas grande de la region.
@@ -179,7 +179,7 @@ const Landing = () => {
             size="lg"
             variant="secondary"
             onClick={() => navigate('/register')}
-            className="font-semibold"
+            className="font-medium"
           >
             Crear cuenta gratis <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
@@ -188,11 +188,11 @@ const Landing = () => {
 
       <footer className="py-8 px-6 bg-card border-t border-border">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm font-semibold text-gradient">
-            SUPPLY NEXU
+          <span className="text-sm font-medium text-gradient">
+            BUYER NODUS
           </span>
           <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} Supply Nexu. Todos los derechos
+            © {new Date().getFullYear()} BUYER NODUS. Todos los derechos
             reservados.
           </p>
         </div>
@@ -202,7 +202,7 @@ const Landing = () => {
         href="https://wa.me/51999999999"
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-[hsl(142,76%,36%)] hover:bg-[hsl(142,76%,30%)] text-white rounded-full px-5 py-3 shadow-lg transition-colors"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-success hover:bg-success/90 text-primary rounded-full px-5 py-3 shadow-lg transition-colors"
       >
         <MessageCircle className="w-5 h-5" />
         <span className="text-sm font-medium hidden sm:inline">

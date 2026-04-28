@@ -31,14 +31,14 @@ const Reports = () => {
         {report && report.role === 'supplier' && (
           <div className="space-y-5">
             <section className="grid md:grid-cols-4 gap-3">
-              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Vistas perfil</p><p className="text-xl font-semibold">{report.metrics.profileViews}</p></div>
-              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Likes</p><p className="text-xl font-semibold">{report.metrics.likes}</p></div>
-              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Mensajes</p><p className="text-xl font-semibold">{report.metrics.messages}</p></div>
-              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Vs mes anterior</p><p className="text-xl font-semibold">{report.metrics.variationVsPreviousMonth}%</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Vistas perfil</p><p className="text-xl font-medium">{report.metrics.profileViews}</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Likes</p><p className="text-xl font-medium">{report.metrics.likes}</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Mensajes</p><p className="text-xl font-medium">{report.metrics.messages}</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Vs mes anterior</p><p className="text-xl font-medium">{report.metrics.variationVsPreviousMonth}%</p></div>
             </section>
 
             <section className="rounded-lg border border-border p-4">
-              <h2 className="text-sm font-semibold mb-3">Top publicaciones</h2>
+              <h2 className="text-sm font-medium mb-3">Top publicaciones</h2>
               <div className="space-y-2">
                 {report.topPublications.map((item) => (
                   <div key={item.id} id={`item-${item.id}`} className="flex items-center justify-between">
@@ -54,14 +54,14 @@ const Reports = () => {
         {report && report.role === 'buyer' && (
           <div className="space-y-5">
             <section className="grid md:grid-cols-4 gap-3">
-              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Proveedores visitados</p><p className="text-xl font-semibold">{report.metrics.suppliersVisited}</p></div>
-              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Mensajes enviados</p><p className="text-xl font-semibold">{report.metrics.messagesSent}</p></div>
-              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Contenidos vistos</p><p className="text-xl font-semibold">{report.metrics.contentsViewed}</p></div>
-              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Nuevos proveedores</p><p className="text-xl font-semibold">{report.metrics.newSuppliersInMyCategories}</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Proveedores visitados</p><p className="text-xl font-medium">{report.metrics.suppliersVisited}</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Mensajes enviados</p><p className="text-xl font-medium">{report.metrics.messagesSent}</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Contenidos vistos</p><p className="text-xl font-medium">{report.metrics.contentsViewed}</p></div>
+              <div className="rounded-lg border border-border p-4"><p className="text-xs text-muted-foreground">Nuevos proveedores</p><p className="text-xl font-medium">{report.metrics.newSuppliersInMyCategories}</p></div>
             </section>
 
             <section className="rounded-lg border border-border p-4">
-              <h2 className="text-sm font-semibold mb-3">Proveedores recomendados</h2>
+              <h2 className="text-sm font-medium mb-3">Proveedores recomendados</h2>
               <div className="space-y-2">
                 {report.recommendedSuppliers.map((item) => (
                   <div key={item.id} id={`item-${item.id}`} className="flex items-center justify-between">

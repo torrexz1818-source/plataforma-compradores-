@@ -1,0 +1,136 @@
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm transition-colors disabled:pointer-events-none disabled:opacity-50;
+    font-weight: var(--font-weight-medium);
+  }
+
+  .btn-primary {
+    background: var(--color-green-growth);
+    color: var(--color-blue-buyer);
+    box-shadow: var(--shadow-green);
+  }
+
+  .btn-primary:hover {
+    background: color-mix(in srgb, var(--color-green-growth) 82%, var(--color-white));
+  }
+
+  .btn-secondary {
+    background: var(--color-blue-buyer);
+    color: var(--color-white);
+  }
+
+  .btn-secondary:hover {
+    background: var(--color-purple-innovation);
+  }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-blue-buyer);
+    border: 1px solid var(--border-medium);
+  }
+
+  .btn-ghost:hover {
+    background: rgba(90, 49, 213, 0.10);
+    border-color: var(--color-purple-innovation);
+  }
+
+  .btn-danger {
+    background: var(--color-red-nodus);
+    color: var(--color-white);
+    box-shadow: var(--shadow-danger);
+  }
+
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--color-red-nodus) 86%, var(--color-purple-innovation));
+  }
+
+  .card,
+  .metric-card,
+  .panel-card,
+  .feature-card {
+    background: var(--card-bg);
+    color: var(--text-on-light);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  .metric-card {
+    border-left: 4px solid var(--color-green-growth);
+  }
+
+  .panel-card {
+    border-top: 4px solid var(--color-purple-innovation);
+  }
+
+  .feature-card {
+    border-top: 4px solid var(--color-red-nodus);
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs;
+    font-weight: var(--font-weight-medium);
+  }
+
+  .badge-buyer {
+    background: rgba(14, 16, 158, 0.10);
+    border-color: rgba(14, 16, 158, 0.18);
+    color: var(--color-blue-buyer);
+  }
+
+  .badge-provider {
+    background: var(--color-green-growth);
+    border-color: var(--color-green-growth);
+    color: var(--color-blue-buyer);
+  }
+
+  .badge-alert {
+    background: var(--color-red-nodus);
+    border-color: var(--color-red-nodus);
+    color: var(--color-white);
+  }
+
+  .badge-premium {
+    background: var(--color-purple-innovation);
+    border-color: var(--color-purple-innovation);
+    color: var(--color-white);
+  }
+
+  .table-brand {
+    color: var(--text-on-light);
+  }
+
+  .table-brand th {
+    color: var(--color-blue-buyer);
+    font-weight: var(--font-weight-bold);
+  }
+
+  .table-brand tr {
+    border-color: var(--border-soft);
+  }
+
+  .table-brand tbody tr:hover {
+    background: rgba(90, 49, 213, 0.08);
+  }
+
+  .input-brand,
+  input,
+  textarea,
+  select {
+    background: var(--color-white);
+    border-color: var(--border-medium);
+    color: var(--color-blue-buyer);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: rgba(14, 16, 158, 0.56);
+  }
+
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: var(--color-purple-innovation);
+    box-shadow: 0 0 0 3px rgba(90, 49, 213, 0.14);
+  }
+}

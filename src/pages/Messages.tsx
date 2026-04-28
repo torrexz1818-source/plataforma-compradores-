@@ -60,10 +60,10 @@ function AttachmentPreview({ attachment, compact = false }: { attachment: Messag
           />
         ) : null}
         <div className="p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-primary/80">
+          <p className="text-[11px] font-medium uppercase tracking-wide text-primary/80">
             Publicacion compartida
           </p>
-          <p className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">{attachment.name}</p>
+          <p className="mt-1 line-clamp-2 text-sm font-medium text-foreground">{attachment.name}</p>
           {attachment.description && (
             <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{attachment.description}</p>
           )}
@@ -75,12 +75,12 @@ function AttachmentPreview({ attachment, compact = false }: { attachment: Messag
   if (attachment.kind === 'profile') {
     return (
       <div className={`rounded-xl border border-border bg-white p-3 ${compact ? 'w-40' : 'w-full max-w-sm'}`}>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-primary/80">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-primary/80">
           Perfil compartido
         </p>
-        <p className="mt-1 line-clamp-2 text-sm font-semibold text-foreground">{attachment.name}</p>
+        <p className="mt-1 line-clamp-2 text-sm font-medium text-foreground">{attachment.name}</p>
         {attachment.label && (
-          <p className="mt-1 line-clamp-1 text-xs font-medium text-slate-700">{attachment.label}</p>
+          <p className="mt-1 line-clamp-1 text-xs font-medium text-foreground/80">{attachment.label}</p>
         )}
         {attachment.description && (
           <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{attachment.description}</p>
@@ -367,7 +367,7 @@ const Messages = () => {
             Conversaciones en tiempo real con soporte para fotos, archivos y ubicacion.
           </p>
           {!hasMembershipAccess && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3 inline-block">
+            <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2 mt-3 inline-block">
               Tu cuenta puede enviar texto. Fotos, archivos y ubicacion requieren membresia activa autorizada.
             </p>
           )}
@@ -410,12 +410,12 @@ const Messages = () => {
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                      <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium shrink-0">
                         {getInitials(name)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className={`text-sm truncate ${conversation.unreadCount > 0 ? 'font-bold text-foreground' : 'font-semibold text-foreground'}`}>{name}</p>
+                          <p className={`text-sm truncate ${conversation.unreadCount > 0 ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>{name}</p>
                           <span className="text-[11px] text-muted-foreground shrink-0">
                             {formatConversationTime(conversation.updatedAt)}
                           </span>
@@ -426,7 +426,7 @@ const Messages = () => {
                             {conversation.lastMessage || 'Sin mensajes aun'}
                           </p>
                           {conversation.unreadCount > 0 && (
-                            <span className="shrink-0 min-w-5 h-5 px-1 rounded-full bg-blue-600 text-white text-[10px] font-semibold flex items-center justify-center">
+                            <span className="shrink-0 min-w-5 h-5 px-1 rounded-full bg-primary text-white text-[10px] font-medium flex items-center justify-center">
                               {conversation.unreadCount}
                             </span>
                           )}
@@ -450,14 +450,14 @@ const Messages = () => {
               {activeConversation ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                    <div className="w-11 h-11 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium shrink-0">
                       {getInitials(
                         activeConversation.otherUserName ||
                         (isBuyerLikeRole(user?.role) ? activeConversation.supplierName : activeConversation.buyerName),
                       )}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-foreground">
+                      <p className="text-sm font-medium text-foreground">
                         {activeConversation.otherUserName ||
                           (isBuyerLikeRole(user?.role) ? activeConversation.supplierName : activeConversation.buyerName)}
                       </p>
@@ -468,15 +468,15 @@ const Messages = () => {
                     </div>
                   </div>
                   {source === 'employability' && activeConversationId === searchParams.get('conversationId') && (
-                    <div className="rounded-xl border border-sky-200 bg-sky-50/80 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">
+                    <div className="rounded-xl border border-secondary/25 bg-secondary/10 px-4 py-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-secondary">
                         Conversacion iniciada desde Empleabilidad
                       </p>
-                      <p className="mt-1 text-sm font-semibold text-slate-900">
+                      <p className="mt-1 text-sm font-medium text-foreground">
                         {sourceTargetName ?? 'Perfil profesional'}
                       </p>
                       {sourceTargetHeadline ? (
-                        <p className="mt-1 text-xs text-slate-600">{sourceTargetHeadline}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{sourceTargetHeadline}</p>
                       ) : null}
                     </div>
                   )}
@@ -486,10 +486,10 @@ const Messages = () => {
                       onClick={() => publicationPath && navigate(publicationPath)}
                       className="w-full text-left rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 hover:bg-primary/10 transition-colors"
                     >
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-primary/80">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-primary/80">
                         Conversacion ligada a publicacion
                       </p>
-                      <p className="text-sm font-semibold text-foreground mt-1">
+                      <p className="text-sm font-medium text-foreground mt-1">
                         {publicationQuery.data.post.title}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
@@ -503,7 +503,7 @@ const Messages = () => {
               )}
             </div>
 
-            <div className="min-h-[360px] max-h-[52vh] overflow-y-auto space-y-3 p-5 bg-[linear-gradient(180deg,rgba(248,250,252,0.8),rgba(255,255,255,1))]">
+            <div className="min-h-[360px] max-h-[52vh] overflow-y-auto space-y-3 p-5 bg-[linear-gradient(180deg,rgba(14, 16, 158, 0.08),rgba(255, 255, 255, 1))]">
               {messagesQuery.isError && (
                 <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                   No se pudieron cargar los mensajes de esta conversacion.
@@ -637,15 +637,15 @@ const Messages = () => {
               <div className="px-5 pb-5 space-y-5">
                 {(similarSuppliersQuery.data?.length ?? 0) > 0 && (
                   <div>
-                    <h2 className="text-sm font-semibold text-foreground mb-3">
+                    <h2 className="text-sm font-medium text-foreground mb-3">
                       Proveedores similares que podrian interesarte
                     </h2>
                     <div className="grid md:grid-cols-3 gap-3">
                       {(similarSuppliersQuery.data ?? []).map((supplier) => (
                         <article key={supplier.id} className="rounded-xl border border-border p-3">
-                          <p className="text-sm font-semibold text-foreground">{supplier.company}</p>
+                          <p className="text-sm font-medium text-foreground">{supplier.company}</p>
                           <p className="text-xs text-muted-foreground">{supplier.sector}</p>
-                          <p className="text-xs text-amber-600 mt-1">*****</p>
+                          <p className="text-xs text-destructive mt-1">*****</p>
                           <Button
                             size="sm"
                             variant="outline"
@@ -671,7 +671,7 @@ const Messages = () => {
                           key={item}
                           type="button"
                           onClick={() => setRating(item)}
-                          className={`text-lg ${item <= rating ? 'text-amber-500' : 'text-muted-foreground'}`}
+                          className={`text-lg ${item <= rating ? 'text-destructive' : 'text-muted-foreground'}`}
                         >
                           *
                         </button>
@@ -691,7 +691,7 @@ const Messages = () => {
                 )}
 
                 {(alreadyReviewed || reviewDone) && (
-                  <p className="text-sm text-emerald-700">Gracias por tu valoracion</p>
+                  <p className="text-sm text-success-foreground">Gracias por tu valoracion</p>
                 )}
               </div>
             )}
