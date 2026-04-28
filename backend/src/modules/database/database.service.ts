@@ -762,44 +762,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       );
 
     await Promise.all(
-      seedUsers
-        .filter((user) => user.role !== UserRole.ADMIN)
-        .map(async (user) =>
-          users.updateOne(
-            { id: user.id },
-            {
-              $setOnInsert: {
-                id: user.id,
-                email: user.email.toLowerCase(),
-                passwordHash: await bcrypt.hash(user.password, 10),
-                fullName: user.fullName,
-                company: user.company,
-                commercialName: user.commercialName,
-                position: user.position,
-                phone: user.phone,
-                ruc: user.ruc,
-                sector: user.sector,
-                location: user.location,
-                description: user.description,
-                employeeCount: user.employeeCount,
-                digitalPresence: user.digitalPresence,
-                buyerProfile: user.buyerProfile,
-                supplierProfile: user.supplierProfile,
-                expertProfile: user.expertProfile,
-                role: user.role,
-                status: user.status,
-                points: user.points,
-                avatarUrl: user.avatarUrl,
-                createdAt: new Date(user.createdAt),
-                updatedAt: new Date(user.updatedAt),
-              },
-            },
-            { upsert: true },
-          ),
-        ),
-    );
-
-    await Promise.all(
       seedCategories.map((category) =>
         categories.updateOne(
           { id: category.id },
