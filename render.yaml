@@ -14,6 +14,14 @@ services:
         value: America/Lima
       - key: APP_TIMEZONE
         value: America/Lima
+      - key: CORS_ORIGINS
+        value: https://supplynexu.com,https://www.supplynexu.com
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB_NAME
+        value: supplynexu
+      - key: JWT_SECRET
+        sync: false
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET

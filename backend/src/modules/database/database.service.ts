@@ -401,6 +401,19 @@ function sanitizeEnv(value?: string): string | undefined {
   return trimmed;
 }
 
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === 'production' || Boolean(process.env.RENDER);
+}
+
+function withDefaultMongoAuthSource(uri: string): string {
+  if (!uri.startsWith('mongodb+srv://') || /[?&]authSource=/i.test(uri)) {
+    return uri;
+  }
+
+  const separator = uri.includes('?') ? '&' : '?';
+  return `${uri}${separator}authSource=admin`;
+}
+
 function buildMongoUri(): string {
   const directUri =
     sanitizeEnv(process.env.MONGODB_URI) ??
@@ -408,7 +421,7 @@ function buildMongoUri(): string {
     sanitizeEnv(process.env.DATABASE_URL);
 
   if (directUri) {
-    return directUri;
+    return withDefaultMongoAuthSource(directUri);
   }
 
   const username = sanitizeEnv(process.env.MONGODB_USERNAME);
@@ -417,7 +430,19 @@ function buildMongoUri(): string {
   const dbName = sanitizeEnv(process.env.MONGODB_DB_NAME) ?? 'supplynexu';
 
   if (!host) {
+    if (isProductionRuntime()) {
+      throw new Error(
+        'Missing MongoDB configuration. Set MONGODB_URI in Render, or set MONGODB_USERNAME, MONGODB_PASSWORD, and MONGODB_HOST.',
+      );
+    }
+
     return 'mongodb://127.0.0.1:27017';
+  }
+
+  if (isProductionRuntime() && (!username || !password)) {
+    throw new Error(
+      'Incomplete MongoDB configuration. Set MONGODB_URI in Render, or provide both MONGODB_USERNAME and MONGODB_PASSWORD with MONGODB_HOST.',
+    );
   }
 
   const credentials =
@@ -431,7 +456,9 @@ function buildMongoUri(): string {
       : 'mongodb+srv://';
   const normalizedHost = host.replace(/^mongodb(\+srv)?:\/\//, '');
 
-  return `${protocol}${credentials}${normalizedHost}/${encodeURIComponent(dbName)}?retryWrites=true&w=majority`;
+  return withDefaultMongoAuthSource(
+    `${protocol}${credentials}${normalizedHost}/${encodeURIComponent(dbName)}?retryWrites=true&w=majority`,
+  );
 }
 
 @Injectable()
