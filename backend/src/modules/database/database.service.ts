@@ -5,7 +5,7 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { Collection, Db, MongoClient } from 'mongodb';
+import { Collection, Db, Document, MongoClient } from 'mongodb';
 import {
   seedEmployabilityJobs,
   seedEmployabilityTalentProfiles,
@@ -674,7 +674,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private async dropLegacySingleAdminIndex(
     users: Collection<UserDocument>,
   ): Promise<void> {
-    const indexes = await users.indexes();
+    const indexes = await this.getExistingIndexes(users);
     const legacyAdminIndex = indexes.find(
       (index) =>
         index.unique === true &&
@@ -692,7 +692,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private async dropLegacyConversationPairIndex(
     conversations: Collection<ConversationDocument>,
   ): Promise<void> {
-    const indexes = await conversations.indexes();
+    const indexes = await this.getExistingIndexes(conversations);
     const legacyPairIndex = indexes.find(
       (index) =>
         index.unique === true &&
@@ -711,7 +711,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private async dropLegacySingleSlotExpertAppointmentIndex(
     expertAppointments: Collection<ExpertAppointmentDocument>,
   ): Promise<void> {
-    const indexes = await expertAppointments.indexes();
+    const indexes = await this.getExistingIndexes(expertAppointments);
     const legacySlotIndex = indexes.find(
       (index) =>
         index.unique === true &&
@@ -727,6 +727,23 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     }
 
     await expertAppointments.dropIndex(legacySlotIndex.name);
+  }
+
+  private async getExistingIndexes<T extends Document>(
+    collection: Collection<T>,
+  ): Promise<Awaited<ReturnType<Collection<T>['indexes']>>> {
+    try {
+      return await collection.indexes();
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        /ns does not exist|NamespaceNotFound/i.test(error.message)
+      ) {
+        return [];
+      }
+
+      throw error;
+    }
   }
 
   private async seedDefaults(): Promise<void> {
