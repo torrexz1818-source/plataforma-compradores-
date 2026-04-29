@@ -17,12 +17,12 @@ const COMMUNITY_ALLOWED_CATEGORY_SLUGS = new Set([
 
 const CATEGORY_PILL_CLASSES: Record<string, { idle: string; active: string }> = {
   tips: {
-    idle: 'bg-[#1512A8] text-white hover:bg-[#1D1AAE]',
-    active: 'bg-[#1512A8] text-white shadow-[0_10px_22px_rgba(21,18,168,0.18)]',
-  },
-  recomendacion: {
     idle: 'bg-[#5A36D8] text-white hover:bg-[#4f2dca]',
     active: 'bg-[#5A36D8] text-white shadow-[0_10px_22px_rgba(90,54,216,0.18)]',
+  },
+  recomendacion: {
+    idle: 'bg-[#1512A8] text-white hover:bg-[#1D1AAE]',
+    active: 'bg-[#1512A8] text-white shadow-[0_10px_22px_rgba(21,18,168,0.18)]',
   },
   experiencia: {
     idle: 'bg-[#F72A3A] text-white hover:bg-[#de2130]',

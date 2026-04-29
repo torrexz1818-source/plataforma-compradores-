@@ -44,7 +44,7 @@ const BuyerDashboard = () => {
   const totalSectorUsers = (platformStats?.sectorBreakdown ?? []).reduce((acc, item) => acc + item.count, 0);
 
   return (
-    <div className="mx-auto w-full max-w-5xl min-w-0 overflow-x-hidden px-3 py-5 sm:px-6 sm:py-8">
+    <div className="mx-auto w-full max-w-7xl min-w-0 overflow-x-hidden px-3 py-5 sm:px-6 sm:py-8 2xl:max-w-[1440px]">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -101,7 +101,7 @@ const BuyerDashboard = () => {
           </section>
 
           <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+            <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
               <CardContent className="flex min-w-0 items-center gap-4 p-5">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Users className="h-7 w-7" />
@@ -114,7 +114,7 @@ const BuyerDashboard = () => {
                 </div>
               </CardContent>
             </Card>
-            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+            <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
               <CardContent className="flex min-w-0 items-center gap-4 p-5">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
                   <UserRound className="h-7 w-7" />
@@ -127,7 +127,7 @@ const BuyerDashboard = () => {
                 </div>
               </CardContent>
             </Card>
-            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+            <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
               <CardContent className="flex min-w-0 items-center gap-4 p-5">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/20 text-success-foreground">
                   <Building2 className="h-7 w-7" />
@@ -142,8 +142,8 @@ const BuyerDashboard = () => {
             </Card>
           </section>
 
-          <section className="grid min-w-0 gap-4 xl:grid-cols-2">
-            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+          <section className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+            <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">
                   Usuarios por sector
@@ -173,15 +173,15 @@ const BuyerDashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+            <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">
                   Ultimos registros
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="w-full max-w-full overflow-x-auto overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
-                <table className="min-w-[640px] w-full table-fixed text-sm">
+                <div className="w-full max-w-full overflow-x-auto overflow-y-visible overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
+                <table className="min-w-[620px] w-full table-fixed text-sm">
                   <thead>
                     <tr className="border-b border-border/50 text-left text-xs text-foreground">
                       <th className="w-[34%] py-2 pr-3 font-semibold">Nombre</th>

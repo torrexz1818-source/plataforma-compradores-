@@ -283,8 +283,10 @@ const Admin = () => {
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId) ?? null;
   const educationalCategory = categories.find((category) => category.slug === 'contenido-educativo') ?? null;
   const skillCategory = categories.find((category) => category.slug === SKILL_CATEGORY_SLUG) ?? null;
-  const isSkillDestination = form.categoryId === skillCategory?.id;
-  const requiresLearningRoute = !isSkillDestination;
+  const isSkillDestination = form.categoryId === skillCategory?.id || (!skillCategory && form.categoryId === 'cat-8');
+  const isEducationalDestination =
+    form.categoryId === educationalCategory?.id || (!educationalCategory && form.categoryId === 'cat-7');
+  const requiresLearningRoute = isEducationalDestination;
   const categoryCommentCounts = useMemo(() => {
     return categories.map((category) => ({
       ...category,
@@ -597,7 +599,7 @@ const Admin = () => {
 
   return (
     <MainLayout>
-      <div className="mx-auto w-full max-w-5xl min-w-0 px-3 py-5 space-y-8 overflow-x-hidden sm:px-6 sm:py-8">
+      <div className="mx-auto w-full max-w-7xl min-w-0 px-3 py-5 space-y-8 overflow-x-hidden sm:px-6 sm:py-8 2xl:max-w-[1440px]">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Panel administrativo</h1>
           <p className="mt-1 text-muted-foreground">Resumen general de la plataforma</p>
@@ -608,7 +610,7 @@ const Admin = () => {
             const Icon = card.icon;
 
             return (
-              <Card key={card.label} className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+              <Card key={card.label} className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
                 <CardContent className="flex min-w-0 items-center gap-4 p-5">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${card.iconClassName}`}>
                     <Icon className="h-7 w-7" />
@@ -626,7 +628,7 @@ const Admin = () => {
         </section>
 
         <section className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <Card className="min-w-0 overflow-hidden rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
+          <Card className="min-w-0 rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
             <CardContent className="flex min-w-0 items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <FileText className="h-5 w-5" />
@@ -637,7 +639,7 @@ const Admin = () => {
               </div>
             </CardContent>
           </Card>
-          <Card className="min-w-0 overflow-hidden rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
+          <Card className="min-w-0 rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
             <CardContent className="flex min-w-0 items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/15 text-secondary">
                 <Video className="h-5 w-5" />
@@ -648,7 +650,7 @@ const Admin = () => {
               </div>
             </CardContent>
           </Card>
-          <Card className="min-w-0 overflow-hidden rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
+          <Card className="min-w-0 rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
             <CardContent className="flex min-w-0 items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
                 <MessageCircle className="h-5 w-5" />
@@ -661,8 +663,8 @@ const Admin = () => {
           </Card>
         </section>
 
-        <section className="grid min-w-0 gap-4 xl:grid-cols-2">
-          <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+        <section className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Usuarios por sector</CardTitle>
             </CardHeader>
@@ -696,7 +698,7 @@ const Admin = () => {
             </CardContent>
           </Card>
 
-          <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+          <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Ultimos registros</CardTitle>
             </CardHeader>
@@ -704,8 +706,8 @@ const Admin = () => {
               {platformStatsQuery.isLoading && (
                 <p className="text-sm text-muted-foreground">Cargando usuarios...</p>
               )}
-              <div className="w-full max-w-full overflow-x-auto overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
-                <table className="min-w-[640px] w-full table-fixed text-sm">
+              <div className="w-full max-w-full overflow-x-auto overflow-y-visible overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
+                <table className="min-w-[620px] w-full table-fixed text-sm">
                   <thead>
                     <tr className="border-b border-border/50 text-left text-xs text-foreground">
                       <th className="w-[34%] py-2 pr-3 font-semibold">Nombre</th>
@@ -807,38 +809,31 @@ const Admin = () => {
                   </p>
                 )}
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Ruta tematica</label>
-                <select
-                  value={form.learningRoute}
-                  disabled={isSkillDestination}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      learningRoute: normalizeLearningRouteId(event.target.value) ?? DEFAULT_LEARNING_ROUTE_ID,
-                    }))
-                  }
-                  className={`flex h-10 w-full rounded-md border border-input px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    isSkillDestination
-                      ? 'cursor-not-allowed bg-muted text-muted-foreground opacity-70'
-                      : 'bg-background'
-                  }`}
-                >
-                  {isSkillDestination && (
-                    <option value="">No aplica para Mejorar skill</option>
-                  )}
-                  {LEARNING_ROUTES.map((route) => (
-                    <option key={route.id} value={route.id}>
-                      {route.label} - {route.title}
-                    </option>
-                  ))}
-                </select>
-                {isSkillDestination && (
-                  <p className="text-xs text-muted-foreground">
-                    Las rutas solo aplican para Contenido Educativo.
-                  </p>
-                )}
-              </div>
+              {requiresLearningRoute ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Ruta tematica</label>
+                  <select
+                    value={form.learningRoute || DEFAULT_LEARNING_ROUTE_ID}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        learningRoute: normalizeLearningRouteId(event.target.value) ?? DEFAULT_LEARNING_ROUTE_ID,
+                      }))
+                    }
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {LEARNING_ROUTES.map((route) => (
+                      <option key={route.id} value={route.id}>
+                        {route.label} - {route.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="rounded-xl border border-primary/10 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                  Este destino no necesita ruta tematica; se publicara solo en Empleabilidad / Mejorar skill.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
