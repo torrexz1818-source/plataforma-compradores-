@@ -123,6 +123,56 @@
     color: var(--color-purple-innovation) !important;
   }
 
+  button[class*="bg-[#0E109E]"],
+  button[class*="bg-[#1512A8]"],
+  button[class*="bg-[#1f20b7]"],
+  button[class*="bg-[#5A31D5]"],
+  button[class*="bg-[#5A36D8]"],
+  a[class*="bg-[#0E109E]"],
+  a[class*="bg-[#1512A8]"],
+  a[class*="bg-[#1f20b7]"],
+  a[class*="bg-[#5A31D5]"],
+  a[class*="bg-[#5A36D8]"],
+  [role="button"][class*="bg-[#0E109E]"],
+  [role="button"][class*="bg-[#1512A8]"],
+  [role="button"][class*="bg-[#1f20b7]"],
+  [role="button"][class*="bg-[#5A31D5]"],
+  [role="button"][class*="bg-[#5A36D8]"] {
+    background: rgba(14, 16, 158, 0.14) !important;
+    border-color: rgba(14, 16, 158, 0.28) !important;
+    color: var(--color-blue-buyer) !important;
+    box-shadow: 0 12px 28px rgba(14, 16, 158, 0.08);
+  }
+
+  button[class*="bg-[#0E109E]"]:hover,
+  button[class*="bg-[#1512A8]"]:hover,
+  button[class*="bg-[#1f20b7]"]:hover,
+  button[class*="bg-[#5A31D5]"]:hover,
+  button[class*="bg-[#5A36D8]"]:hover,
+  button[class*="hover:bg-[#0E109E]"]:hover,
+  button[class*="hover:bg-[#1D1AAE]"]:hover,
+  button[class*="hover:bg-[#4f2dca]"]:hover,
+  a[class*="bg-[#0E109E]"]:hover,
+  a[class*="bg-[#1512A8]"]:hover,
+  a[class*="bg-[#1f20b7]"]:hover,
+  a[class*="bg-[#5A31D5]"]:hover,
+  a[class*="bg-[#5A36D8]"]:hover,
+  a[class*="hover:bg-[#0E109E]"]:hover,
+  a[class*="hover:bg-[#1D1AAE]"]:hover,
+  a[class*="hover:bg-[#4f2dca]"]:hover,
+  [role="button"][class*="bg-[#0E109E]"]:hover,
+  [role="button"][class*="bg-[#1512A8]"]:hover,
+  [role="button"][class*="bg-[#1f20b7]"]:hover,
+  [role="button"][class*="bg-[#5A31D5]"]:hover,
+  [role="button"][class*="bg-[#5A36D8]"]:hover,
+  [role="button"][class*="hover:bg-[#0E109E]"]:hover,
+  [role="button"][class*="hover:bg-[#1D1AAE]"]:hover,
+  [role="button"][class*="hover:bg-[#4f2dca]"]:hover {
+    background: rgba(14, 16, 158, 0.20) !important;
+    border-color: rgba(14, 16, 158, 0.34) !important;
+    color: var(--color-blue-buyer) !important;
+  }
+
   button[aria-selected="true"][class*="primary"],
   button[aria-selected="true"][class*="secondary"],
   button[data-active="true"][class*="primary"],

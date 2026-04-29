@@ -4,6 +4,7 @@ import {
   Bot,
   BriefcaseBusiness,
   Building2,
+  LayoutDashboard,
   FileText,
   MessageCircle,
   MessagesSquare,
@@ -16,6 +17,19 @@ import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
 const baseModuleCards = [
+  {
+    title: 'Dashboard',
+    description: 'Consulta el resumen general de usuarios, sectores y actividad reciente.',
+    to: '/buyer/dashboard',
+    supplierTo: '/supplier/dashboard',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Novedades',
+    description: 'Revisa noticias, anuncios y publicaciones recientes de la plataforma.',
+    to: '/novedades',
+    icon: Newspaper,
+  },
   {
     title: 'Comunidad',
     description: 'Conecta con compradores, proveedores y profesionales del sector.',
@@ -58,12 +72,6 @@ const baseModuleCards = [
     description: 'Busca, filtra y revisa proveedores registrados en la plataforma.',
     to: '/buyer/directory',
     icon: Building2,
-  },
-  {
-    title: 'Novedades',
-    description: 'Revisa noticias, actualizaciones y publicaciones recientes de la comunidad.',
-    to: '/novedades',
-    icon: Newspaper,
   },
   {
     title: 'Mensajería',

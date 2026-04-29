@@ -29,7 +29,12 @@ import {
   updateUserStatus,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { DEFAULT_LEARNING_ROUTE_ID, LEARNING_ROUTES, LearningRouteId } from '@/lib/learningRoutes';
+import {
+  DEFAULT_LEARNING_ROUTE_ID,
+  LEARNING_ROUTES,
+  LearningRouteId,
+  normalizeLearningRouteId,
+} from '@/lib/learningRoutes';
 import { getRoleBadgeClass, getRoleLabel } from '@/lib/roles';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,6 +42,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { PostResource, UserStatus } from '@/types';
+
+const SKILL_CATEGORY_SLUG = 'mejorar-skill';
 
 const sectorColors = [
   'bg-primary',
@@ -71,7 +78,7 @@ const Admin = () => {
     title: '',
     description: '',
     mediaType: 'video' as 'video' | 'image',
-    categoryId: 'cat-1',
+    categoryId: 'cat-7',
     learningRoute: DEFAULT_LEARNING_ROUTE_ID as LearningRouteId,
   });
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
@@ -115,7 +122,7 @@ const Admin = () => {
         title: '',
         description: '',
         mediaType: 'video',
-        categoryId: 'cat-1',
+        categoryId: 'cat-7',
         learningRoute: DEFAULT_LEARNING_ROUTE_ID,
       });
       setThumbnailFile(null);
@@ -133,6 +140,7 @@ const Admin = () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['home-feed'] });
       void queryClient.invalidateQueries({ queryKey: ['community-posts'] });
+      void queryClient.invalidateQueries({ queryKey: ['employability-skill-posts'] });
     },
   });
 
@@ -215,25 +223,7 @@ const Admin = () => {
   const sectorBreakdown = platformStatsQuery.data?.sectorBreakdown ?? [];
   const latestUsers = (platformStatsQuery.data?.latestUsers ?? []).slice(0, 8);
   const totalSectorUsers = sectorBreakdown.reduce((acc, item) => acc + item.count, 0);
-
-  if (!isAuthLoading && !user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  if (!isAuthLoading && user?.role !== 'admin') {
-    return (
-      <MainLayout>
-        <div className="mx-auto w-full max-w-3xl px-3 py-8 sm:px-6 sm:py-10">
-          <h1 className="text-2xl font-bold text-foreground mb-2">Panel de administracion</h1>
-          <p className="text-muted-foreground">
-            Solo el administrador superior de la plataforma puede acceder a esta seccion.
-          </p>
-        </div>
-      </MainLayout>
-    );
-  }
-
-  const categories = data?.categories ?? [];
+  const categories = useMemo(() => data?.categories ?? [], [data?.categories]);
   const selectedUser = (data?.users ?? []).find((item) => item.id === selectedUserId) ?? null;
   const buyerUsers = useMemo(
     () => (data?.users ?? []).filter((item) => item.role === 'buyer' && item.status === 'active'),
@@ -259,6 +249,8 @@ const Admin = () => {
     return data.comments.filter((comment) => postsById.get(comment.postId)?.category.id === selectedCategoryId);
   }, [data?.comments, postsById, selectedCategoryId]);
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId) ?? null;
+  const skillCategory = categories.find((category) => category.slug === SKILL_CATEGORY_SLUG) ?? null;
+  const isSkillDestination = form.categoryId === skillCategory?.id;
   const categoryCommentCounts = useMemo(() => {
     return categories.map((category) => ({
       ...category,
@@ -276,12 +268,33 @@ const Admin = () => {
         return current;
       }
 
+      const educationalCategory = categories.find((category) => category.slug === 'contenido-educativo');
+
       return {
         ...current,
-        categoryId: categories[0].id,
+        categoryId: educationalCategory?.id ?? categories[0].id,
       };
     });
   }, [categories]);
+
+  const showLegacyUsersSection = false;
+
+  if (!isAuthLoading && !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!isAuthLoading && user?.role !== 'admin') {
+    return (
+      <MainLayout>
+        <div className="mx-auto w-full max-w-3xl px-3 py-8 sm:px-6 sm:py-10">
+          <h1 className="text-2xl font-bold text-foreground mb-2">Panel de administracion</h1>
+          <p className="text-muted-foreground">
+            Solo el administrador superior de la plataforma puede acceder a esta seccion.
+          </p>
+        </div>
+      </MainLayout>
+    );
+  }
 
   const openCategoryComments = (categoryId: string) => {
     setSelectedCategoryId(categoryId);
@@ -667,7 +680,7 @@ const Admin = () => {
             <div>
               <h2 className="text-lg font-medium text-foreground">Crear contenido</h2>
               <p className="text-sm text-muted-foreground">
-                Publica material educativo con vista previa antes de subirlo y agrega recursos complementarios.
+                Publica material educativo o recursos para mejorar skills con vista previa antes de subirlo.
               </p>
             </div>
 
@@ -694,13 +707,39 @@ const Admin = () => {
                 </select>
               </div>
               <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Destino</label>
+                <select
+                  value={isSkillDestination ? 'skill' : 'educational'}
+                  onChange={(event) => {
+                    setForm((current) => ({
+                      ...current,
+                      categoryId:
+                        event.target.value === 'skill' && skillCategory
+                          ? skillCategory.id
+                          : categories[0]?.id ?? current.categoryId,
+                    }));
+                  }}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="educational">Contenido Educativo</option>
+                  <option value="skill" disabled={!skillCategory}>
+                    Empleabilidad / Mejorar skill
+                  </option>
+                </select>
+                {!skillCategory && (
+                  <p className="text-xs text-muted-foreground">
+                    La categoria Mejorar skill estara disponible al sincronizar las categorias del backend.
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground">Ruta tematica</label>
                 <select
                   value={form.learningRoute}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
-                      learningRoute: event.target.value as LearningRouteId,
+                      learningRoute: normalizeLearningRouteId(event.target.value) ?? DEFAULT_LEARNING_ROUTE_ID,
                     }))
                   }
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -807,7 +846,7 @@ const Admin = () => {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Este contenido se publicara solo en el modulo de contenido educativo.
+                  Este contenido se publicara en {isSkillDestination ? 'Empleabilidad / Mejorar skill' : 'Contenido Educativo'}.
                 </p>
               </div>
             </div>
@@ -937,6 +976,7 @@ const Admin = () => {
                 !form.title.trim() ||
                 !form.description.trim() ||
                 !form.categoryId ||
+                !form.learningRoute ||
                 (form.mediaType === 'video' ? !videoFile : !thumbnailFile)
               }
               onClick={async () => {
@@ -986,7 +1026,9 @@ const Admin = () => {
                 ? form.mediaType === 'video' && videoUploadProgress > 0
                   ? `Subiendo video... ${videoUploadProgress}%`
                   : 'Guardando...'
-                : 'Publicar contenido educativo'}
+                : isSkillDestination
+                  ? 'Publicar en Mejorar skill'
+                  : 'Publicar contenido educativo'}
             </Button>
           </div>
 
@@ -1113,7 +1155,7 @@ const Admin = () => {
           {renderManagedUsers(supplierUsers, 'Proveedores')}
         </section>
 
-        {false && <section className="bg-card rounded-lg border border-border p-5">
+        {showLegacyUsersSection && <section className="bg-card rounded-lg border border-border p-5">
           <h2 className="text-lg font-medium text-foreground mb-4">Usuarios</h2>
           <div className="space-y-3">
             {(data?.users ?? []).map((managedUser) => (

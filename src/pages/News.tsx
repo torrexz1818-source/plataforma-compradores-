@@ -1,8 +1,8 @@
 import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowRight, ExternalLink, FileText, Heart, ImagePlus, Link, MessageCircle, Send } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ExternalLink, FileText, Heart, ImagePlus, Link, MessageCircle, Send } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { createNewsComment, createNewsPost, getNewsPosts, resolveApiAssetUrl, toggleNewsLike } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { NewsComment, NewsPost } from '@/types';
@@ -257,7 +257,6 @@ const NewsCard = ({
 };
 
 const News = () => {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
@@ -443,24 +442,6 @@ const News = () => {
         </section>
       </div>
 
-      <button
-        type="button"
-        onClick={() => navigate('/inicio')}
-        aria-label="Ir al inicio"
-        className="fixed right-4 top-1/2 z-20 inline-flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-primary text-white shadow-[0_20px_40px_rgba(14, 16, 158, 0.22)] transition-transform hover:scale-105"
-      >
-        <span className="news-bounce-arrow inline-flex">
-          <ArrowRight className="h-6 w-6" />
-        </span>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => navigate('/inicio')}
-        className="fixed bottom-4 right-4 rounded-full bg-white px-4 py-2 text-sm font-medium text-foreground/80 shadow-lg transition-colors hover:bg-primary/5 sm:hidden"
-      >
-        Ir al inicio
-      </button>
     </div>
   );
 };

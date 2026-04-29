@@ -4,14 +4,14 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import NotificationBell from '@/components/NotificationBell';
 import MessageBell from '@/components/MessageBell';
-import NewsAccessButton from '@/components/NewsAccessButton';
 import HomeAccessButton from '@/components/HomeAccessButton';
 import { isBuyerLikeRole } from '@/lib/roles';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const buyerNavItems = [
-  { to: '/buyer/dashboard', label: 'Inicio', icon: LayoutDashboard },
+  { to: '/buyer/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/novedades', label: 'Novedades', icon: Newspaper },
   { to: '/community', label: 'Comunidad', icon: MessageCircle },
   {
     to: '/contenido-educativo',
@@ -22,13 +22,14 @@ const buyerNavItems = [
       { to: '/nexu-experts', label: 'Nodus Experts', icon: Users },
     ],
   },
-  { to: '/buyer/sale', label: 'Liquidaciones', icon: FileText },
+  { to: '/buyer/sale', label: 'Oportunidades de stock', icon: FileText },
   { to: '/nexu-ia', label: 'Nodus IA', icon: Bot },
   { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
 ];
 
 const supplierNavItems = [
-  { to: '/supplier/dashboard', label: 'Inicio proveedor', icon: LayoutDashboard },
+  { to: '/supplier/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/novedades', label: 'Novedades', icon: Newspaper },
   { to: '/supplier/directory', label: 'Directorio de compradores', icon: Building2 },
   { to: '/publicaciones', label: 'Publicaciones', icon: FileText },
 ];
@@ -63,18 +64,20 @@ const BuyerLayout = () => {
         icon: Users,
         className: 'bg-destructive/20 border border-destructive/30 text-white/90',
       };
+  const adminBuyerItems = buyerNavItems;
+  const adminSupplierItems = supplierNavItems.filter((item) => item.to !== '/novedades');
 
   const navSections = isAdmin
     ? [
         {
           title: 'Administrador',
           items: [
-            { to: '/admin/dashboard', label: 'Panel administrativo', icon: Shield },
+            { to: '/admin/dashboard', label: 'Panel administrativo', icon: LayoutDashboard },
             { to: '/novedades', label: 'Novedades', icon: Newspaper },
           ],
         },
-        { title: 'Comprador', items: buyerNavItems },
-        { title: 'Proveedor', items: supplierNavItems },
+        { title: 'Comprador', items: adminBuyerItems },
+        { title: 'Proveedor', items: adminSupplierItems },
       ]
     : [{ title: '', items: isBuyerLikeRole(user?.role) ? buyerNavItems : buyerNavItems }];
 
@@ -293,7 +296,6 @@ const BuyerLayout = () => {
               <MessageBell />
               <NotificationBell />
               <HomeAccessButton />
-              <NewsAccessButton />
               </div>
             </div>
           </div>

@@ -170,13 +170,13 @@ const SalePage = () => {
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <div className="mb-4 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-white/85">
-              Oportunidades de stock
+              Oportunidades stock
             </div>
             <h1 className="mb-3 text-2xl font-bold tracking-tight text-primary-foreground sm:text-3xl lg:text-4xl">
               Liquidaciones de inventario
             </h1>
             <p className="max-w-xl text-sm leading-6 text-primary-foreground/85 sm:text-base sm:leading-7 lg:text-lg">
-              Publica oportunidades de stock y encuentra liquidaciones activas en una vista clara.
+              Publica oportunidades de stock y encuentra oportunidades activas en una vista clara.
             </p>
           </div>
 
@@ -184,7 +184,7 @@ const SalePage = () => {
             href="#liquidation-feed"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 py-2 text-center text-sm font-medium text-[#0E109E] shadow-sm transition-colors hover:bg-white/95 sm:px-8"
           >
-            Explorar liquidaciones <ArrowRight className="h-4 w-4" />
+            Explorar oportunidades <ArrowRight className="h-4 w-4" />
           </a>
         </div>
       </motion.section>
@@ -269,7 +269,7 @@ const SalePage = () => {
       )}
 
       {isLoading && <p className="text-muted-foreground text-sm">Cargando publicaciones...</p>}
-      {isError && <p className="text-destructive text-sm">No se pudo cargar el feed de liquidaciones.</p>}
+      {isError && <p className="text-destructive text-sm">No se pudo cargar el feed de oportunidades de stock.</p>}
 
       <div id="liquidation-feed" className="space-y-4">
         {filtered.map((post, i) => (
@@ -344,7 +344,7 @@ const SalePage = () => {
                 type="button"
                 onClick={() => {
                   if (!isBuyerLikeRole(user?.role)) {
-                    setFeedback('Solo compradores o expertos pueden dar like en Liquidaciones.');
+                    setFeedback('Solo compradores o expertos pueden dar like en Oportunidades de stock.');
                     return;
                   }
                   if (post.isLiked) {
@@ -383,7 +383,7 @@ const SalePage = () => {
       </div>
 
       {!isLoading && !isError && filtered.length === 0 && (
-        <p className="text-muted-foreground text-sm text-center py-12">No se encontraron liquidaciones activas.</p>
+        <p className="text-muted-foreground text-sm text-center py-12">No se encontraron oportunidades de stock activas.</p>
       )}
     </div>
   );

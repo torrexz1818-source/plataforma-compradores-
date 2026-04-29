@@ -36,11 +36,13 @@ import EcosystemHome from "./pages/EcosystemHome.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import EducationalContent from "./pages/EducationalContent.tsx";
 import Employability from "./pages/Employability.tsx";
+import EmployabilitySkills from "./pages/EmployabilitySkills.tsx";
 import NexuExperts from "./expert/NexuExperts.tsx";
 import NexuIA from "./pages/NexuIA.tsx";
 import ExpertCalendarSetup from "./expert/ExpertCalendarSetup.tsx";
 import RegisterExpert from "./expert/RegisterExpert.tsx";
 import MainLayout from "./layouts/MainLayout.tsx";
+import NewsLayout from "./layouts/NewsLayout.tsx";
 
 const queryClient = new QueryClient();
 
@@ -156,7 +158,7 @@ const BuyerOnlySharedLayout = () => {
     return <Navigate to="/login" replace />;
   }
 
-  if (user.role === 'buyer' || user.role === 'expert') {
+  if (user.role === 'buyer' || user.role === 'expert' || user.role === 'admin') {
     return <BuyerLayout />;
   }
 
@@ -182,7 +184,7 @@ const App = () => (
               path="/inicio"
               element={
                 <RequireAuth>
-                  <ProfileLayoutRedirect />
+                  <NewsLayout />
                 </RequireAuth>
               }
             >
@@ -272,6 +274,7 @@ const App = () => (
               }
             >
               <Route index element={<Employability />} />
+              <Route path="mejorar-skill" element={<EmployabilitySkills />} />
             </Route>
             <Route
               path="/nexu-experts"

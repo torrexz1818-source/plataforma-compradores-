@@ -703,6 +703,7 @@ export const seedAgents: SeedAgent[] = [
 export const seedCategories: SeedCategory[] = [
   { id: 'cat-1', name: 'Tips', slug: 'tips' },
   { id: 'cat-5', name: 'Empleo', slug: 'empleo' },
+  { id: 'cat-8', name: 'Empleabilidad / Mejorar skill', slug: 'mejorar-skill' },
   { id: 'cat-2', name: 'Recomendacion', slug: 'recomendacion' },
   { id: 'cat-3', name: 'Experiencia', slug: 'experiencia' },
   { id: 'cat-4', name: 'Pregunta', slug: 'pregunta' },

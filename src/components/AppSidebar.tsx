@@ -15,18 +15,18 @@ import {
 } from '@/components/ui/sidebar';
 
 const buyerNavItems = [
-  { title: 'Inicio', url: '/buyer/dashboard', icon: Home },
+  { title: 'Dashboard', url: '/buyer/dashboard', icon: Home },
   { title: 'Comunidad', url: '/community', icon: Users },
   { title: 'Contenido Educativo', icon: BookOpen },
   { title: 'Empleabilidad', url: '/empleabilidad', icon: BriefcaseBusiness, indent: true },
   { title: 'Nodus Experts', url: '/nexu-experts', icon: Users, indent: true },
-  { title: 'Liquidaciones', url: '/buyer/sale', icon: FileText },
+  { title: 'Oportunidades de stock', url: '/buyer/sale', icon: FileText },
   { title: 'Nodus IA', url: '/nexu-ia', icon: Bot },
   { title: 'Directorio de proveedores', url: '/buyer/directory', icon: Building2 },
 ];
 
 const supplierNavItems = [
-  { title: 'Inicio proveedor', url: '/supplier/dashboard', icon: Home },
+  { title: 'Dashboard', url: '/supplier/dashboard', icon: Home },
   { title: 'Directorio compradores', url: '/supplier/directory', icon: Building2 },
   { title: 'Publicaciones', url: '/publicaciones', icon: Newspaper },
 ];

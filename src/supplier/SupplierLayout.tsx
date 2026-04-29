@@ -4,19 +4,20 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import NotificationBell from '@/components/NotificationBell';
 import MessageBell from '@/components/MessageBell';
-import NewsAccessButton from '@/components/NewsAccessButton';
 import HomeAccessButton from '@/components/HomeAccessButton';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const supplierNavItems = [
-  { to: '/supplier/dashboard', label: 'Inicio', icon: LayoutDashboard },
+  { to: '/supplier/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/novedades', label: 'Novedades', icon: Newspaper },
   { to: '/supplier/directory', label: 'Directorio de compradores', icon: Building2 },
-  { to: '/supplier/sale', label: 'Liquidaciones', icon: FileText },
+  { to: '/supplier/sale', label: 'Oportunidades de stock', icon: FileText },
 ];
 
 const buyerNavItems = [
-  { to: '/buyer/dashboard', label: 'Inicio comprador', icon: LayoutDashboard },
+  { to: '/buyer/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/novedades', label: 'Novedades', icon: Newspaper },
   { to: '/community', label: 'Comunidad', icon: MessageCircle },
   {
     to: '/contenido-educativo',
@@ -27,7 +28,7 @@ const buyerNavItems = [
       { to: '/nexu-experts', label: 'Nodus Experts', icon: Users },
     ],
   },
-  { to: '/buyer/sale', label: 'Liquidaciones', icon: FileText },
+  { to: '/buyer/sale', label: 'Oportunidades de stock', icon: FileText },
   { to: '/nexu-ia', label: 'Nodus IA', icon: Bot },
   { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
 ];
@@ -56,18 +57,20 @@ const SupplierLayout = () => {
         icon: Store,
         className: 'bg-[#B2EB4A]/10 border border-[#B2EB4A] text-[#B2EB4A]',
       };
+  const adminBuyerItems = buyerNavItems;
+  const adminSupplierItems = supplierNavItems.filter((item) => item.to !== '/novedades');
 
   const navSections = isAdmin
     ? [
         {
           title: 'Administrador',
           items: [
-            { to: '/admin/dashboard', label: 'Panel administrativo', icon: Shield },
+            { to: '/admin/dashboard', label: 'Panel administrativo', icon: LayoutDashboard },
             { to: '/novedades', label: 'Novedades', icon: Newspaper },
           ],
         },
-        { title: 'Comprador', items: buyerNavItems },
-        { title: 'Proveedor', items: supplierNavItems },
+        { title: 'Comprador', items: adminBuyerItems },
+        { title: 'Proveedor', items: adminSupplierItems },
       ]
     : [{ title: '', items: supplierNavItems }];
 
@@ -310,7 +313,6 @@ const SupplierLayout = () => {
               <MessageBell />
               <NotificationBell />
               <HomeAccessButton />
-              <NewsAccessButton />
               </div>
             </div>
           </div>

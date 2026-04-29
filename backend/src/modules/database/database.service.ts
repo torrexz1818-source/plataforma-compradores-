@@ -108,8 +108,15 @@ type PostDocument = {
   description: string;
   learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4';
   type: 'educational' | 'community' | 'liquidation';
+  mediaType?: 'video' | 'image';
   videoUrl?: string;
   thumbnailUrl?: string;
+  resources?: Array<{
+    id: string;
+    type: 'image' | 'file' | 'link';
+    name: string;
+    url: string;
+  }>;
   shares: number;
   likedBy: string[];
   createdAt: Date;

@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BriefcaseBusiness, MapPin, Plus, Search, Users } from 'lucide-react';
+import { BookOpen, BriefcaseBusiness, MapPin, Plus, Search, Users } from 'lucide-react';
 import {
   applyToEmployabilityJob,
   createConversation,
@@ -425,6 +425,29 @@ const Employability = () => {
               Explora perfiles publicados y crea el tuyo dentro de esta sección.
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden rounded-[28px] border-secondary/15 bg-white shadow-sm">
+        <CardContent className="grid gap-5 p-5 sm:p-6 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="flex min-w-0 gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-secondary/12 text-secondary">
+              <BookOpen className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-foreground">Mejora tus skills</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Accede a contenidos, recursos y materiales para fortalecer tus habilidades profesionales.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            className="w-full rounded-2xl bg-secondary/15 px-5 text-secondary hover:bg-secondary/20 sm:w-fit"
+            onClick={() => navigate('/empleabilidad/mejorar-skill')}
+          >
+            Mejorar skill
+          </Button>
         </CardContent>
       </Card>
 

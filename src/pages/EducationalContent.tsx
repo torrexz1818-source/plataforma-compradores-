@@ -3,12 +3,16 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { getHomeFeed, resolveApiAssetUrl } from '@/lib/api';
+import { getHomeFeed, getPosts, resolveApiAssetUrl } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { useHighlight } from '@/hooks/useHighlight';
 import { Post } from '@/types';
-import { LEARNING_ROUTES, LearningRouteId, isLearningRouteId } from '@/lib/learningRoutes';
+import {
+  LEARNING_ROUTES,
+  LearningRouteId,
+  normalizeLearningRouteId,
+} from '@/lib/learningRoutes';
 
 interface EducationalPostCardProps {
   post: Post;
@@ -22,6 +26,8 @@ const formatPostDate = (date: string) =>
     month: 'long',
     year: 'numeric',
   });
+
+const resolvePostLearningRoute = (post: Post) => normalizeLearningRouteId(post.learningRoute);
 
 interface LearningRoutesSectionProps {
   activeRouteId: LearningRouteId | null;
@@ -64,7 +70,7 @@ const LearningRoutesSection = ({
                 onSelectRoute(route.id);
               }
             }}
-            className={`flex min-h-[280px] cursor-pointer flex-col rounded-3xl p-6 text-white shadow-[0_16px_34px_rgba(14,16,158,0.12)] transition-transform duration-200 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
+            className={`group flex min-h-[280px] cursor-pointer flex-col rounded-3xl p-6 text-white shadow-[0_16px_34px_rgba(14,16,158,0.12)] transition-transform duration-200 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
               activeRouteId === route.id ? 'ring-4 ring-primary/20' : ''
             }`}
             style={{ backgroundColor: route.color }}
@@ -79,7 +85,7 @@ const LearningRoutesSection = ({
             <p className="mt-4 text-sm leading-6 text-white/85">{route.description}</p>
 
             <div className="mt-auto pt-7">
-              <span className="inline-flex rounded-full bg-[#0E109E] px-4 py-2 text-sm font-bold text-white shadow-[0_8px_18px_rgba(14,16,158,0.22)]">
+              <span className="inline-flex rounded-full border border-white/35 bg-white/85 px-4 py-2 text-sm font-bold text-[#0E109E] shadow-[0_8px_18px_rgba(14,16,158,0.14)] transition-colors group-hover:bg-white group-active:bg-white/75">
                 {countsByRoute[route.id]} {countsByRoute[route.id] === 1 ? 'contenido' : 'contenidos'}
               </span>
               {firstPost && (
@@ -127,7 +133,7 @@ const EducationalPostCard = ({ post, index, onOpen }: EducationalPostCardProps) 
         )}
 
         {hasMedia && <div className="absolute inset-0 bg-gradient-to-t from-primary/55 via-primary/10 to-transparent" />}
-        <div className="absolute left-4 top-4 rounded-full bg-primary px-3 py-1 text-[11px] font-medium text-primary-foreground shadow-sm">
+        <div className="absolute left-4 top-4 rounded-full border border-[#0E109E]/18 bg-[#0E109E]/14 px-3 py-1 text-[11px] font-medium text-[#0E109E] shadow-[0_8px_18px_rgba(14,16,158,0.08)] backdrop-blur-sm">
           {post.mediaType === 'video' || post.videoUrl ? 'Video' : 'Articulo'}
         </div>
         {(post.mediaType === 'video' || post.videoUrl) && (
@@ -160,21 +166,34 @@ const EducationalContent = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const highlightedId = searchParams.get('highlight');
   const routeParam = searchParams.get('route');
-  const activeRouteId = isLearningRouteId(routeParam ?? undefined) ? routeParam : null;
+  const activeRouteId = normalizeLearningRouteId(routeParam ?? undefined) ?? null;
   useHighlight(highlightedId);
-  const { data, isLoading, isError } = useQuery({
+  const homeFeedQuery = useQuery({
     queryKey: ['home-feed'],
     queryFn: getHomeFeed,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
+  });
+  const educationalPostsQuery = useQuery({
+    queryKey: ['educational-posts'],
+    queryFn: () => getPosts({ type: 'educational' }),
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
-  const educationalPosts = data?.educationalPosts ?? [];
-  const continueWatching = data?.continueWatching ?? [];
+  const educationalPosts = useMemo(() => {
+    const directPosts = educationalPostsQuery.data ?? [];
+    return directPosts.length ? directPosts : homeFeedQuery.data?.educationalPosts ?? [];
+  }, [educationalPostsQuery.data, homeFeedQuery.data?.educationalPosts]);
+  const continueWatching = useMemo(() => homeFeedQuery.data?.continueWatching ?? [], [homeFeedQuery.data?.continueWatching]);
+  const isLoading = homeFeedQuery.isLoading || educationalPostsQuery.isLoading;
+  const isError = homeFeedQuery.isError && educationalPostsQuery.isError;
   const countsByRoute = useMemo(
     () =>
       LEARNING_ROUTES.reduce(
         (acc, route) => ({
           ...acc,
-          [route.id]: educationalPosts.filter((post) => post.learningRoute === route.id).length,
+          [route.id]: educationalPosts.filter((post) => resolvePostLearningRoute(post) === route.id).length,
         }),
         {} as Record<LearningRouteId, number>,
       ),
@@ -183,7 +202,7 @@ const EducationalContent = () => {
   const firstPostByRoute = useMemo(
     () =>
       LEARNING_ROUTES.reduce((acc, route) => {
-        const firstPost = educationalPosts.find((post) => post.learningRoute === route.id);
+        const firstPost = educationalPosts.find((post) => resolvePostLearningRoute(post) === route.id);
         return {
           ...acc,
           ...(firstPost ? { [route.id]: firstPost } : {}),
@@ -195,7 +214,7 @@ const EducationalContent = () => {
     () =>
       educationalPosts.filter(
         (post) =>
-          (!activeRouteId || post.learningRoute === activeRouteId) &&
+          (!activeRouteId || resolvePostLearningRoute(post) === activeRouteId) &&
           (post.title.toLowerCase().includes(search.toLowerCase()) ||
             post.description.toLowerCase().includes(search.toLowerCase())),
       ),
@@ -205,6 +224,8 @@ const EducationalContent = () => {
 
   const selectLearningRoute = (routeId: LearningRouteId) => {
     setSearch('');
+    void homeFeedQuery.refetch();
+    void educationalPostsQuery.refetch();
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set('route', routeId);
     nextParams.delete('highlight');

@@ -91,7 +91,7 @@ export class MessagesService {
     }
 
     const sender = await this.usersService.requireActiveUser(data.senderId);
-    let supplierId = data.supplierId;
+    const supplierId = data.supplierId;
     let buyerId = data.buyerId;
 
     if (sender.role === UserRole.SUPPLIER) {

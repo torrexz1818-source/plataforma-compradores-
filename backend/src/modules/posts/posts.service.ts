@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -12,13 +13,27 @@ import { UsersService } from '../users/users.service';
 
 type PostType = 'educational' | 'community' | 'liquidation';
 type LearningRouteId = 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4';
+type LearningRouteAlias = 'ruta_1' | 'ruta_2' | 'ruta_3' | 'ruta_4';
 
 const learningRouteIds: LearningRouteId[] = ['ruta-1', 'ruta-2', 'ruta-3', 'ruta-4'];
+const learningRouteAliases: Record<LearningRouteAlias, LearningRouteId> = {
+  ruta_1: 'ruta-1',
+  ruta_2: 'ruta-2',
+  ruta_3: 'ruta-3',
+  ruta_4: 'ruta-4',
+};
 
 function normalizeLearningRoute(value?: string): LearningRouteId | undefined {
-  return learningRouteIds.includes(value as LearningRouteId)
-    ? (value as LearningRouteId)
-    : undefined;
+  if (learningRouteIds.includes(value as LearningRouteId)) {
+    return value as LearningRouteId;
+  }
+
+  return value ? learningRouteAliases[value as LearningRouteAlias] : undefined;
+}
+
+function getLearningRouteStorageValues(value?: string): Array<LearningRouteId | LearningRouteAlias> {
+  const normalized = normalizeLearningRoute(value);
+  return normalized ? [normalized, normalized.replace('-', '_') as LearningRouteAlias] : [];
 }
 
 type PostCategory = {
@@ -33,7 +48,7 @@ type PostRecord = {
   categoryId: string;
   title: string;
   description: string;
-  learningRoute?: LearningRouteId;
+  learningRoute?: LearningRouteId | LearningRouteAlias;
   type: PostType;
   mediaType?: 'video' | 'image';
   videoUrl?: string;
@@ -355,12 +370,14 @@ export class PostsService {
 
   async getPostDetail(id: string, viewerId?: string) {
     const post = await this.findPost(id);
+    const postLearningRoute = normalizeLearningRoute(post.learningRoute) ?? 'ruta-1';
+    const postLearningRouteValues = getLearningRouteStorageValues(postLearningRoute);
     const relatedPostsQuery =
       post.type === 'educational'
         ? {
             type: post.type,
             id: { $ne: post.id },
-            learningRoute: post.learningRoute ?? 'ruta-1',
+            learningRoute: { $in: postLearningRouteValues },
           }
         : {
             type: post.type,
@@ -402,6 +419,13 @@ export class PostsService {
     if (type === 'educational' && !data.isAdmin) {
       throw new ForbiddenException('Only the administrator can publish educational videos');
     }
+    const learningRoute = type === 'educational'
+      ? normalizeLearningRoute(data.learningRoute)
+      : undefined;
+
+    if (type === 'educational' && !learningRoute) {
+      throw new BadRequestException('Selecciona una ruta tematica para publicar contenido educativo.');
+    }
 
     const category = await this.ensureCategoryExists(data.categoryId);
 
@@ -422,9 +446,7 @@ export class PostsService {
       categoryId: data.categoryId,
       title: data.title.trim(),
       description: data.description.trim(),
-      learningRoute: type === 'educational'
-        ? normalizeLearningRoute(data.learningRoute) ?? 'ruta-1'
-        : undefined,
+      learningRoute,
       type,
       mediaType: data.mediaType ?? (data.videoUrl ? 'video' : data.thumbnailUrl ? 'image' : undefined),
       videoUrl: data.videoUrl?.trim() || undefined,
@@ -955,7 +977,7 @@ export class PostsService {
       category: this.getRequiredCategoryFromMap(categoriesMap, post.categoryId),
       title: post.title,
       description: post.description,
-      learningRoute: post.learningRoute,
+      learningRoute: normalizeLearningRoute(post.learningRoute),
       mediaType: post.mediaType,
       videoUrl: post.videoUrl,
       thumbnailUrl: post.thumbnailUrl,
@@ -1074,7 +1096,7 @@ export class PostsService {
       category,
       title: post.title,
       description: post.description,
-      learningRoute: post.learningRoute,
+      learningRoute: normalizeLearningRoute(post.learningRoute),
       mediaType: post.mediaType,
       videoUrl: post.videoUrl,
       thumbnailUrl: post.thumbnailUrl,

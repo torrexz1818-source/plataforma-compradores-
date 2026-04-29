@@ -144,7 +144,7 @@ const SaleDetailPage = () => {
   });
 
   if (!selectedPost) {
-    return <p className="text-sm text-muted-foreground px-6 py-8">No hay liquidaciones activas.</p>;
+    return <p className="text-sm text-muted-foreground px-6 py-8">No hay oportunidades de stock activas.</p>;
   }
 
   const authorProfile = authorProfileQuery.data;
@@ -156,7 +156,7 @@ const SaleDetailPage = () => {
   return (
     <div className="mx-auto w-full max-w-6xl px-3 py-5 sm:px-6 sm:py-8">
       <BackButton fallback={saleListPath} className="mb-4" />
-      <h1 className="text-2xl font-bold text-foreground mb-6">Liquidaciones</h1>
+      <h1 className="text-2xl font-bold text-foreground mb-6">Oportunidades de stock</h1>
 
       <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
         {liquidationPosts.map((post) => (
@@ -254,7 +254,7 @@ const SaleDetailPage = () => {
             <button
               onClick={() => {
                 if (user?.role !== 'buyer') {
-                  setFeedback('Solo compradores pueden dar like en Liquidaciones.');
+                  setFeedback('Solo compradores pueden dar like en Oportunidades de stock.');
                   return;
                 }
                 if (selectedPost.isLiked) {
