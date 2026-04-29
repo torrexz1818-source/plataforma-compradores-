@@ -106,6 +106,7 @@ const LearningRoutesSection = ({
 
 const EducationalPostCard = ({ post, index, onOpen }: EducationalPostCardProps) => {
   const hasMedia = Boolean(post.thumbnailUrl);
+  const routeColor = LEARNING_ROUTES.find((route) => route.id === resolvePostLearningRoute(post))?.color ?? '#0E109E';
 
   return (
     <motion.article
@@ -136,7 +137,14 @@ const EducationalPostCard = ({ post, index, onOpen }: EducationalPostCardProps) 
         )}
 
         {hasMedia && <div className="absolute inset-0 bg-gradient-to-t from-primary/55 via-primary/10 to-transparent" />}
-        <div className="absolute left-4 top-4 rounded-full border border-[#0E109E]/18 bg-[#0E109E]/14 px-3 py-1 text-[11px] font-medium text-[#0E109E] shadow-[0_8px_18px_rgba(14,16,158,0.08)] backdrop-blur-sm">
+        <div
+          className="absolute left-4 top-4 rounded-full border px-3 py-1 text-[11px] font-medium shadow-[0_8px_18px_rgba(14,16,158,0.08)] backdrop-blur-sm"
+          style={{
+            backgroundColor: `${routeColor}24`,
+            borderColor: `${routeColor}42`,
+            color: routeColor,
+          }}
+        >
           {post.mediaType === 'video' || post.videoUrl ? 'Video' : 'Articulo'}
         </div>
         {(post.mediaType === 'video' || post.videoUrl) && (

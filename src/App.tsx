@@ -14,6 +14,7 @@ import SalePage from "./buyer/SalePage.tsx";
 import SaleDetailPage from "./buyer/SaleDetailPage.tsx";
 import UserProfilePage from "./buyer/UserProfilePage.tsx";
 import SupplierLayout from "./supplier/SupplierLayout.tsx";
+import SupplierHome from "./supplier/SupplierHome.tsx";
 import SupplierDashboard from "./supplier/SupplierDashboard.tsx";
 import BuyerDirectoryPage from "./supplier/BuyerDirectoryPage.tsx";
 import SectorBuyers from "./supplier/SectorBuyers.tsx";
@@ -106,7 +107,7 @@ const DashboardRedirect = () => {
   }
 
   if (user.role === 'supplier') {
-    return <Navigate to="/supplier/dashboard" replace />;
+    return <Navigate to="/supplier/inicio" replace />;
   }
 
   if (user.role === 'expert') {
@@ -167,7 +168,7 @@ const BuyerOnlySharedLayout = () => {
   }
 
   if (user.role === 'supplier') {
-    return <Navigate to="/supplier/dashboard" replace />;
+    return <Navigate to="/supplier/inicio" replace />;
   }
 
   return <Navigate to="/admin/dashboard" replace />;
@@ -185,7 +186,7 @@ const NewsAccessLayout = () => {
   }
 
   if (user.role === 'supplier') {
-    return <Navigate to="/supplier/dashboard" replace />;
+    return <Navigate to="/supplier/inicio" replace />;
   }
 
   if (user.role === 'buyer' || user.role === 'expert') {
@@ -211,7 +212,7 @@ const HomeAccessLayout = () => {
   }
 
   if (user.role === 'supplier') {
-    return <Navigate to="/supplier/dashboard" replace />;
+    return <Navigate to="/supplier/inicio" replace />;
   }
 
   return <NewsLayout />;
@@ -267,6 +268,16 @@ const App = () => (
               <Route path="community" element={<Navigate to="/community" replace />} />
             </Route>
             <Route
+              path="/supplier/inicio"
+              element={
+                <ProtectedRoute role="supplier">
+                  <NewsLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<SupplierHome />} />
+            </Route>
+            <Route
               path="/supplier"
               element={
                 <ProtectedRoute role="supplier">
@@ -274,6 +285,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
+              <Route index element={<Navigate to="/supplier/inicio" replace />} />
               <Route path="dashboard" element={<SupplierDashboard />} />
               <Route path="directory" element={<BuyerDirectoryPage />} />
               <Route path="directory/:sector" element={<SectorBuyers />} />

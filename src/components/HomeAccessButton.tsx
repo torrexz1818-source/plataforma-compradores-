@@ -1,15 +1,21 @@
 import { Home } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/lib/auth';
 
 const HomeAccessButton = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const isActive = location.pathname === '/inicio' || location.pathname === '/home' || location.pathname === '/dashboard';
+  const { user } = useAuth();
+  const homePath = user?.role === 'supplier' ? '/supplier/inicio' : '/inicio';
+  const isActive =
+    location.pathname === homePath ||
+    location.pathname === '/home' ||
+    location.pathname === '/dashboard';
 
   return (
     <button
       type="button"
-      onClick={() => navigate('/inicio')}
+      onClick={() => navigate(homePath)}
       className={`inline-flex h-11 w-11 items-center justify-center gap-2 rounded-xl border px-0 text-sm font-medium transition-colors sm:h-10 sm:w-auto sm:rounded-md sm:px-3 ${
         isActive
           ? 'border-[#0E109E]/35 bg-[#0E109E]/10 text-[#0E109E]'

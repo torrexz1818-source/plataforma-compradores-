@@ -106,7 +106,7 @@ const Admin = () => {
     description: '',
     mediaType: 'video' as 'video' | 'image',
     categoryId: 'cat-7',
-    learningRoute: DEFAULT_LEARNING_ROUTE_ID as LearningRouteId,
+    learningRoute: DEFAULT_LEARNING_ROUTE_ID as LearningRouteId | '',
   });
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -281,8 +281,10 @@ const Admin = () => {
     return data.comments.filter((comment) => postsById.get(comment.postId)?.category.id === selectedCategoryId);
   }, [data?.comments, postsById, selectedCategoryId]);
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId) ?? null;
+  const educationalCategory = categories.find((category) => category.slug === 'contenido-educativo') ?? null;
   const skillCategory = categories.find((category) => category.slug === SKILL_CATEGORY_SLUG) ?? null;
   const isSkillDestination = form.categoryId === skillCategory?.id;
+  const requiresLearningRoute = !isSkillDestination;
   const categoryCommentCounts = useMemo(() => {
     return categories.map((category) => ({
       ...category,
@@ -300,14 +302,12 @@ const Admin = () => {
         return current;
       }
 
-      const educationalCategory = categories.find((category) => category.slug === 'contenido-educativo');
-
       return {
         ...current,
         categoryId: educationalCategory?.id ?? categories[0].id,
       };
     });
-  }, [categories]);
+  }, [categories, educationalCategory]);
 
   const showLegacyUsersSection = false;
 
@@ -782,12 +782,16 @@ const Admin = () => {
                 <select
                   value={isSkillDestination ? 'skill' : 'educational'}
                   onChange={(event) => {
+                    const nextIsSkill = event.target.value === 'skill' && skillCategory;
                     setForm((current) => ({
                       ...current,
                       categoryId:
-                        event.target.value === 'skill' && skillCategory
+                        nextIsSkill
                           ? skillCategory.id
-                          : categories[0]?.id ?? current.categoryId,
+                          : educationalCategory?.id ?? categories[0]?.id ?? current.categoryId,
+                      learningRoute: nextIsSkill
+                        ? ''
+                        : current.learningRoute || DEFAULT_LEARNING_ROUTE_ID,
                     }));
                   }}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -807,20 +811,33 @@ const Admin = () => {
                 <label className="text-sm font-medium text-foreground">Ruta tematica</label>
                 <select
                   value={form.learningRoute}
+                  disabled={isSkillDestination}
                   onChange={(event) =>
                     setForm((current) => ({
                       ...current,
                       learningRoute: normalizeLearningRouteId(event.target.value) ?? DEFAULT_LEARNING_ROUTE_ID,
                     }))
                   }
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className={`flex h-10 w-full rounded-md border border-input px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                    isSkillDestination
+                      ? 'cursor-not-allowed bg-muted text-muted-foreground opacity-70'
+                      : 'bg-background'
+                  }`}
                 >
+                  {isSkillDestination && (
+                    <option value="">No aplica para Mejorar skill</option>
+                  )}
                   {LEARNING_ROUTES.map((route) => (
                     <option key={route.id} value={route.id}>
                       {route.label} - {route.title}
                     </option>
                   ))}
                 </select>
+                {isSkillDestination && (
+                  <p className="text-xs text-muted-foreground">
+                    Las rutas solo aplican para Contenido Educativo.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1071,7 +1088,7 @@ const Admin = () => {
                 !form.title.trim() ||
                 !form.description.trim() ||
                 !form.categoryId ||
-                !form.learningRoute ||
+                (requiresLearningRoute && !form.learningRoute) ||
                 (form.mediaType === 'video' ? !videoFile : !thumbnailFile)
               }
               onClick={async () => {
@@ -1088,7 +1105,9 @@ const Admin = () => {
                     formData.set('description', form.description);
                     formData.set('categoryId', form.categoryId);
                     formData.set('type', 'educational');
-                    formData.set('learningRoute', form.learningRoute);
+                    if (requiresLearningRoute && form.learningRoute) {
+                      formData.set('learningRoute', form.learningRoute);
+                    }
                     formData.set('mediaType', form.mediaType);
                     formData.set('videoUrl', uploadedVideoUrl);
                     formData.set('resources', JSON.stringify(resources));
@@ -1107,7 +1126,9 @@ const Admin = () => {
                   formData.set('description', form.description);
                   formData.set('categoryId', form.categoryId);
                   formData.set('type', 'educational');
-                  formData.set('learningRoute', form.learningRoute);
+                  if (requiresLearningRoute && form.learningRoute) {
+                    formData.set('learningRoute', form.learningRoute);
+                  }
                   formData.set('mediaType', form.mediaType);
                   formData.set('resources', JSON.stringify(resources));
 

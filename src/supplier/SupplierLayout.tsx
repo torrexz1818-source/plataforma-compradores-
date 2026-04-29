@@ -4,10 +4,12 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import NotificationBell from '@/components/NotificationBell';
 import MessageBell from '@/components/MessageBell';
+import HomeAccessButton from '@/components/HomeAccessButton';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 
 const supplierNavItems = [
+  { to: '/supplier/inicio', label: 'Inicio', icon: LayoutDashboard },
   { to: '/supplier/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/supplier/directory', label: 'Directorio de compradores', icon: Building2 },
   { to: '/supplier/sale', label: 'Oportunidades de stock', icon: FileText },
@@ -101,6 +103,10 @@ const SupplierLayout = () => {
         location.pathname === '/publicaciones' ||
         location.pathname.startsWith('/publicaciones/')
       );
+    }
+
+    if (path === '/supplier/inicio') {
+      return location.pathname === '/supplier/inicio';
     }
 
     if (path === '/supplier/sale') {
@@ -310,6 +316,7 @@ const SupplierLayout = () => {
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <MessageBell />
               <NotificationBell />
+              <HomeAccessButton />
               </div>
             </div>
           </div>
