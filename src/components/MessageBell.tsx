@@ -109,14 +109,14 @@ const MessageBell = () => {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={`relative inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors ${
+        className={`relative inline-flex h-11 w-11 items-center justify-center rounded-xl border transition-colors sm:h-10 sm:w-10 sm:rounded-md ${
           open
             ? 'border-[#0E109E]/35 bg-[#0E109E]/10'
             : 'border-border bg-card hover:bg-[#0E109E]/10 active:bg-[#0E109E]/15'
         }`}
         aria-label="Abrir mensajeria"
       >
-        <MessageCircle className="w-4 h-4 text-foreground" />
+        <MessageCircle className="h-5 w-5 text-foreground sm:h-4 sm:w-4" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-white text-[10px] font-medium flex items-center justify-center">
             {formattedCount}
@@ -125,24 +125,24 @@ const MessageBell = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-[min(380px,calc(100vw-1.5rem))] rounded-2xl border border-border bg-card shadow-lg z-50 overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-            <div>
+        <div className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top)+4.75rem)] z-50 max-h-[min(70dvh,520px)] overflow-hidden rounded-2xl border border-border bg-card shadow-lg sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[min(380px,calc(100vw-1.5rem))]">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-3 py-3 sm:px-4">
+            <div className="min-w-0">
               <p className="text-sm font-medium text-foreground">Mensajes</p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="truncate text-[11px] text-muted-foreground">
                 {user?.role === 'supplier' ? 'Conversaciones con compradores' : 'Conversaciones con proveedores'}
               </p>
             </div>
             <button
               type="button"
               onClick={onOpenAll}
-              className="text-xs text-primary hover:underline"
+              className="shrink-0 text-xs text-primary hover:underline"
             >
               Ver todo
             </button>
           </div>
 
-          <div className="max-h-80 overflow-y-auto">
+          <div className="max-h-[calc(min(70dvh,520px)-72px)] overflow-y-auto">
             {items.map((item) => {
               const currentUserIsBuyer = isBuyerLikeRole(user?.role);
               const name = currentUserIsBuyer ? item.supplierName : item.buyerName;
@@ -155,16 +155,16 @@ const MessageBell = () => {
                   key={item.id}
                   type="button"
                   onClick={() => onOpenConversation(item.id)}
-                  className="w-full text-left px-4 py-3 border-b border-border/70 hover:bg-muted/60 transition-colors"
+                  className="w-full border-b border-border/70 px-3 py-3 text-left transition-colors hover:bg-muted/60 sm:px-4"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-medium shrink-0 ${avatarClass}`}>
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-medium ${avatarClass}`}>
                       {getInitials(name)}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium text-foreground truncate">{name}</p>
-                        <span className="text-[11px] text-muted-foreground shrink-0">{getTimeLabel(item.updatedAt)}</span>
+                        <span className="hidden shrink-0 text-[11px] text-muted-foreground min-[430px]:inline">{getTimeLabel(item.updatedAt)}</span>
                       </div>
                       <p className="text-xs text-muted-foreground truncate">{company}</p>
                       <div className="flex items-center gap-2 mt-1">

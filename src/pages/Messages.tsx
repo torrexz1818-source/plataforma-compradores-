@@ -378,7 +378,7 @@ const Messages = () => {
         </div>
 
         <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
-          <aside className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-card">
+          <aside className="order-2 w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-card lg:order-1">
             <div className="border-b border-border p-3 sm:p-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -391,7 +391,7 @@ const Messages = () => {
               </div>
             </div>
 
-            <div className="max-h-[70vh] overflow-y-auto p-2 max-[430px]:max-h-none">
+            <div className="max-h-[44dvh] overflow-y-auto p-2 sm:max-h-[70vh]">
               {filteredConversations.map((conversation) => {
                 const name =
                   conversation.otherUserName ||
@@ -449,8 +449,8 @@ const Messages = () => {
             </div>
           </aside>
 
-          <section className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="border-b border-border bg-muted/20 px-4 py-4 sm:px-5">
+          <section className="order-1 w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-card lg:order-2">
+            <div className="border-b border-border bg-muted/20 px-3 py-3 sm:px-5 sm:py-4">
               {activeConversation ? (
                 <div className="space-y-3">
                     <div className="flex min-w-0 items-center gap-3">
@@ -507,7 +507,7 @@ const Messages = () => {
               )}
             </div>
 
-            <div className="min-h-[320px] max-h-[52vh] space-y-3 overflow-y-auto bg-[linear-gradient(180deg,rgba(14,16,158,0.08),rgba(255,255,255,1))] p-4 sm:min-h-[360px] sm:p-5">
+            <div className="min-h-[260px] max-h-[42dvh] space-y-3 overflow-y-auto bg-[linear-gradient(180deg,rgba(14,16,158,0.08),rgba(255,255,255,1))] p-3 sm:min-h-[360px] sm:max-h-[52vh] sm:p-5">
               {messagesQuery.isError && (
                 <div className="rounded-xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
                   No se pudieron cargar los mensajes de esta conversacion.
@@ -516,7 +516,7 @@ const Messages = () => {
               {(messagesQuery.data ?? []).map((message) => (
                 <div
                   key={message.id}
-                  className={`max-w-[92%] overflow-hidden break-words rounded-2xl px-4 py-3 text-sm shadow-sm sm:max-w-[80%] ${
+                  className={`max-w-[94%] overflow-hidden break-words rounded-2xl px-3 py-2.5 text-sm shadow-sm sm:max-w-[80%] sm:px-4 sm:py-3 ${
                     message.isOwn
                       ? 'ml-auto bg-primary text-primary-foreground rounded-br-md'
                       : 'bg-white border border-border text-foreground rounded-bl-md'
@@ -593,19 +593,19 @@ const Messages = () => {
                     value={draft}
                     onChange={(event) => setDraft(event.target.value)}
                     placeholder="Escribe tu mensaje..."
-                    rows={3}
-                    className="resize-none rounded-2xl"
+                    rows={2}
+                    className="min-h-[92px] resize-none rounded-2xl sm:min-h-[116px]"
                   />
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => imageInputRef.current?.click()} disabled={!hasMembershipAccess || isUploadingAttachments}>
+                  <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+                    <Button type="button" variant="outline" size="sm" className="min-w-0 rounded-full px-2 text-xs sm:px-3 sm:text-sm" onClick={() => imageInputRef.current?.click()} disabled={!hasMembershipAccess || isUploadingAttachments}>
                       <ImagePlus className="w-4 h-4 mr-1" />
                       Foto
                     </Button>
-                    <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => fileInputRef.current?.click()} disabled={!hasMembershipAccess || isUploadingAttachments}>
+                    <Button type="button" variant="outline" size="sm" className="min-w-0 rounded-full px-2 text-xs sm:px-3 sm:text-sm" onClick={() => fileInputRef.current?.click()} disabled={!hasMembershipAccess || isUploadingAttachments}>
                       <FileUp className="w-4 h-4 mr-1" />
                       Archivo
                     </Button>
-                    <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={shareLocation} disabled={!hasMembershipAccess || isUploadingAttachments}>
+                    <Button type="button" variant="outline" size="sm" className="min-w-0 rounded-full px-2 text-xs sm:px-3 sm:text-sm" onClick={shareLocation} disabled={!hasMembershipAccess || isUploadingAttachments}>
                       <MapPin className="w-4 h-4 mr-1" />
                       Ubicacion
                     </Button>
