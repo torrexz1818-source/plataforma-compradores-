@@ -44,7 +44,7 @@ const BuyerDashboard = () => {
   const totalSectorUsers = (platformStats?.sectorBreakdown ?? []).reduce((acc, item) => acc + item.count, 0);
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-3 py-5 sm:px-6 sm:py-8">
+    <div className="mx-auto w-full max-w-5xl min-w-0 overflow-x-hidden px-3 py-5 sm:px-6 sm:py-8">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -100,40 +100,40 @@ const BuyerDashboard = () => {
             <p className="text-muted-foreground mt-1">Resumen general de la plataforma</p>
           </section>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <Card className="rounded-xl shadow-[var(--shadow-card)]">
-              <CardContent className="flex items-center gap-4 p-5">
+          <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+              <CardContent className="flex min-w-0 items-center gap-4 p-5">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
                   <Users className="h-7 w-7" />
                 </div>
                 <div className="h-16 w-1 rounded-full bg-primary" />
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground">Total usuarios</p>
                   <p className="mt-1 text-3xl font-bold leading-none text-foreground">{platformStats.totalUsers}</p>
                   <p className="mt-2 text-xs text-muted-foreground">Usuarios registrados en la plataforma</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="rounded-xl shadow-[var(--shadow-card)]">
-              <CardContent className="flex items-center gap-4 p-5">
+            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+              <CardContent className="flex min-w-0 items-center gap-4 p-5">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
                   <UserRound className="h-7 w-7" />
                 </div>
                 <div className="h-16 w-1 rounded-full bg-destructive" />
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground">Compradores</p>
                   <p className="mt-1 text-3xl font-bold leading-none text-foreground">{platformStats.buyers}</p>
                   <p className="mt-2 text-xs text-muted-foreground">Empresas compradoras activas</p>
                 </div>
               </CardContent>
             </Card>
-            <Card className="rounded-xl shadow-[var(--shadow-card)]">
-              <CardContent className="flex items-center gap-4 p-5">
+            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+              <CardContent className="flex min-w-0 items-center gap-4 p-5">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/20 text-success-foreground">
                   <Building2 className="h-7 w-7" />
                 </div>
                 <div className="h-16 w-1 rounded-full bg-success" />
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground">Proveedores</p>
                   <p className="mt-1 text-3xl font-bold leading-none text-foreground">{platformStats.suppliers}</p>
                   <p className="mt-2 text-xs text-muted-foreground">Proveedores registrados</p>
@@ -142,21 +142,21 @@ const BuyerDashboard = () => {
             </Card>
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-2">
-            <Card className="rounded-xl shadow-[var(--shadow-card)]">
+          <section className="grid min-w-0 gap-4 xl:grid-cols-2">
+            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">
                   Usuarios por sector
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="min-w-0 space-y-3">
                 {platformStats.sectorBreakdown.map((item, index) => {
                   const rawPercent = totalSectorUsers > 0 ? (item.count / totalSectorUsers) * 100 : 0;
                   const widthPercent = rawPercent > 0 ? Math.max(rawPercent, 4) : 0;
                   const roundedPercent = Math.round(rawPercent);
 
                   return (
-                    <div key={item.sector} className="grid grid-cols-[120px_1fr_70px] items-center gap-3">
+                    <div key={item.sector} className="grid min-w-0 grid-cols-[minmax(72px,0.85fr)_minmax(88px,1fr)_56px] items-center gap-2 sm:grid-cols-[120px_1fr_70px] sm:gap-3">
                       <span className="truncate text-sm text-foreground">{item.sector}</span>
                       <div className="h-2.5 overflow-hidden rounded-full bg-primary/10">
                         <div
@@ -173,15 +173,15 @@ const BuyerDashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="rounded-xl shadow-[var(--shadow-card)]">
+            <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">
                   Ultimos registros
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="w-full overflow-x-auto">
-                <table className="min-w-[560px] w-full table-fixed text-sm">
+                <div className="w-full max-w-full overflow-x-auto overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
+                <table className="min-w-[640px] w-full table-fixed text-sm">
                   <thead>
                     <tr className="border-b border-border/50 text-left text-xs text-foreground">
                       <th className="w-[34%] py-2 pr-3 font-semibold">Nombre</th>

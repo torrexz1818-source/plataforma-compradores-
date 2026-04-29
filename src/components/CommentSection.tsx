@@ -78,7 +78,7 @@ const CommentItem = ({ comment, onReply, onCommentLiked, isReply = false }: Comm
   });
 
   const handleReply = async () => {
-    if (!replyText.trim()) return;
+    if (!replyText.trim() || commentMutationIsPending(comment.id)) return;
     try {
       await onReply({ content: replyText, parentId: comment.id });
       setReplyText('');
@@ -100,7 +100,7 @@ const CommentItem = ({ comment, onReply, onCommentLiked, isReply = false }: Comm
   };
 
   const handleReplyKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       void handleReply();
     }
@@ -268,7 +268,7 @@ const CommentSection = ({
   };
 
   const handleNewCommentKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+    if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       if (newComment.trim() && !commentMutation.isPending) {
         void submitComment({ content: newComment });

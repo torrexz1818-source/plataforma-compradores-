@@ -603,18 +603,18 @@ const Admin = () => {
           <p className="mt-1 text-muted-foreground">Resumen general de la plataforma</p>
         </motion.div>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {summaryCards.map((card) => {
             const Icon = card.icon;
 
             return (
-              <Card key={card.label} className="rounded-xl shadow-[var(--shadow-card)]">
-                <CardContent className="flex items-center gap-4 p-5">
+              <Card key={card.label} className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
+                <CardContent className="flex min-w-0 items-center gap-4 p-5">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${card.iconClassName}`}>
                     <Icon className="h-7 w-7" />
                   </div>
                   <div className={`h-16 w-1 rounded-full ${card.dividerClassName}`} />
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs font-medium text-muted-foreground">{card.label}</p>
                     <p className="mt-1 text-3xl font-bold leading-none text-foreground">{card.value}</p>
                     <p className="mt-2 text-xs text-muted-foreground">{card.description}</p>
@@ -625,35 +625,35 @@ const Admin = () => {
           })}
         </section>
 
-        <section className="grid gap-3 sm:grid-cols-3">
-          <Card className="rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
-            <CardContent className="flex items-center gap-3 p-4">
+        <section className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Card className="min-w-0 overflow-hidden rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
+            <CardContent className="flex min-w-0 items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <FileText className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground">Posts</p>
                 <p className="text-2xl font-bold leading-none text-foreground">{data?.overview.totalPosts ?? 0}</p>
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
-            <CardContent className="flex items-center gap-3 p-4">
+          <Card className="min-w-0 overflow-hidden rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
+            <CardContent className="flex min-w-0 items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-secondary/15 text-secondary">
                 <Video className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground">Videos</p>
                 <p className="text-2xl font-bold leading-none text-foreground">{data?.overview.educationalPosts ?? 0}</p>
               </div>
             </CardContent>
           </Card>
-          <Card className="rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
-            <CardContent className="flex items-center gap-3 p-4">
+          <Card className="min-w-0 overflow-hidden rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
+            <CardContent className="flex min-w-0 items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
                 <MessageCircle className="h-5 w-5" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs font-medium text-muted-foreground">Comentarios</p>
                 <p className="text-2xl font-bold leading-none text-foreground">{data?.overview.totalComments ?? 0}</p>
               </div>
@@ -661,12 +661,12 @@ const Admin = () => {
           </Card>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-2">
-          <Card className="rounded-xl shadow-[var(--shadow-card)]">
+        <section className="grid min-w-0 gap-4 xl:grid-cols-2">
+          <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Usuarios por sector</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="min-w-0 space-y-3">
               {platformStatsQuery.isLoading && (
                 <p className="text-sm text-muted-foreground">Cargando sectores...</p>
               )}
@@ -676,7 +676,7 @@ const Admin = () => {
                 const roundedPercent = Math.round(rawPercent);
 
                 return (
-                  <div key={item.sector} className="grid grid-cols-[120px_1fr_70px] items-center gap-3">
+                  <div key={item.sector} className="grid min-w-0 grid-cols-[minmax(72px,0.85fr)_minmax(88px,1fr)_56px] items-center gap-2 sm:grid-cols-[120px_1fr_70px] sm:gap-3">
                     <span className="truncate text-sm text-foreground">{item.sector}</span>
                     <div className="h-2.5 overflow-hidden rounded-full bg-primary/10">
                       <div
@@ -696,7 +696,7 @@ const Admin = () => {
             </CardContent>
           </Card>
 
-          <Card className="rounded-xl shadow-[var(--shadow-card)]">
+          <Card className="min-w-0 overflow-hidden rounded-xl shadow-[var(--shadow-card)]">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Ultimos registros</CardTitle>
             </CardHeader>
@@ -704,8 +704,8 @@ const Admin = () => {
               {platformStatsQuery.isLoading && (
                 <p className="text-sm text-muted-foreground">Cargando usuarios...</p>
               )}
-              <div className="w-full overflow-x-auto">
-                <table className="min-w-[560px] w-full table-fixed text-sm">
+              <div className="w-full max-w-full overflow-x-auto overscroll-x-contain pb-1 touch-pan-x [-webkit-overflow-scrolling:touch]">
+                <table className="min-w-[640px] w-full table-fixed text-sm">
                   <thead>
                     <tr className="border-b border-border/50 text-left text-xs text-foreground">
                       <th className="w-[34%] py-2 pr-3 font-semibold">Nombre</th>

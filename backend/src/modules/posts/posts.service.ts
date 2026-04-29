@@ -419,15 +419,15 @@ export class PostsService {
     if (type === 'educational' && !data.isAdmin) {
       throw new ForbiddenException('Only the administrator can publish educational videos');
     }
-    const learningRoute = type === 'educational'
+    const category = await this.ensureCategoryExists(data.categoryId);
+    const requiresLearningRoute = type === 'educational' && category.slug === 'contenido-educativo';
+    const learningRoute = requiresLearningRoute
       ? normalizeLearningRoute(data.learningRoute)
       : undefined;
 
-    if (type === 'educational' && !learningRoute) {
+    if (requiresLearningRoute && !learningRoute) {
       throw new BadRequestException('Selecciona una ruta tematica para publicar contenido educativo.');
     }
-
-    const category = await this.ensureCategoryExists(data.categoryId);
 
     if (
       type === 'community' &&
