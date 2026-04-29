@@ -49,11 +49,17 @@
   --sidebar-ring: 0 0% 100%;
 
   /* Backgrounds */
-  --app-bg: var(--color-white);
+  --app-bg:
+    radial-gradient(circle at top right, rgba(90, 49, 213, 0.06), rgba(255, 255, 255, 0) 30%),
+    radial-gradient(circle at 12% 20%, rgba(14, 16, 158, 0.04), rgba(255, 255, 255, 0) 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 1) 0%, rgba(14, 16, 158, 0.05) 100%);
   --sidebar-bg: var(--color-blue-buyer);
   --topbar-bg: var(--color-white);
   --card-bg: var(--color-white);
-  --surface-tint: linear-gradient(135deg, rgba(14, 16, 158, 0.08) 0%, var(--color-white) 52%, rgba(90, 49, 213, 0.08) 100%);
+  --surface-1: var(--color-white);
+  --surface-2: rgba(255, 255, 255, 0.92);
+  --panel-overlay: rgba(255, 255, 255, 0.90);
+  --surface-tint: linear-gradient(135deg, rgba(14, 16, 158, 0.08) 0%, rgba(255, 255, 255, 0.96) 52%, rgba(90, 49, 213, 0.08) 100%);
 
   /* Text colors */
   --text-on-light: var(--color-blue-buyer);
@@ -62,8 +68,8 @@
   --text-muted: rgba(14, 16, 158, 0.68);
 
   /* Borders */
-  --border-soft: rgba(14, 16, 158, 0.14);
-  --border-medium: rgba(14, 16, 158, 0.28);
+  --border-soft: rgba(14, 16, 158, 0.12);
+  --border-medium: rgba(14, 16, 158, 0.18);
   --border-strong: rgba(14, 16, 158, 0.44);
   --border-inverse: rgba(255, 255, 255, 0.22);
 
@@ -85,9 +91,13 @@
   --radius-full: 999px;
 
   /* Shadows */
-  --shadow-soft: 0 10px 30px rgba(14, 16, 158, 0.10);
-  --shadow-card: 0 18px 45px rgba(14, 16, 158, 0.12);
-  --shadow-purple: 0 18px 45px rgba(90, 49, 213, 0.16);
+  --shadow-soft: 0 8px 20px rgba(14, 16, 158, 0.06);
+  --shadow-card: 0 14px 32px rgba(14, 16, 158, 0.08);
+  --shadow-elevated: 0 18px 45px rgba(14, 16, 158, 0.12);
+  --shadow-premium: 0 24px 55px rgba(90, 49, 213, 0.12);
+  --shadow-purple: 0 22px 55px rgba(90, 49, 213, 0.18);
+  --shadow-sidebar: 18px 0 42px rgba(14, 16, 158, 0.16);
+  --shadow-topbar: 0 10px 24px rgba(14, 16, 158, 0.06);
   --shadow-green: 0 14px 35px rgba(178, 235, 74, 0.22);
   --shadow-danger: 0 14px 35px rgba(243, 49, 63, 0.16);
 

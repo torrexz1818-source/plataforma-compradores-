@@ -48,11 +48,25 @@
   .metric-card,
   .panel-card,
   .feature-card {
-    background: var(--card-bg);
+    background: var(--surface-2);
     color: var(--text-on-light);
     border: 1px solid var(--border-soft);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
+    backdrop-filter: blur(10px);
+  }
+
+  .card.shadow-sm,
+  .card.shadow-md,
+  .card.shadow-lg,
+  .shadow-smooth {
+    box-shadow: var(--shadow-card);
+  }
+
+  .card:hover,
+  .panel-card:hover,
+  .feature-card:hover {
+    box-shadow: var(--shadow-elevated);
   }
 
   .metric-card {

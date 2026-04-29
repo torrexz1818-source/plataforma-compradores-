@@ -29,7 +29,7 @@ const BuyerDashboard = () => {
       >
         <div className="pointer-events-none absolute -right-12 -top-14 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
         <div className="pointer-events-none absolute right-24 bottom-[-42px] h-32 w-32 rounded-full bg-secondary/10 blur-2xl" />
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-[42%] bg-[radial-gradient(circle_at_center,rgba(255, 255, 255, 0.12),transparent_62%)]" />
+        <div className="hero-radial-light pointer-events-none absolute inset-y-0 right-0 w-[42%]" />
 
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">

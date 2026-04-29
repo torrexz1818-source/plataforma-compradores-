@@ -7,6 +7,9 @@
   .sidebar-shell {
     background: var(--sidebar-bg);
     color: var(--text-on-dark);
+    box-shadow: var(--shadow-sidebar);
+    position: relative;
+    z-index: 10;
   }
 
   .sidebar-link {
@@ -17,29 +20,34 @@
   .sidebar-link:hover {
     background: rgba(255, 255, 255, 0.12);
     color: var(--text-on-dark);
+    transform: translateX(2px);
   }
 
   .sidebar-link-active {
     background: var(--color-white);
     color: var(--color-blue-buyer);
-    box-shadow: inset 4px 0 0 var(--color-red-nodus);
+    box-shadow: inset 4px 0 0 var(--color-red-nodus), 0 10px 24px rgba(255, 255, 255, 0.18);
+    transform: translateX(2px);
   }
 
   .topbar-shell {
     background: var(--topbar-bg);
     color: var(--text-on-light);
     border-bottom: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-topbar);
   }
 
   .hero-brand {
     background: var(--gradient-brand);
     color: var(--text-on-dark);
-    box-shadow: var(--shadow-purple);
+    box-shadow: var(--shadow-premium), var(--shadow-elevated);
+    position: relative;
+    z-index: 2;
   }
 
   .surface-soft {
-    background: var(--gradient-soft);
+    background: var(--surface-tint);
     border: 1px solid var(--border-soft);
-    box-shadow: var(--shadow-soft);
+    box-shadow: var(--shadow-card);
   }
 }

@@ -13,7 +13,9 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply text-foreground antialiased;
+    background: var(--app-bg);
+    background-attachment: fixed;
     color: var(--text-on-light);
     font-family: var(--font-main);
     font-size: var(--text-base-size);

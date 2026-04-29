@@ -3,8 +3,20 @@
     box-shadow: var(--shadow-soft);
   }
 
-  .shadow-smooth-hover {
+  .shadow-sm {
     box-shadow: var(--shadow-card);
+  }
+
+  .shadow-smooth-hover {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .shadow-md {
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .shadow-lg {
+    box-shadow: var(--shadow-premium);
   }
 
   .gradient-primary {
@@ -24,7 +36,7 @@
   }
 
   .bg-brand-soft {
-    background: rgba(14, 16, 158, 0.08);
+    background: rgba(14, 16, 158, 0.06);
   }
 
   .bg-purple-soft {
@@ -37,6 +49,14 @@
 
   .bg-danger-soft {
     background: rgba(243, 49, 63, 0.10);
+  }
+
+  .bg-card {
+    background: var(--panel-overlay);
+  }
+
+  .hero-radial-light {
+    background: radial-gradient(circle at center, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0) 62%);
   }
 }
 

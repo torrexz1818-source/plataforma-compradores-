@@ -178,11 +178,11 @@ const Admin = () => {
   const categories = data?.categories ?? [];
   const selectedUser = (data?.users ?? []).find((item) => item.id === selectedUserId) ?? null;
   const buyerUsers = useMemo(
-    () => (data?.users ?? []).filter((item) => item.role === 'buyer'),
+    () => (data?.users ?? []).filter((item) => item.role === 'buyer' && item.status === 'active'),
     [data?.users],
   );
   const supplierUsers = useMemo(
-    () => (data?.users ?? []).filter((item) => item.role === 'supplier'),
+    () => (data?.users ?? []).filter((item) => item.role === 'supplier' && item.status === 'active'),
     [data?.users],
   );
   const postsById = useMemo(

@@ -121,7 +121,7 @@ const SupplierLayout = () => {
   };
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden">
+    <div className="h-screen app-shell flex overflow-hidden">
       <aside className="w-72 h-screen sidebar-shell flex flex-col overflow-hidden">
         <div className="px-4 py-4 border-b border-white/15">
           <p className="text-xl font-bold tracking-tight">BUYER NODUS</p>
@@ -207,7 +207,7 @@ const SupplierLayout = () => {
 
       <main className="flex-1 min-w-0 overflow-y-auto">
         <div className="max-w-6xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-end gap-3 mb-4">
+          <div className="topbar-shell flex items-center justify-end gap-3 mb-6 rounded-2xl px-4 py-3">
             <span className="text-sm font-medium text-foreground truncate max-w-[260px]">
               {user?.fullName ?? 'Proveedor'}
             </span>
