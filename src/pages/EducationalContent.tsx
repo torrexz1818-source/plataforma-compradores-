@@ -70,26 +70,29 @@ const LearningRoutesSection = ({
                 onSelectRoute(route.id);
               }
             }}
-            className={`group flex min-h-[280px] cursor-pointer flex-col rounded-3xl p-6 text-white shadow-[0_16px_34px_rgba(14,16,158,0.12)] transition-transform duration-200 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
+            className={`group flex min-h-[280px] cursor-pointer flex-col rounded-3xl border p-6 text-[#0E109E] shadow-[0_16px_34px_rgba(14,16,158,0.08)] transition-transform duration-200 hover:-translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35 ${
               activeRouteId === route.id ? 'ring-4 ring-primary/20' : ''
             }`}
-            style={{ backgroundColor: route.color }}
+            style={{
+              background: `linear-gradient(135deg, ${route.color}30 0%, ${route.color}16 100%)`,
+              borderColor: `${route.color}42`,
+            }}
           >
             <div className="mb-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-white/80">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#0E109E]/70">
                 {route.label}
               </p>
             </div>
 
-            <h3 className="text-xl font-bold leading-tight text-white">{route.title}</h3>
-            <p className="mt-4 text-sm leading-6 text-white/85">{route.description}</p>
+            <h3 className="text-xl font-bold leading-tight text-[#0E109E]">{route.title}</h3>
+            <p className="mt-4 text-sm leading-6 text-[#0E109E]/78">{route.description}</p>
 
             <div className="mt-auto pt-7">
-              <span className="inline-flex rounded-full border border-white/35 bg-white/85 px-4 py-2 text-sm font-bold text-[#0E109E] shadow-[0_8px_18px_rgba(14,16,158,0.14)] transition-colors group-hover:bg-white group-active:bg-white/75">
+              <span className="inline-flex rounded-full border border-[#0E109E]/18 bg-white/80 px-4 py-2 text-sm font-bold text-[#0E109E] shadow-[0_8px_18px_rgba(14,16,158,0.08)] transition-colors group-hover:bg-white group-active:bg-white/75">
                 {countsByRoute[route.id]} {countsByRoute[route.id] === 1 ? 'contenido' : 'contenidos'}
               </span>
               {firstPost && (
-                <p className="mt-3 line-clamp-2 text-xs font-medium leading-5 text-white/88">
+                <p className="mt-3 line-clamp-2 text-xs font-medium leading-5 text-[#0E109E]/72">
                   Ultimo video: {firstPost.title}
                 </p>
               )}
@@ -303,7 +306,7 @@ const EducationalContent = () => {
             <button
               type="button"
               onClick={clearLearningRoute}
-              className="w-fit rounded-full bg-muted px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+              className="w-fit rounded-full border border-[#0E109E]/24 !bg-[#0E109E]/12 px-4 py-2 text-sm font-medium !text-[#0E109E] shadow-[0_8px_18px_rgba(14,16,158,0.06)] transition-colors hover:!bg-[#0E109E]/18 focus-visible:!bg-[#0E109E]/18"
             >
               Ver todos
             </button>

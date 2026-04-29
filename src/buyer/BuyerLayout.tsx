@@ -36,9 +36,9 @@ const supplierNavItems = [
 
 const SIDEBAR_DESKTOP_WIDTH = 'w-72';
 const SIDEBAR_MINI_WIDTH = 'w-20';
-const MAIN_DESKTOP_OFFSET = 'md:ml-72';
-const MAIN_MINI_OFFSET = 'md:ml-20';
-const MOBILE_DRAWER_WIDTH = '!w-[min(86vw,340px)] max-[430px]:!w-[min(82vw,320px)]';
+const MAIN_DESKTOP_OFFSET = 'lg:ml-72';
+const MAIN_MINI_OFFSET = 'lg:ml-20';
+const MOBILE_DRAWER_WIDTH = '!w-[min(92dvw,360px)] max-[430px]:!w-[min(90dvw,350px)]';
 
 const BuyerLayout = () => {
   const { user, logout } = useAuth();
@@ -246,7 +246,7 @@ const BuyerLayout = () => {
     <div className="h-[100dvh] w-full max-w-full app-shell overflow-hidden">
       <aside
         className={cn(
-          'fixed left-0 top-0 z-30 hidden h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sidebar-shell md:flex',
+          'fixed left-0 top-0 z-30 hidden h-[100dvh] max-h-[100dvh] flex-col overflow-hidden sidebar-shell lg:flex',
           collapsed ? SIDEBAR_MINI_WIDTH : SIDEBAR_DESKTOP_WIDTH,
         )}
         style={{ transition: 'width 0.25s ease' }}
@@ -268,7 +268,7 @@ const BuyerLayout = () => {
                 <SheetTrigger asChild>
                   <button
                     type="button"
-                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-muted md:hidden"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-muted lg:hidden"
                     aria-label="Abrir menú"
                     aria-haspopup="true"
                     aria-expanded={mobileMenuOpen}

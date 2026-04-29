@@ -581,7 +581,7 @@ const NexuIA = () => {
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">
-                      <Badge className="bg-primary text-white hover:bg-primary">
+                      <Badge className="border border-primary/20 bg-primary/12 text-primary hover:bg-primary/18">
                         {agent.automationType}
                       </Badge>
                       <span className="inline-flex items-center gap-1 text-sm font-medium text-foreground/80">
@@ -630,7 +630,7 @@ const NexuIA = () => {
                     <Badge variant="outline" className="border-primary/15 text-muted-foreground">
                       {selectedAgent.category}
                     </Badge>
-                    <Badge className="bg-primary text-white hover:bg-primary">
+                    <Badge className="border border-primary/20 bg-primary/12 text-primary hover:bg-primary/18">
                       {selectedAgent.automationType}
                     </Badge>
                     <Badge

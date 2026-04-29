@@ -712,7 +712,7 @@ const NexuExperts = () => {
                         </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <Badge className="bg-primary text-white">
+                        <Badge className="border border-primary/20 bg-primary/12 text-primary">
                           {expertProfileQuery.data.specialty}
                         </Badge>
                         <Badge variant="outline" className="border-secondary/20 text-secondary">

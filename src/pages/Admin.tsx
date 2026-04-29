@@ -97,6 +97,9 @@ const Admin = () => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
+  const [isPublishingContent, setIsPublishingContent] = useState(false);
+  const [publishError, setPublishError] = useState('');
+  const [publishSuccess, setPublishSuccess] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['admin-dashboard'],
@@ -137,8 +140,10 @@ const Admin = () => {
       setResourceFile(null);
       setResources([]);
       setVideoUploadProgress(0);
+      setPublishError('');
       void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['home-feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['educational-posts'] });
       void queryClient.invalidateQueries({ queryKey: ['community-posts'] });
       void queryClient.invalidateQueries({ queryKey: ['employability-skill-posts'] });
     },
@@ -956,23 +961,43 @@ const Admin = () => {
               </div>
             </div>
 
-            {createMutation.error && (
+            {(publishError || createMutation.error) && (
               <p className="text-sm text-destructive">
-                {createMutation.error instanceof Error
+                {publishError ||
+                (createMutation.error instanceof Error
                   ? createMutation.error.message
-                  : 'No se pudo crear el contenido'}
+                  : 'No se pudo crear el contenido')}
               </p>
             )}
 
-            {form.mediaType === 'video' && videoUploadProgress > 0 && createMutation.isPending && (
-              <p className="text-sm text-muted-foreground">
-                Subiendo video por partes: {videoUploadProgress}%
+            {publishSuccess && (
+              <p className="rounded-xl border border-success/40 bg-success/20 px-3 py-2 text-sm font-medium text-success-foreground">
+                Contenido publicado correctamente.
               </p>
+            )}
+
+            {form.mediaType === 'video' && videoUploadProgress > 0 && isPublishingContent && (
+              <div className="space-y-2 rounded-xl border border-primary/15 bg-primary/5 px-3 py-2">
+                <div className="flex items-center justify-between gap-3 text-xs font-medium text-primary">
+                  <span>
+                    {videoUploadProgress >= 100 ? 'Procesando video...' : 'Subiendo video...'}
+                  </span>
+                  <span>{videoUploadProgress}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-primary/10">
+                  <div
+                    className="h-full rounded-full bg-success transition-all duration-300"
+                    style={{ width: `${videoUploadProgress}%` }}
+                  />
+                </div>
+              </div>
             )}
 
             <Button
               disabled={
+                isPublishingContent ||
                 createMutation.isPending ||
+                isUploadingResource ||
                 !form.title.trim() ||
                 !form.description.trim() ||
                 !form.categoryId ||
@@ -980,6 +1005,9 @@ const Admin = () => {
                 (form.mediaType === 'video' ? !videoFile : !thumbnailFile)
               }
               onClick={async () => {
+                setIsPublishingContent(true);
+                setPublishError('');
+                setPublishSuccess(false);
                 try {
                   if (form.mediaType === 'video' && videoFile) {
                     setVideoUploadProgress(1);
@@ -1000,6 +1028,7 @@ const Admin = () => {
                     }
 
                     await createMutation.mutateAsync(formData);
+                    setPublishSuccess(true);
                     return;
                   }
 
@@ -1017,15 +1046,21 @@ const Admin = () => {
                   }
 
                   await createMutation.mutateAsync(formData);
+                  setPublishSuccess(true);
+                } catch (error) {
+                  setPublishError(error instanceof Error ? error.message : 'No se pudo publicar el contenido.');
                 } finally {
+                  setIsPublishingContent(false);
                   setVideoUploadProgress(0);
                 }
               }}
             >
-              {createMutation.isPending
+              {isPublishingContent || createMutation.isPending
                 ? form.mediaType === 'video' && videoUploadProgress > 0
-                  ? `Subiendo video... ${videoUploadProgress}%`
-                  : 'Guardando...'
+                  ? videoUploadProgress >= 100
+                    ? 'Procesando video...'
+                    : `Subiendo video... ${videoUploadProgress}%`
+                  : 'Publicando...'
                 : isSkillDestination
                   ? 'Publicar en Mejorar skill'
                   : 'Publicar contenido educativo'}

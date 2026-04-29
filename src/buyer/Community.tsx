@@ -17,20 +17,20 @@ const COMMUNITY_ALLOWED_CATEGORY_SLUGS = new Set([
 
 const CATEGORY_PILL_CLASSES: Record<string, { idle: string; active: string }> = {
   tips: {
-    idle: 'border border-[#1512A8]/18 bg-[#1512A8]/10 text-[#1512A8] hover:bg-[#1512A8]/16',
-    active: 'border border-[#1512A8]/28 bg-[#1512A8]/18 text-[#1512A8] shadow-[0_10px_22px_rgba(21,18,168,0.08)]',
+    idle: 'bg-[#1512A8] text-white hover:bg-[#1D1AAE]',
+    active: 'bg-[#1512A8] text-white shadow-[0_10px_22px_rgba(21,18,168,0.18)]',
   },
   recomendacion: {
-    idle: 'border border-[#5A36D8]/18 bg-[#5A36D8]/10 text-[#4B2BC7] hover:bg-[#5A36D8]/16',
-    active: 'border border-[#5A36D8]/28 bg-[#5A36D8]/18 text-[#4B2BC7] shadow-[0_10px_22px_rgba(90,54,216,0.08)]',
+    idle: 'bg-[#5A36D8] text-white hover:bg-[#4f2dca]',
+    active: 'bg-[#5A36D8] text-white shadow-[0_10px_22px_rgba(90,54,216,0.18)]',
   },
   experiencia: {
-    idle: 'border border-[#F72A3A]/18 bg-[#F72A3A]/10 text-[#D91F2E] hover:bg-[#F72A3A]/16',
-    active: 'border border-[#F72A3A]/28 bg-[#F72A3A]/18 text-[#D91F2E] shadow-[0_10px_22px_rgba(247,42,58,0.08)]',
+    idle: 'bg-[#F72A3A] text-white hover:bg-[#de2130]',
+    active: 'bg-[#F72A3A] text-white shadow-[0_10px_22px_rgba(247,42,58,0.18)]',
   },
   pregunta: {
-    idle: 'border border-[#A7E13F]/35 bg-[#A7E13F]/22 text-[#0E109E] hover:bg-[#A7E13F]/30',
-    active: 'border border-[#A7E13F]/45 bg-[#A7E13F]/34 text-[#0E109E] shadow-[0_10px_22px_rgba(167,225,63,0.10)]',
+    idle: 'bg-[#A7E13F] text-[#0F172A] hover:bg-[#C3E971]',
+    active: 'bg-[#A7E13F] text-[#0F172A] shadow-[0_10px_22px_rgba(167,225,63,0.22)]',
   },
 };
 
@@ -118,7 +118,7 @@ const Community = () => {
         <button
           onClick={() => setActiveCategory(null)}
           className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
-            !activeCategory ? 'border border-[#1512A8]/28 bg-[#1512A8]/18 text-[#1512A8] shadow-[0_10px_22px_rgba(21,18,168,0.08)]' : 'border border-[#1512A8]/18 bg-[#1512A8]/10 text-[#1512A8] hover:bg-[#1512A8]/16'
+            !activeCategory ? 'bg-[#1512A8] text-white shadow-[0_10px_22px_rgba(21,18,168,0.14)]' : 'bg-[#1512A8]/10 text-[#1512A8] hover:bg-[#1512A8]/16'
           }`}
         >
           Todos
@@ -129,8 +129,8 @@ const Community = () => {
             onClick={() => setActiveCategory(cat.id)}
             className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
               activeCategory === cat.id
-                ? CATEGORY_PILL_CLASSES[cat.slug]?.active ?? 'border border-[#1512A8]/28 bg-[#1512A8]/18 text-[#1512A8] shadow-[0_10px_22px_rgba(21,18,168,0.08)]'
-                : CATEGORY_PILL_CLASSES[cat.slug]?.idle ?? 'border border-[#1512A8]/18 bg-[#1512A8]/10 text-[#1512A8] hover:bg-[#1512A8]/16'
+                ? CATEGORY_PILL_CLASSES[cat.slug]?.active ?? 'bg-[#1512A8] text-white shadow-[0_10px_22px_rgba(21,18,168,0.14)]'
+                : CATEGORY_PILL_CLASSES[cat.slug]?.idle ?? 'bg-[#1512A8]/10 text-[#1512A8] hover:bg-[#1512A8]/16'
             }`}
           >
             {cat.name}

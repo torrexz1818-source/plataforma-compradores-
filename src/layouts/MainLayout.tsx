@@ -33,7 +33,7 @@ const SIDEBAR_DESKTOP_WIDTH = 'w-72';
 const SIDEBAR_MINI_WIDTH = 'w-20';
 const MAIN_DESKTOP_OFFSET = 'lg:ml-0';
 const MAIN_MINI_OFFSET = 'lg:ml-0';
-const MOBILE_DRAWER_WIDTH = '!w-[min(86vw,340px)] max-[430px]:!w-[min(82vw,320px)]';
+const MOBILE_DRAWER_WIDTH = '!w-[min(92dvw,360px)] max-[430px]:!w-[min(90dvw,350px)]';
 
 const MainLayout = ({ children }: MainLayoutProps) => {
   const { user, logout } = useAuth();
@@ -294,7 +294,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     <div className="h-[100dvh] w-full max-w-full app-shell flex overflow-hidden">
       <aside
         className={cn(
-          'hidden h-[100dvh] max-h-[100dvh] sidebar-shell flex-col overflow-hidden md:flex',
+          'hidden h-[100dvh] max-h-[100dvh] sidebar-shell flex-col overflow-hidden lg:flex',
           collapsed ? SIDEBAR_MINI_WIDTH : SIDEBAR_DESKTOP_WIDTH,
         )}
         style={{ transition: 'width 0.25s ease' }}
@@ -310,7 +310,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
               <SheetTrigger asChild>
                 <button
                   type="button"
-                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-muted md:hidden"
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-border bg-card text-foreground transition-colors hover:bg-muted lg:hidden"
                   aria-label="Abrir menú"
                   aria-haspopup="true"
                   aria-expanded={mobileMenuOpen}

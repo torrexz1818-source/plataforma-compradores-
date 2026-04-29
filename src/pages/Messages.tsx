@@ -364,29 +364,29 @@ const Messages = () => {
   };
 
   return (
-    <div className="mx-auto w-full max-w-6xl min-w-0 overflow-x-hidden px-[clamp(12px,4vw,20px)] py-5 sm:px-6 sm:py-8">
+    <div className="mx-auto w-full max-w-[100dvw] min-w-0 overflow-x-hidden px-3 py-4 sm:max-w-6xl sm:px-6 sm:py-8">
         <div className="mb-6 min-w-0">
-          <h1 className="text-[clamp(1.75rem,8vw,2.25rem)] font-bold leading-tight text-foreground">Mensajeria</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-3xl font-bold leading-tight text-foreground sm:text-4xl">Mensajeria</h1>
+          <p className="mt-1 max-w-full break-words text-sm leading-6 text-muted-foreground sm:text-base">
             Conversaciones en tiempo real con soporte para fotos, archivos y ubicacion.
           </p>
           {!hasMembershipAccess && (
-            <p className="mt-3 block w-full rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive sm:inline-block sm:w-auto">
+            <p className="mt-3 block w-full max-w-full rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs leading-5 text-destructive sm:inline-block sm:w-auto">
               Tu cuenta puede enviar texto. Fotos, archivos y ubicacion requieren membresia activa autorizada.
             </p>
           )}
         </div>
 
-        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
-          <aside className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
-            <div className="p-4 border-b border-border">
+        <div className="grid w-full min-w-0 max-w-full grid-cols-1 gap-4 lg:grid-cols-[minmax(260px,340px)_minmax(0,1fr)]">
+          <aside className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-card">
+            <div className="border-b border-border p-3 sm:p-4">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Buscar en mensajes..."
-                  className="pl-10 rounded-full"
+                  className="w-full rounded-full pl-10 text-base"
                 />
               </div>
             </div>
@@ -409,7 +409,7 @@ const Messages = () => {
                       setActiveConversationId(conversation.id);
                       setSearchParams({ conversationId: conversation.id });
                     }}
-                    className={`mb-1 w-full min-w-0 rounded-xl px-3 py-3 text-left transition-colors ${
+                    className={`mb-1 w-full min-w-0 max-w-full rounded-xl px-3 py-3 text-left transition-colors ${
                       isActive ? 'bg-primary/10 border border-primary/20 shadow-sm' : 'hover:bg-muted/60'
                     }`}
                   >
@@ -420,7 +420,7 @@ const Messages = () => {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <p className={`text-sm truncate ${conversation.unreadCount > 0 ? 'font-bold text-foreground' : 'font-medium text-foreground'}`}>{name}</p>
-                          <span className="text-[11px] text-muted-foreground shrink-0">
+                          <span className="hidden shrink-0 text-[11px] text-muted-foreground min-[430px]:inline">
                             {formatConversationTime(conversation.updatedAt)}
                           </span>
                         </div>
@@ -449,7 +449,7 @@ const Messages = () => {
             </div>
           </aside>
 
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-border bg-card">
+          <section className="w-full min-w-0 max-w-full overflow-hidden rounded-2xl border border-border bg-card">
             <div className="border-b border-border bg-muted/20 px-4 py-4 sm:px-5">
               {activeConversation ? (
                 <div className="space-y-3">
@@ -461,11 +461,11 @@ const Messages = () => {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground">
+                      <p className="break-words text-sm font-medium text-foreground">
                         {activeConversation.otherUserName ||
                           (currentUserIsBuyer ? activeConversation.supplierName : activeConversation.buyerName)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="break-words text-xs text-muted-foreground">
                         {activeConversation.otherUserCompany ||
                           (currentUserIsBuyer ? activeConversation.supplierCompany : activeConversation.buyerCompany)}
                       </p>
@@ -488,12 +488,12 @@ const Messages = () => {
                     <button
                       type="button"
                       onClick={() => publicationPath && navigate(publicationPath)}
-                      className="w-full min-w-0 rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 text-left transition-colors hover:bg-primary/10"
+                    className="w-full min-w-0 max-w-full rounded-xl border border-primary/15 bg-primary/5 px-3 py-3 text-left transition-colors hover:bg-primary/10 sm:px-4"
                     >
                       <p className="text-[11px] font-medium uppercase tracking-wide text-primary/80">
                         Conversacion ligada a publicacion
                       </p>
-                      <p className="text-sm font-medium text-foreground mt-1">
+                      <p className="mt-1 break-words text-sm font-medium text-foreground">
                         {publicationQuery.data.post.title}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">

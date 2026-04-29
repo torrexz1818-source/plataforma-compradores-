@@ -76,7 +76,8 @@ type CompleteChunkUploadBody = {
 const adminUploadMaxFileSize =
   Number.parseInt(process.env.ADMIN_UPLOAD_MAX_FILE_SIZE_BYTES?.trim() || '', 10) || 2 * 1024 * 1024 * 1024;
 const adminUploadChunkSize =
-  Number.parseInt(process.env.ADMIN_UPLOAD_CHUNK_SIZE_BYTES?.trim() || '', 10) || 8 * 1024 * 1024;
+  Number.parseInt(process.env.ADMIN_UPLOAD_CHUNK_SIZE_BYTES?.trim() || '', 10) || 5 * 1024 * 1024;
+const adminUploadChunkLimit = adminUploadChunkSize + 1024 * 1024;
 
 @Controller('admin')
 @UseGuards(AuthenticatedGuard, AdminGuard)
@@ -121,7 +122,7 @@ export class AdminController {
     FileInterceptor('chunk', {
       storage: memoryStorage(),
       limits: {
-        fileSize: adminUploadChunkSize,
+        fileSize: adminUploadChunkLimit,
       },
     }),
   )
