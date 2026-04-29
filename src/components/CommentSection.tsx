@@ -294,7 +294,9 @@ const CommentSection = ({
               key={sortValue}
               onClick={() => setSortBy(sortValue)}
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                sortBy === sortValue ? 'bg-[#5A31D5] text-white' : 'text-[#0E109E] hover:bg-[rgba(14,16,158,0.06)]'
+                sortBy === sortValue
+                  ? 'border border-[#5A31D5]/24 bg-[#5A31D5]/16 text-[#4B2BC7]'
+                  : 'text-[#0E109E] hover:bg-[rgba(14,16,158,0.06)]'
               }`}
             >
               {sortValue === 'voted' ? 'Mas votados' : 'Mas recientes'}

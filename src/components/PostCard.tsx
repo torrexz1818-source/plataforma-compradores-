@@ -14,10 +14,10 @@ interface PostCardProps {
 }
 
 function getCategoryStyles(slug?: string) {
-  if (slug === 'experiencia') return 'bg-[#F72A3A] text-white hover:bg-[#de2130]';
-  if (slug === 'pregunta') return 'bg-[#A7E13F] text-[#0F172A] hover:bg-[#C3E971]';
-  if (slug === 'tips') return 'bg-[#1512A8] text-white hover:bg-[#1D1AAE]';
-  return 'bg-[#5A36D8] text-white hover:bg-[#4f2dca]';
+  if (slug === 'experiencia') return 'border border-[#F72A3A]/20 bg-[#F72A3A]/12 text-[#D91F2E] hover:bg-[#F72A3A]/18';
+  if (slug === 'pregunta') return 'border border-[#A7E13F]/35 bg-[#A7E13F]/22 text-[#0E109E] hover:bg-[#A7E13F]/30';
+  if (slug === 'tips') return 'border border-[#1512A8]/20 bg-[#1512A8]/12 text-[#1512A8] hover:bg-[#1512A8]/18';
+  return 'border border-[#5A36D8]/20 bg-[#5A36D8]/12 text-[#4B2BC7] hover:bg-[#5A36D8]/18';
 }
 
 const PostCard = ({ post, index = 0 }: PostCardProps) => {
