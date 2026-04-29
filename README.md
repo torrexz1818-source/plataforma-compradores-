@@ -19,6 +19,21 @@ PORT=10000
 CORS_ORIGINS=https://supplynexu.com,https://www.supplynexu.com
 ```
 
+### Recuperacion de contrasena por correo
+
+El flujo de "me olvide contrasena" usa SMTP desde el backend. En produccion configura estas variables en Render o cPanel:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=tu-correo@gmail.com
+SMTP_PASS=tu-app-password-de-google
+SMTP_FROM="Buyer Nodus <tu-correo@gmail.com>"
+```
+
+Si usas Gmail, `SMTP_PASS` debe ser una App Password de Google, no la contrasena normal de la cuenta. Despues del deploy revisa `https://api.buyernodus.com/health`: debe mostrar `email.configured: true`, `hasUser: true` y `hasPassword: true`.
+
 ### Google Calendar OAuth
 
 El flujo ya esta implementado para que compradores y expertos conecten su Google Calendar directamente desde la plataforma.
