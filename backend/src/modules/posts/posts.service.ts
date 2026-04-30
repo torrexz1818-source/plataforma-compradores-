@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Filter } from 'mongodb';
 import { DatabaseService } from '../database/database.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { User } from '../users/domain/user.model';
@@ -12,15 +13,18 @@ import { UserStatus } from '../users/domain/user-status.enum';
 import { UsersService } from '../users/users.service';
 
 type PostType = 'educational' | 'community' | 'liquidation';
-type LearningRouteId = 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4';
-type LearningRouteAlias = 'ruta_1' | 'ruta_2' | 'ruta_3' | 'ruta_4';
+type LearningRouteId = 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
+type LearningRouteAlias = 'ruta_1' | 'ruta_2' | 'ruta_3' | 'ruta_4' | 'ruta_5';
+type PostStatus = 'draft' | 'published' | 'archived';
+type AccessType = 'free' | 'professional' | 'premium';
 
-const learningRouteIds: LearningRouteId[] = ['ruta-1', 'ruta-2', 'ruta-3', 'ruta-4'];
+const learningRouteIds: LearningRouteId[] = ['ruta-1', 'ruta-2', 'ruta-3', 'ruta-4', 'ruta-5'];
 const learningRouteAliases: Record<LearningRouteAlias, LearningRouteId> = {
   ruta_1: 'ruta-1',
   ruta_2: 'ruta-2',
   ruta_3: 'ruta-3',
   ruta_4: 'ruta-4',
+  ruta_5: 'ruta-5',
 };
 
 function normalizeLearningRoute(value?: string): LearningRouteId | undefined {
@@ -48,6 +52,7 @@ type PostRecord = {
   categoryId: string;
   title: string;
   description: string;
+  contentBody?: string;
   learningRoute?: LearningRouteId | LearningRouteAlias;
   type: PostType;
   mediaType?: 'video' | 'image';
@@ -59,6 +64,12 @@ type PostRecord = {
     name: string;
     url: string;
   }>;
+  status?: PostStatus;
+  accessType?: AccessType;
+  isFeatured?: boolean;
+  expertName?: string;
+  downloads?: number;
+  saves?: number;
   shares: number;
   likedBy: string[];
   createdAt: Date;
@@ -113,6 +124,7 @@ type ListPostsFilters = {
 type CreatePostData = {
   title: string;
   description: string;
+  contentBody?: string;
   categoryId: string;
   type?: PostType;
   learningRoute?: string;
@@ -125,8 +137,16 @@ type CreatePostData = {
     name: string;
     url: string;
   }>;
+  status?: PostStatus;
+  accessType?: AccessType;
+  isFeatured?: boolean;
+  expertName?: string;
   authorId: string;
   isAdmin: boolean;
+};
+
+type UpdatePostData = Partial<Omit<CreatePostData, 'authorId' | 'isAdmin' | 'type'>> & {
+  type?: PostType;
 };
 
 type CreateCommentData = {
@@ -164,6 +184,7 @@ type PostResponse = {
   category: PostCategory;
   title: string;
   description: string;
+  contentBody?: string;
   learningRoute?: LearningRouteId;
   mediaType?: 'video' | 'image';
   videoUrl?: string;
@@ -174,6 +195,16 @@ type PostResponse = {
     name: string;
     url: string;
   }>;
+  status: PostStatus;
+  accessType: AccessType;
+  isFeatured: boolean;
+  expertName?: string;
+  metrics: {
+    views: number;
+    downloads: number;
+    saves: number;
+    comments: number;
+  };
   type: PostType;
   likes: number;
   comments: number;
@@ -343,7 +374,9 @@ export class PostsService {
   }
 
   async listPosts(filters: ListPostsFilters) {
-    const query: Record<string, unknown> = {};
+    const query: Record<string, unknown> = {
+      $and: [{ $or: [{ status: 'published' }, { status: { $exists: false } }] }],
+    };
     const search = filters.search?.trim();
 
     if (filters.type) {
@@ -355,10 +388,12 @@ export class PostsService {
     }
 
     if (search) {
-      query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } },
-      ];
+      (query.$and as Record<string, unknown>[]).push({
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } },
+        ],
+      });
     }
 
     const posts = await this.postsCollection().find(query).sort({ createdAt: -1 }).toArray();
@@ -372,16 +407,19 @@ export class PostsService {
     const post = await this.findPost(id);
     const postLearningRoute = normalizeLearningRoute(post.learningRoute) ?? 'ruta-1';
     const postLearningRouteValues = getLearningRouteStorageValues(postLearningRoute);
+    const publicStatusQuery: Filter<PostRecord> = { $or: [{ status: 'published' }, { status: { $exists: false } }] };
     const relatedPostsQuery =
       post.type === 'educational'
         ? {
             type: post.type,
             id: { $ne: post.id },
             learningRoute: { $in: postLearningRouteValues },
+            ...publicStatusQuery,
           }
         : {
             type: post.type,
             id: { $ne: post.id },
+            ...publicStatusQuery,
           };
 
     const [relatedPosts, comments, lesson] = await Promise.all([
@@ -400,13 +438,15 @@ export class PostsService {
       ...comments.map((comment) => comment.userId),
     ]);
     const categoriesMap = await this.createCategoriesMap(allPosts.map((item) => item.categoryId));
-    const commentsCountMap = await this.createCommentsCountMap(allPosts.map((item) => item.id));
+    const postIds = allPosts.map((item) => item.id);
+    const commentsCountMap = await this.createCommentsCountMap(postIds);
+    const viewCountsMap = await this.createEducationalViewsCountMap(postIds);
 
     return {
-      post: this.mapPostFromMaps(post, viewerId, usersMap, categoriesMap, commentsCountMap),
+      post: this.mapPostFromMaps(post, viewerId, usersMap, categoriesMap, commentsCountMap, viewCountsMap),
       comments: this.mapCommentsTree(comments, viewerId, usersMap),
       relatedPosts: relatedPosts.map((item) =>
-        this.mapPostFromMaps(item, viewerId, usersMap, categoriesMap, commentsCountMap),
+        this.mapPostFromMaps(item, viewerId, usersMap, categoriesMap, commentsCountMap, viewCountsMap),
       ),
       lesson,
     };
@@ -421,7 +461,7 @@ export class PostsService {
     }
     const category = await this.ensureCategoryExists(data.categoryId);
     const requiresLearningRoute = type === 'educational' && category.slug === 'contenido-educativo';
-    const learningRoute = requiresLearningRoute
+    const learningRoute = type === 'educational'
       ? normalizeLearningRoute(data.learningRoute)
       : undefined;
 
@@ -446,6 +486,7 @@ export class PostsService {
       categoryId: data.categoryId,
       title: data.title.trim(),
       description: data.description.trim(),
+      contentBody: data.contentBody?.trim() || undefined,
       learningRoute,
       type,
       mediaType: data.mediaType ?? (data.videoUrl ? 'video' : data.thumbnailUrl ? 'image' : undefined),
@@ -457,6 +498,12 @@ export class PostsService {
         name: item.name.trim(),
         url: item.url.trim(),
       })),
+      status: data.status ?? 'published',
+      accessType: data.accessType ?? 'free',
+      isFeatured: Boolean(data.isFeatured),
+      expertName: data.expertName?.trim() || undefined,
+      downloads: 0,
+      saves: 0,
       shares: 0,
       likedBy: [],
       createdAt: now,
@@ -465,14 +512,17 @@ export class PostsService {
 
     await this.postsCollection().insertOne(post);
 
-    await this.notifyNewPostToAllUsers(post, author);
+    if ((post.status ?? 'published') === 'published') {
+      await this.notifyNewPostToAllUsers(post, author);
+    }
 
     const categoriesMap = await this.createCategoriesMap([post.categoryId]);
     const usersMap = new Map([[author.id, author]]);
     const commentsCountMap = new Map<string, number>([[post.id, 0]]);
+    const viewCountsMap = new Map<string, number>([[post.id, 0]]);
 
     return {
-      post: this.mapPostFromMaps(post, author.id, usersMap, categoriesMap, commentsCountMap),
+      post: this.mapPostFromMaps(post, author.id, usersMap, categoriesMap, commentsCountMap, viewCountsMap),
     };
   }
 
@@ -651,6 +701,73 @@ export class PostsService {
       liked: !wasLiked,
       likes: likedBy.length,
     };
+  }
+
+  async updatePost(id: string, data: UpdatePostData): Promise<{ post: PostResponse }> {
+    const currentPost = await this.findPost(id);
+    const categoryId = data.categoryId ?? currentPost.categoryId;
+    const category = await this.ensureCategoryExists(categoryId);
+    const type = data.type ?? currentPost.type;
+    const requiresLearningRoute = type === 'educational' && category.slug === 'contenido-educativo';
+    const nextLearningRoute =
+      typeof data.learningRoute === 'string'
+        ? normalizeLearningRoute(data.learningRoute)
+        : normalizeLearningRoute(currentPost.learningRoute);
+
+    if (requiresLearningRoute && !nextLearningRoute) {
+      throw new BadRequestException('Selecciona una ruta tematica para publicar contenido educativo.');
+    }
+
+    const updates: Partial<PostRecord> = {
+      categoryId,
+      type,
+      learningRoute: nextLearningRoute,
+      updatedAt: new Date(),
+    };
+
+    if (typeof data.title === 'string') updates.title = data.title.trim();
+    if (typeof data.description === 'string') updates.description = data.description.trim();
+    if (typeof data.contentBody === 'string') updates.contentBody = data.contentBody.trim() || undefined;
+    if (typeof data.mediaType === 'string') updates.mediaType = data.mediaType;
+    if (typeof data.videoUrl === 'string') updates.videoUrl = data.videoUrl.trim() || undefined;
+    if (typeof data.thumbnailUrl === 'string') updates.thumbnailUrl = data.thumbnailUrl.trim() || undefined;
+    if (typeof data.status === 'string') updates.status = data.status;
+    if (typeof data.accessType === 'string') updates.accessType = data.accessType;
+    if (typeof data.isFeatured === 'boolean') updates.isFeatured = data.isFeatured;
+    if (typeof data.expertName === 'string') updates.expertName = data.expertName.trim() || undefined;
+    if (data.resources) {
+      updates.resources = data.resources
+        .filter((item) => item.url?.trim() && item.name?.trim())
+        .map((item) => ({
+          id: item.id,
+          type: item.type,
+          name: item.name.trim(),
+          url: item.url.trim(),
+        }));
+    }
+
+    await this.postsCollection().updateOne({ id }, { $set: updates });
+
+    const updatedPost = await this.findPost(id);
+    const usersMap = await this.createUsersMap([updatedPost.authorId]);
+    const categoriesMap = await this.createCategoriesMap([updatedPost.categoryId]);
+    const commentsCountMap = await this.createCommentsCountMap([updatedPost.id]);
+    const viewCountsMap = await this.createEducationalViewsCountMap([updatedPost.id]);
+
+    return {
+      post: this.mapPostFromMaps(
+        updatedPost,
+        undefined,
+        usersMap,
+        categoriesMap,
+        commentsCountMap,
+        viewCountsMap,
+      ),
+    };
+  }
+
+  async archivePost(id: string): Promise<{ post: PostResponse }> {
+    return this.updatePost(id, { status: 'archived' });
   }
 
   async toggleCommentLike(postId: string, commentId: string, userId: string) {
@@ -891,6 +1008,7 @@ export class PostsService {
       .find({
         id: { $in: viewCounts.map((item) => item._id) },
         type: 'educational',
+        $or: [{ status: 'published' }, { status: { $exists: false } }],
       })
       .toArray();
     const postMap = new Map(posts.map((post) => [post.id, post]));
@@ -922,7 +1040,7 @@ export class PostsService {
       .filter(Boolean);
 
     const educationalPosts = await this.postsCollection()
-      .find({ type: 'educational' })
+      .find({ type: 'educational', $or: [{ status: 'published' }, { status: { $exists: false } }] })
       .sort({ createdAt: -1 })
       .limit(50)
       .toArray();
@@ -949,7 +1067,9 @@ export class PostsService {
   private async mapPosts(posts: PostRecord[], viewerId?: string): Promise<PostResponse[]> {
     const usersMap = await this.createUsersMap(posts.map((post) => post.authorId));
     const categoriesMap = await this.createCategoriesMap(posts.map((post) => post.categoryId));
-    const commentsCountMap = await this.createCommentsCountMap(posts.map((post) => post.id));
+    const postIds = posts.map((post) => post.id);
+    const commentsCountMap = await this.createCommentsCountMap(postIds);
+    const viewCountsMap = await this.createEducationalViewsCountMap(postIds);
 
     return posts.flatMap((post) => {
       const mapped = this.tryMapPostFromMaps(
@@ -958,6 +1078,7 @@ export class PostsService {
         usersMap,
         categoriesMap,
         commentsCountMap,
+        viewCountsMap,
       );
 
       return mapped ? [mapped] : [];
@@ -970,6 +1091,7 @@ export class PostsService {
     usersMap: Map<string, User>,
     categoriesMap: Map<string, PostCategory>,
     commentsCountMap: Map<string, number>,
+    viewCountsMap: Map<string, number>,
   ): PostResponse {
     return {
       id: post.id,
@@ -977,11 +1099,22 @@ export class PostsService {
       category: this.getRequiredCategoryFromMap(categoriesMap, post.categoryId),
       title: post.title,
       description: post.description,
+      contentBody: post.contentBody,
       learningRoute: normalizeLearningRoute(post.learningRoute),
       mediaType: post.mediaType,
       videoUrl: post.videoUrl,
       thumbnailUrl: post.thumbnailUrl,
       resources: post.resources ?? [],
+      status: post.status ?? 'published',
+      accessType: post.accessType ?? 'free',
+      isFeatured: Boolean(post.isFeatured),
+      expertName: post.expertName,
+      metrics: {
+        views: viewCountsMap.get(post.id) ?? 0,
+        downloads: post.downloads ?? 0,
+        saves: post.saves ?? post.likedBy.length,
+        comments: commentsCountMap.get(post.id) ?? 0,
+      },
       type: post.type,
       likes: post.likedBy.length,
       comments: commentsCountMap.get(post.id) ?? 0,
@@ -1042,7 +1175,10 @@ export class PostsService {
     }
 
     const posts = await this.postsCollection()
-      .find({ id: { $in: progressRecords.map((item) => item.postId) } })
+      .find({
+        id: { $in: progressRecords.map((item) => item.postId) },
+        $or: [{ status: 'published' }, { status: { $exists: false } }],
+      })
       .toArray();
     const postsMap = new Map(posts.map((post) => [post.id, post]));
     const authorMap = await this.createUsersMap(posts.map((post) => post.authorId));
@@ -1082,6 +1218,7 @@ export class PostsService {
     usersMap: Map<string, User>,
     categoriesMap: Map<string, PostCategory>,
     commentsCountMap: Map<string, number>,
+    viewCountsMap: Map<string, number>,
   ): PostResponse | null {
     const author = usersMap.get(post.authorId);
     const category = categoriesMap.get(post.categoryId);
@@ -1096,11 +1233,22 @@ export class PostsService {
       category,
       title: post.title,
       description: post.description,
+      contentBody: post.contentBody,
       learningRoute: normalizeLearningRoute(post.learningRoute),
       mediaType: post.mediaType,
       videoUrl: post.videoUrl,
       thumbnailUrl: post.thumbnailUrl,
       resources: post.resources ?? [],
+      status: post.status ?? 'published',
+      accessType: post.accessType ?? 'free',
+      isFeatured: Boolean(post.isFeatured),
+      expertName: post.expertName,
+      metrics: {
+        views: viewCountsMap.get(post.id) ?? 0,
+        downloads: post.downloads ?? 0,
+        saves: post.saves ?? post.likedBy.length,
+        comments: commentsCountMap.get(post.id) ?? 0,
+      },
       type: post.type,
       likes: post.likedBy.length,
       comments: commentsCountMap.get(post.id) ?? 0,
@@ -1257,6 +1405,21 @@ export class PostsService {
       .aggregate<{ _id: string; total: number }>([
         { $match: { postId: { $in: Array.from(new Set(postIds)) } } },
         { $group: { _id: '$postId', total: { $sum: 1 } } },
+      ])
+      .toArray();
+
+    return new Map(counts.map((item) => [item._id, item.total]));
+  }
+
+  private async createEducationalViewsCountMap(postIds: string[]): Promise<Map<string, number>> {
+    if (postIds.length === 0) {
+      return new Map();
+    }
+
+    const counts = await this.educationalViewsCollection()
+      .aggregate<{ _id: string; total: number }>([
+        { $match: { contentId: { $in: Array.from(new Set(postIds)) } } },
+        { $group: { _id: '$contentId', total: { $sum: 1 } } },
       ])
       .toArray();
 

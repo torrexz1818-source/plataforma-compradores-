@@ -555,7 +555,7 @@ export async function createPost(payload: {
   description: string;
   categoryId: string;
   type?: 'educational' | 'community' | 'liquidation';
-  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4';
+  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
   mediaType?: 'video' | 'image';
   videoUrl?: string;
   thumbnailUrl?: string;
@@ -627,18 +627,38 @@ export async function getAdminDashboard() {
 export async function adminCreatePost(payload: {
   title: string;
   description: string;
+  contentBody?: string;
   categoryId: string;
   type: 'educational' | 'community' | 'liquidation';
-  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4';
+  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
   mediaType?: 'video' | 'image';
   videoUrl?: string;
   thumbnailUrl?: string;
   resources?: PostResource[];
+  status?: 'draft' | 'published' | 'archived';
+  accessType?: 'free' | 'professional' | 'premium';
+  isFeatured?: boolean;
+  expertName?: string;
 } | FormData) {
   return apiRequest<PostMutationResponse>('/admin/posts', {
     method: 'POST',
     auth: true,
     body: payload instanceof FormData ? payload : JSON.stringify(payload),
+  });
+}
+
+export async function adminUpdatePost(postId: string, payload: FormData) {
+  return apiRequest<PostMutationResponse>(`/admin/posts/${postId}`, {
+    method: 'PATCH',
+    auth: true,
+    body: payload,
+  });
+}
+
+export async function adminArchivePost(postId: string) {
+  return apiRequest<PostMutationResponse>(`/admin/posts/${postId}/archive`, {
+    method: 'PATCH',
+    auth: true,
   });
 }
 

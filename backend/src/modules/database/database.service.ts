@@ -106,7 +106,8 @@ type PostDocument = {
   categoryId: string;
   title: string;
   description: string;
-  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4';
+  contentBody?: string;
+  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
   type: 'educational' | 'community' | 'liquidation';
   mediaType?: 'video' | 'image';
   videoUrl?: string;
@@ -117,6 +118,12 @@ type PostDocument = {
     name: string;
     url: string;
   }>;
+  status?: 'draft' | 'published' | 'archived';
+  accessType?: 'free' | 'professional' | 'premium';
+  isFeatured?: boolean;
+  expertName?: string;
+  downloads?: number;
+  saves?: number;
   shares: number;
   likedBy: string[];
   createdAt: Date;

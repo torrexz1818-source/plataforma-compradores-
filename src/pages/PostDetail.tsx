@@ -86,7 +86,12 @@ const PostDetail = () => {
                   </div>
                 )}
 
-                <p className="text-foreground/80 leading-relaxed mb-8">{post.description}</p>
+                <div className="mb-8 space-y-4 text-foreground/80">
+                  <p className="leading-relaxed">{post.description}</p>
+                  {post.contentBody && (
+                    <p className="whitespace-pre-line leading-relaxed">{post.contentBody}</p>
+                  )}
+                </div>
 
                 {!!post.resources?.length && (
                   <div className="mb-8">

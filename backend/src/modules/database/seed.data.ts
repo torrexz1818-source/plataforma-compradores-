@@ -79,10 +79,22 @@ export type SeedPost = {
   categoryId: string;
   title: string;
   description: string;
-  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4';
+  contentBody?: string;
+  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
   type: 'educational' | 'community' | 'liquidation';
+  mediaType?: 'video' | 'image';
   videoUrl?: string;
   thumbnailUrl?: string;
+  resources?: Array<{
+    id: string;
+    type: 'image' | 'file' | 'link';
+    name: string;
+    url: string;
+  }>;
+  status?: 'draft' | 'published' | 'archived';
+  accessType?: 'free' | 'professional' | 'premium';
+  isFeatured?: boolean;
+  expertName?: string;
   shares: number;
   likedBy: string[];
   createdAt: string;

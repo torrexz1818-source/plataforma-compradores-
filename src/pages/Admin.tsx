@@ -4,11 +4,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
+  Archive,
   Building2,
+  Download,
+  Edit,
+  Eye,
   FileText,
   Image as ImageIcon,
   Link2,
   MessageCircle,
+  Save,
   Upload,
   UserRound,
   Users,
@@ -18,8 +23,10 @@ import {
 import MainLayout from '@/layouts/MainLayout';
 import {
   adminCreatePost,
+  adminArchivePost,
   adminDeleteComment,
   adminDeletePost,
+  adminUpdatePost,
   getAdminMemberships,
   getAdminDashboard,
   getPlatformStats,
@@ -41,11 +48,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { PostResource, UserStatus } from '@/types';
+import { Post, PostResource, UserStatus } from '@/types';
 
 const SKILL_CATEGORY_SLUG = 'mejorar-skill';
+const PROFESSIONAL_ROUTE_ID: LearningRouteId = 'ruta-5';
 const MAX_ADMIN_VIDEO_DURATION_SECONDS = 15 * 60;
 const MAX_ADMIN_VIDEO_SIZE_BYTES = 2 * 1024 * 1024 * 1024;
+
+type ContentStatus = 'draft' | 'published' | 'archived';
+type AccessType = 'free' | 'professional' | 'premium';
 
 const formatFileSize = (bytes: number) => {
   if (bytes >= 1024 * 1024 * 1024) {
@@ -104,10 +115,16 @@ const Admin = () => {
   const [form, setForm] = useState({
     title: '',
     description: '',
+    contentBody: '',
     mediaType: 'video' as 'video' | 'image',
     categoryId: 'cat-7',
     learningRoute: DEFAULT_LEARNING_ROUTE_ID as LearningRouteId | '',
+    status: 'published' as ContentStatus,
+    accessType: 'free' as AccessType,
+    isFeatured: false,
+    expertName: '',
   });
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string>('');
@@ -151,10 +168,16 @@ const Admin = () => {
       setForm({
         title: '',
         description: '',
+        contentBody: '',
         mediaType: 'video',
         categoryId: 'cat-7',
         learningRoute: DEFAULT_LEARNING_ROUTE_ID,
+        status: 'published',
+        accessType: 'free',
+        isFeatured: false,
+        expertName: '',
       });
+      setEditingPostId(null);
       setThumbnailFile(null);
       setVideoFile(null);
       setThumbnailPreview('');
@@ -176,12 +199,42 @@ const Admin = () => {
     },
   });
 
+  const updatePostMutation = useMutation({
+    mutationFn: ({ postId, payload }: { postId: string; payload: FormData }) =>
+      adminUpdatePost(postId, payload),
+    onSuccess: () => {
+      setEditingPostId(null);
+      setThumbnailFile(null);
+      setVideoFile(null);
+      setThumbnailPreview('');
+      setVideoPreview('');
+      setResources([]);
+      setPublishError('');
+      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['educational-posts'] });
+      void queryClient.invalidateQueries({ queryKey: ['employability-skill-posts'] });
+    },
+  });
+
+  const archivePostMutation = useMutation({
+    mutationFn: adminArchivePost,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['home-feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['educational-posts'] });
+      void queryClient.invalidateQueries({ queryKey: ['employability-skill-posts'] });
+    },
+  });
+
   const deletePostMutation = useMutation({
     mutationFn: adminDeletePost,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
       void queryClient.invalidateQueries({ queryKey: ['home-feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['educational-posts'] });
       void queryClient.invalidateQueries({ queryKey: ['community-posts'] });
+      void queryClient.invalidateQueries({ queryKey: ['employability-skill-posts'] });
     },
   });
 
@@ -286,7 +339,11 @@ const Admin = () => {
   const isSkillDestination = form.categoryId === skillCategory?.id || (!skillCategory && form.categoryId === 'cat-8');
   const isEducationalDestination =
     form.categoryId === educationalCategory?.id || (!educationalCategory && form.categoryId === 'cat-7');
-  const requiresLearningRoute = isEducationalDestination;
+  const requiresLearningRoute = isEducationalDestination || isSkillDestination;
+  const educationalContentPosts = useMemo(
+    () => (data?.posts ?? []).filter((post) => post.type === 'educational'),
+    [data?.posts],
+  );
   const categoryCommentCounts = useMemo(() => {
     return categories.map((category) => ({
       ...category,
@@ -369,6 +426,18 @@ const Admin = () => {
         <span className="font-medium text-foreground">{label}:</span> {content}
       </p>
     );
+  };
+
+  const getStatusLabel = (status?: Post['status']) => {
+    if (status === 'draft') return 'Borrador';
+    if (status === 'archived') return 'Archivado';
+    return 'Publicado';
+  };
+
+  const getAccessLabel = (accessType?: Post['accessType']) => {
+    if (accessType === 'professional') return 'Profesional';
+    if (accessType === 'premium') return 'Premium';
+    return 'Gratuito';
   };
 
   const renderManagedUsers = (users: typeof buyerUsers, roleLabel: string) => (
@@ -545,6 +614,144 @@ const Admin = () => {
 
     setThumbnailFile(file);
     setThumbnailPreview(file ? URL.createObjectURL(file) : '');
+  };
+
+  const resetContentForm = () => {
+    setForm({
+      title: '',
+      description: '',
+      contentBody: '',
+      mediaType: 'video',
+      categoryId: educationalCategory?.id ?? 'cat-7',
+      learningRoute: DEFAULT_LEARNING_ROUTE_ID,
+      status: 'published',
+      accessType: 'free',
+      isFeatured: false,
+      expertName: '',
+    });
+    setEditingPostId(null);
+    setThumbnailFile(null);
+    setVideoFile(null);
+    setThumbnailPreview('');
+    setVideoPreview('');
+    setResources([]);
+    setResourceDraft({ type: 'link', name: '', url: '' });
+    setResourceFile(null);
+    setPublishError('');
+    setPublishSuccess(false);
+  };
+
+  const handleLearningRouteChange = (value: string) => {
+    const nextRoute = normalizeLearningRouteId(value) ?? DEFAULT_LEARNING_ROUTE_ID;
+
+    setForm((current) => ({
+      ...current,
+      learningRoute: nextRoute,
+      categoryId:
+        nextRoute === PROFESSIONAL_ROUTE_ID && skillCategory
+          ? skillCategory.id
+          : nextRoute !== PROFESSIONAL_ROUTE_ID
+            ? educationalCategory?.id ?? current.categoryId
+            : current.categoryId,
+    }));
+  };
+
+  const handleEditPost = (post: Post) => {
+    const postRoute = normalizeLearningRouteId(post.learningRoute) ?? DEFAULT_LEARNING_ROUTE_ID;
+    setEditingPostId(post.id);
+    setForm({
+      title: post.title,
+      description: post.description,
+      contentBody: post.contentBody ?? '',
+      mediaType: post.mediaType ?? (post.videoUrl ? 'video' : 'image'),
+      categoryId: post.category.id,
+      learningRoute: postRoute,
+      status: post.status ?? 'published',
+      accessType: post.accessType ?? 'free',
+      isFeatured: Boolean(post.isFeatured),
+      expertName: post.expertName ?? post.author.fullName ?? '',
+    });
+    setThumbnailFile(null);
+    setVideoFile(null);
+    setThumbnailPreview(post.thumbnailUrl ?? '');
+    setVideoPreview(post.videoUrl ?? '');
+    setResources(post.resources ?? []);
+    setPublishSuccess(false);
+    setPublishError('');
+    window.requestAnimationFrame(() => {
+      document.getElementById('admin-content-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const buildContentFormData = async () => {
+    const formData = new FormData();
+    const isProfessionalRoute = form.learningRoute === PROFESSIONAL_ROUTE_ID;
+
+    formData.set('title', form.title);
+    formData.set('description', form.description);
+    formData.set('contentBody', form.contentBody);
+    formData.set('categoryId', isProfessionalRoute && skillCategory ? skillCategory.id : form.categoryId);
+    formData.set('type', 'educational');
+    if (requiresLearningRoute && form.learningRoute) {
+      formData.set('learningRoute', form.learningRoute);
+    }
+    formData.set('mediaType', form.mediaType);
+    formData.set('resources', JSON.stringify(resources));
+    formData.set('status', form.status);
+    formData.set('accessType', form.accessType);
+    formData.set('isFeatured', String(form.isFeatured));
+    formData.set('expertName', form.expertName);
+
+    if (form.mediaType === 'video' && videoFile) {
+      setVideoUploadProgress(1);
+      formData.set('videoUrl', await uploadAdminVideoInChunks(videoFile, setVideoUploadProgress));
+    } else if (form.mediaType === 'video' && videoPreview && !videoPreview.startsWith('blob:')) {
+      formData.set('videoUrl', videoPreview);
+    }
+
+    if (form.mediaType === 'image' && thumbnailFile) {
+      formData.append('mainMedia', thumbnailFile);
+    } else if (form.mediaType === 'image' && thumbnailPreview && !thumbnailPreview.startsWith('blob:')) {
+      formData.set('thumbnailUrl', thumbnailPreview);
+    }
+
+    if (form.mediaType === 'video' && thumbnailFile) {
+      formData.append('thumbnail', thumbnailFile);
+    } else if (form.mediaType === 'video' && thumbnailPreview && !thumbnailPreview.startsWith('blob:')) {
+      formData.set('thumbnailUrl', thumbnailPreview);
+    }
+
+    return formData;
+  };
+
+  const handleSaveContent = async () => {
+    setIsPublishingContent(true);
+    setPublishError('');
+    setPublishSuccess(false);
+
+    try {
+      const formData = await buildContentFormData();
+
+      if (editingPostId) {
+        await updatePostMutation.mutateAsync({ postId: editingPostId, payload: formData });
+        setPublishSuccess(true);
+        resetContentForm();
+        return;
+      }
+
+      await createMutation.mutateAsync(formData);
+      setPublishSuccess(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo guardar el contenido.';
+      setPublishError(
+        message.toLowerCase().includes('file too large')
+          ? 'El video es demasiado grande para el limite actual de subida. Intenta nuevamente cuando el backend desplegado tenga el ajuste de chunks.'
+          : message,
+      );
+    } finally {
+      setIsPublishingContent(false);
+      setVideoUploadProgress(0);
+    }
   };
 
   const addResource = async () => {
@@ -749,9 +956,18 @@ const Admin = () => {
         </section>
 
         <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
-          <div className="min-w-0 overflow-hidden bg-card rounded-lg border border-border p-5 space-y-4">
+          <div id="admin-content-form" className="min-w-0 overflow-hidden bg-card rounded-lg border border-border p-5 space-y-4 scroll-mt-6">
             <div>
-              <h2 className="text-lg font-medium text-foreground">Crear contenido</h2>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <h2 className="text-lg font-medium text-foreground">
+                  {editingPostId ? 'Editar contenido' : 'Crear contenido'}
+                </h2>
+                {editingPostId && (
+                  <Button type="button" variant="outline" size="sm" onClick={resetContentForm}>
+                    Cancelar edicion
+                  </Button>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">
                 Publica material educativo o recursos para mejorar skills con vista previa antes de subirlo.
               </p>
@@ -764,6 +980,24 @@ const Admin = () => {
                   value={form.title}
                   onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
                   placeholder="Ej. Masterclass de compras"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Descripcion corta</label>
+                <Textarea
+                  value={form.description}
+                  onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                  placeholder="Resumen breve visible en las tarjetas."
+                  className="min-h-[96px]"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Cuerpo / contenido</label>
+                <Textarea
+                  value={form.contentBody}
+                  onChange={(event) => setForm((current) => ({ ...current, contentBody: event.target.value }))}
+                  placeholder="Desarrolla el contenido, pasos clave o contexto para el comprador."
+                  className="min-h-[140px]"
                 />
               </div>
               <div className="space-y-2">
@@ -792,7 +1026,7 @@ const Admin = () => {
                           ? skillCategory.id
                           : educationalCategory?.id ?? categories[0]?.id ?? current.categoryId,
                       learningRoute: nextIsSkill
-                        ? ''
+                        ? PROFESSIONAL_ROUTE_ID
                         : current.learningRoute || DEFAULT_LEARNING_ROUTE_ID,
                     }));
                   }}
@@ -811,15 +1045,10 @@ const Admin = () => {
               </div>
               {requiresLearningRoute ? (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Ruta tematica</label>
+                  <label className="text-sm font-medium text-foreground">Ruta educativa</label>
                   <select
                     value={form.learningRoute || DEFAULT_LEARNING_ROUTE_ID}
-                    onChange={(event) =>
-                      setForm((current) => ({
-                        ...current,
-                        learningRoute: normalizeLearningRouteId(event.target.value) ?? DEFAULT_LEARNING_ROUTE_ID,
-                      }))
-                    }
+                    onChange={(event) => handleLearningRouteChange(event.target.value)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {LEARNING_ROUTES.map((route) => (
@@ -828,22 +1057,62 @@ const Admin = () => {
                       </option>
                     ))}
                   </select>
+                  {form.learningRoute === PROFESSIONAL_ROUTE_ID && (
+                    <p className="text-xs text-muted-foreground">
+                      Esta ruta se guarda como contenido de progreso profesional y se muestra en Empleabilidad / Mejorar skill.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <p className="rounded-xl border border-primary/10 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
                   Este destino no necesita ruta tematica; se publicara solo en Empleabilidad / Mejorar skill.
                 </p>
               )}
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Descripcion</label>
-              <Textarea
-                value={form.description}
-                onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-                placeholder="Describe de que trata el contenido, para quien es y que aprendera el usuario."
-                className="min-h-[140px]"
-              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Estado</label>
+                  <select
+                    value={form.status}
+                    onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as ContentStatus }))}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="draft">Borrador</option>
+                    <option value="published">Publicado</option>
+                    <option value="archived">Archivado</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Tipo de acceso</label>
+                  <select
+                    value={form.accessType}
+                    onChange={(event) => setForm((current) => ({ ...current, accessType: event.target.value as AccessType }))}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="free">Gratuito</option>
+                    <option value="professional">Profesional</option>
+                    <option value="premium">Premium</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Autor o experto</label>
+                  <Input
+                    value={form.expertName}
+                    onChange={(event) => setForm((current) => ({ ...current, expertName: event.target.value }))}
+                    placeholder="Nombre del autor, experto o mentor"
+                  />
+                </div>
+                <label className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm font-medium text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={form.isFeatured}
+                    onChange={(event) => setForm((current) => ({ ...current, isFeatured: event.target.checked }))}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  Destacado
+                </label>
+              </div>
             </div>
 
             <div className="min-w-0 overflow-hidden rounded-2xl border border-border bg-white p-4 sm:p-5 space-y-4 text-foreground">
@@ -919,6 +1188,35 @@ const Admin = () => {
                     </p>
                   </div>
                 )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {form.mediaType === 'video' && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">URL de video opcional</label>
+                    <Input
+                      value={videoPreview.startsWith('blob:') ? '' : videoPreview}
+                      onChange={(event) => {
+                        setVideoFile(null);
+                        setVideoPreview(event.target.value);
+                      }}
+                      placeholder="https://..."
+                    />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">
+                    {form.mediaType === 'video' ? 'URL de miniatura opcional' : 'URL de imagen opcional'}
+                  </label>
+                  <Input
+                    value={thumbnailPreview.startsWith('blob:') ? '' : thumbnailPreview}
+                    onChange={(event) => {
+                      setThumbnailFile(null);
+                      setThumbnailPreview(event.target.value);
+                    }}
+                    placeholder="https://..."
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1043,12 +1341,14 @@ const Admin = () => {
               </div>
             </div>
 
-            {(publishError || createMutation.error) && (
+            {(publishError || createMutation.error || updatePostMutation.error) && (
               <p className="text-sm text-destructive">
                 {publishError ||
                 (createMutation.error instanceof Error
                   ? createMutation.error.message
-                  : 'No se pudo crear el contenido')}
+                  : updatePostMutation.error instanceof Error
+                    ? updatePostMutation.error.message
+                    : 'No se pudo guardar el contenido')}
               </p>
             )}
 
@@ -1079,82 +1379,24 @@ const Admin = () => {
               disabled={
                 isPublishingContent ||
                 createMutation.isPending ||
+                updatePostMutation.isPending ||
                 isUploadingResource ||
                 !form.title.trim() ||
                 !form.description.trim() ||
                 !form.categoryId ||
-                (requiresLearningRoute && !form.learningRoute) ||
-                (form.mediaType === 'video' ? !videoFile : !thumbnailFile)
+                (requiresLearningRoute && !form.learningRoute)
               }
-              onClick={async () => {
-                setIsPublishingContent(true);
-                setPublishError('');
-                setPublishSuccess(false);
-                try {
-                  if (form.mediaType === 'video' && videoFile) {
-                    setVideoUploadProgress(1);
-                    const uploadedVideoUrl = await uploadAdminVideoInChunks(videoFile, setVideoUploadProgress);
-                    const formData = new FormData();
-
-                    formData.set('title', form.title);
-                    formData.set('description', form.description);
-                    formData.set('categoryId', form.categoryId);
-                    formData.set('type', 'educational');
-                    if (requiresLearningRoute && form.learningRoute) {
-                      formData.set('learningRoute', form.learningRoute);
-                    }
-                    formData.set('mediaType', form.mediaType);
-                    formData.set('videoUrl', uploadedVideoUrl);
-                    formData.set('resources', JSON.stringify(resources));
-
-                    if (thumbnailFile) {
-                      formData.append('thumbnail', thumbnailFile);
-                    }
-
-                    await createMutation.mutateAsync(formData);
-                    setPublishSuccess(true);
-                    return;
-                  }
-
-                  const formData = new FormData();
-                  formData.set('title', form.title);
-                  formData.set('description', form.description);
-                  formData.set('categoryId', form.categoryId);
-                  formData.set('type', 'educational');
-                  if (requiresLearningRoute && form.learningRoute) {
-                    formData.set('learningRoute', form.learningRoute);
-                  }
-                  formData.set('mediaType', form.mediaType);
-                  formData.set('resources', JSON.stringify(resources));
-
-                  if (form.mediaType === 'image' && thumbnailFile) {
-                    formData.append('mainMedia', thumbnailFile);
-                  }
-
-                  await createMutation.mutateAsync(formData);
-                  setPublishSuccess(true);
-                } catch (error) {
-                  const message = error instanceof Error ? error.message : 'No se pudo publicar el contenido.';
-                  setPublishError(
-                    message.toLowerCase().includes('file too large')
-                      ? 'El video es demasiado grande para el limite actual de subida. Intenta nuevamente cuando el backend desplegado tenga el ajuste de chunks.'
-                      : message,
-                  );
-                } finally {
-                  setIsPublishingContent(false);
-                  setVideoUploadProgress(0);
-                }
-              }}
+              onClick={() => void handleSaveContent()}
             >
-              {isPublishingContent || createMutation.isPending
+              {isPublishingContent || createMutation.isPending || updatePostMutation.isPending
                 ? form.mediaType === 'video' && videoUploadProgress > 0
                   ? videoUploadProgress >= 100
                     ? 'Procesando video...'
                     : `Subiendo video... ${videoUploadProgress}%`
-                  : 'Publicando...'
+                  : 'Guardando...'
                 : isSkillDestination
-                  ? 'Publicar en Mejorar skill'
-                  : 'Publicar contenido educativo'}
+                  ? editingPostId ? 'Guardar en Mejorar skill' : 'Publicar en Mejorar skill'
+                  : editingPostId ? 'Guardar cambios' : 'Publicar contenido educativo'}
             </Button>
           </div>
 
@@ -1193,36 +1435,100 @@ const Admin = () => {
 
         <section className="grid lg:grid-cols-2 gap-6">
           <div className="bg-card rounded-lg border border-border p-5">
-            <h2 className="text-lg font-medium text-foreground mb-4">Publicaciones de proveedores</h2>
+            <h2 className="text-lg font-medium text-foreground mb-4">Gestion de Contenido Educativo</h2>
             {isLoading && <p className="text-sm text-muted-foreground">Cargando contenido...</p>}
             {isError && <p className="text-sm text-destructive">No se pudo cargar el panel.</p>}
-            <div className="space-y-3">
-              {(data?.posts ?? []).map((post) => (
-                <div key={post.id} className="rounded-lg border border-border p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{post.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {post.type === 'educational'
-                          ? 'Video educativo'
-                          : post.type === 'liquidation'
-                            ? 'Liquidacion'
-                            : 'Post comunitario'} -{' '}
-                        {post.author.fullName}
-                      </p>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={deletePostMutation.isPending}
-                      onClick={() => void deletePostMutation.mutateAsync(post.id)}
-                    >
-                      Eliminar
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{post.description}</p>
-                </div>
-              ))}
+            <div className="w-full overflow-x-auto">
+              <table className="min-w-[860px] w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">Contenido</th>
+                    <th className="py-2 pr-3 font-medium">Ruta</th>
+                    <th className="py-2 pr-3 font-medium">Estado</th>
+                    <th className="py-2 pr-3 font-medium">Acceso</th>
+                    <th className="py-2 pr-3 font-medium">Metricas</th>
+                    <th className="py-2 pr-0 font-medium">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {educationalContentPosts.map((post) => {
+                    const route = LEARNING_ROUTES.find((item) => item.id === normalizeLearningRouteId(post.learningRoute));
+
+                    return (
+                      <tr key={post.id} className="border-b border-border/70 align-top">
+                        <td className="py-3 pr-3">
+                          <div className="flex gap-3">
+                            <div className="flex h-12 w-16 shrink-0 items-center justify-center overflow-hidden rounded-md bg-primary/10 text-primary">
+                              {post.thumbnailUrl ? (
+                                <img src={post.thumbnailUrl} alt={post.title} className="h-full w-full object-cover" />
+                              ) : (
+                                <ImageIcon className="h-5 w-5" />
+                              )}
+                            </div>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-medium text-foreground">{post.title}</p>
+                                {post.isFeatured && (
+                                  <Badge className="bg-secondary/15 text-secondary hover:bg-secondary/15">
+                                    Destacado
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{post.description}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{post.expertName || post.author.fullName}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-3 text-xs text-muted-foreground">{route?.title ?? 'Sin ruta'}</td>
+                        <td className="py-3 pr-3">
+                          <Badge variant="outline" className="text-xs">
+                            {getStatusLabel(post.status)}
+                          </Badge>
+                        </td>
+                        <td className="py-3 pr-3 text-xs text-muted-foreground">{getAccessLabel(post.accessType)}</td>
+                        <td className="py-3 pr-3">
+                          <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                            <span className="inline-flex items-center gap-1"><Eye className="h-3 w-3" />{post.metrics?.views ?? 0}</span>
+                            <span className="inline-flex items-center gap-1"><Download className="h-3 w-3" />{post.metrics?.downloads ?? 0}</span>
+                            <span className="inline-flex items-center gap-1"><Save className="h-3 w-3" />{post.metrics?.saves ?? 0}</span>
+                            <span className="inline-flex items-center gap-1"><MessageCircle className="h-3 w-3" />{post.metrics?.comments ?? post.comments ?? 0}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 pr-0">
+                          <div className="flex flex-wrap gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => handleEditPost(post)}>
+                              <Edit className="h-4 w-4" />
+                              Editar
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={archivePostMutation.isPending || post.status === 'archived'}
+                              onClick={() => void archivePostMutation.mutateAsync(post.id)}
+                            >
+                              <Archive className="h-4 w-4" />
+                              Archivar
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              disabled={deletePostMutation.isPending}
+                              onClick={() => void deletePostMutation.mutateAsync(post.id)}
+                            >
+                              Eliminar
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!educationalContentPosts.length && (
+                <p className="py-6 text-sm text-muted-foreground">Todavia no hay contenidos educativos registrados.</p>
+              )}
             </div>
           </div>
 

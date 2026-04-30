@@ -29,6 +29,7 @@ import { UsersService } from '../users/users.service';
 type CreateManagedPostBody = {
   title: string;
   description: string;
+  contentBody?: string;
   categoryId: string;
   type: 'educational' | 'community' | 'liquidation';
   learningRoute?: string;
@@ -41,6 +42,10 @@ type CreateManagedPostBody = {
     name: string;
     url: string;
   }>;
+  status?: 'draft' | 'published' | 'archived';
+  accessType?: 'free' | 'professional' | 'premium';
+  isFeatured?: boolean | string;
+  expertName?: string;
 };
 
 type UpdateUserStatusBody = {
@@ -270,6 +275,7 @@ export class AdminController {
     return this.postsService.createPost({
       title: body.title,
       description: body.description,
+      contentBody: body.contentBody,
       categoryId: body.categoryId,
       type: body.type,
       learningRoute: body.learningRoute,
@@ -277,9 +283,106 @@ export class AdminController {
       videoUrl: uploadedVideoUrl ?? body.videoUrl,
       thumbnailUrl: uploadedThumbnailUrl ?? uploadedImageUrl ?? body.thumbnailUrl,
       resources: parsedResources,
+      status: body.status,
+      accessType: body.accessType,
+      isFeatured: this.parseBoolean(body.isFeatured),
+      expertName: body.expertName,
       authorId: user.sub,
       isAdmin: true,
     });
+  }
+
+  @Patch('posts/:id')
+  @UseInterceptors(
+    FileFieldsInterceptor([
+      { name: 'mainMedia', maxCount: 1 },
+      { name: 'thumbnail', maxCount: 1 },
+    ], {
+      storage: diskStorage({
+        destination: (_req, _file, callback) => {
+          const uploadDir = join(process.cwd(), 'uploads');
+          if (!existsSync(uploadDir)) {
+            mkdirSync(uploadDir, { recursive: true });
+          }
+          callback(null, uploadDir);
+        },
+        filename: (_req, file, callback) => {
+          const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname || '')}`;
+          callback(null, uniqueName);
+        },
+      }),
+      limits: {
+        fileSize: adminUploadMaxFileSize,
+      },
+    }),
+  )
+  async updateManagedPost(
+    @Param('id') id: string,
+    @Body() body: CreateManagedPostBody,
+    @UploadedFiles() files: {
+      mainMedia?: Array<{ filename: string; path: string; originalname: string; mimetype: string }>;
+      thumbnail?: Array<{ filename: string; path: string; originalname: string; mimetype: string }>;
+    },
+  ) {
+    const mainMedia = files?.mainMedia?.[0];
+    const thumbnail = files?.thumbnail?.[0];
+    const parsedResources = this.parseResources(body.resources);
+    const uploadedVideoUrl =
+      body.mediaType === 'video' && mainMedia
+        ? await this.uploadsService.saveFile({
+            filePath: mainMedia.path,
+            relativePath: mainMedia.filename,
+            originalName: mainMedia.originalname,
+            mimeType: mainMedia.mimetype,
+          })
+        : undefined;
+    const uploadedImageUrl =
+      body.mediaType === 'image' && mainMedia
+        ? await this.uploadsService.saveFile({
+            filePath: mainMedia.path,
+            relativePath: mainMedia.filename,
+            originalName: mainMedia.originalname,
+            mimeType: mainMedia.mimetype,
+          })
+        : undefined;
+    const uploadedThumbnailUrl = thumbnail
+      ? await this.uploadsService.saveFile({
+          filePath: thumbnail.path,
+          relativePath: thumbnail.filename,
+          originalName: thumbnail.originalname,
+          mimeType: thumbnail.mimetype,
+        })
+      : undefined;
+
+    if (mainMedia) {
+      rmSync(mainMedia.path, { force: true });
+    }
+
+    if (thumbnail) {
+      rmSync(thumbnail.path, { force: true });
+    }
+
+    return this.postsService.updatePost(id, {
+      title: body.title,
+      description: body.description,
+      contentBody: body.contentBody,
+      categoryId: body.categoryId,
+      type: body.type,
+      learningRoute: body.learningRoute,
+      mediaType: body.mediaType,
+      videoUrl: uploadedVideoUrl ?? body.videoUrl,
+      thumbnailUrl: uploadedThumbnailUrl ?? uploadedImageUrl ?? body.thumbnailUrl,
+      resources: parsedResources,
+      status: body.status,
+      accessType: body.accessType,
+      isFeatured: this.parseBoolean(body.isFeatured),
+      expertName: body.expertName,
+    });
+  }
+
+  @Patch('posts/:id/archive')
+  archivePost(@Param('id') id: string) {
+    return this.postsService.archivePost(id);
   }
 
   @Delete('posts/:id')
@@ -338,6 +441,18 @@ export class AdminController {
     } catch {
       return [];
     }
+  }
+
+  private parseBoolean(value: boolean | string | undefined): boolean | undefined {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      return value === 'true';
+    }
+
+    return undefined;
   }
 
   private getUploadDir() {

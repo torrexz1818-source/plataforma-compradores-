@@ -97,11 +97,22 @@ export interface Post {
   category: PostCategory;
   title: string;
   description: string;
-  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4';
+  contentBody?: string;
+  learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
   mediaType?: 'video' | 'image';
   videoUrl?: string;
   thumbnailUrl?: string;
   resources?: PostResource[];
+  status?: 'draft' | 'published' | 'archived';
+  accessType?: 'free' | 'professional' | 'premium';
+  isFeatured?: boolean;
+  expertName?: string;
+  metrics?: {
+    views: number;
+    downloads: number;
+    saves: number;
+    comments: number;
+  };
   type: 'educational' | 'community' | 'liquidation';
   likes: number;
   comments: number;

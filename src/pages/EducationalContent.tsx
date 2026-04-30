@@ -194,7 +194,8 @@ const EducationalContent = () => {
 
   const educationalPosts = useMemo(() => {
     const directPosts = educationalPostsQuery.data ?? [];
-    return directPosts.length ? directPosts : homeFeedQuery.data?.educationalPosts ?? [];
+    const posts = directPosts.length ? directPosts : homeFeedQuery.data?.educationalPosts ?? [];
+    return posts.filter((post) => resolvePostLearningRoute(post) !== 'ruta-5' && post.category.slug !== 'mejorar-skill');
   }, [educationalPostsQuery.data, homeFeedQuery.data?.educationalPosts]);
   const continueWatching = useMemo(() => homeFeedQuery.data?.continueWatching ?? [], [homeFeedQuery.data?.continueWatching]);
   const isLoading = homeFeedQuery.isLoading || educationalPostsQuery.isLoading;
