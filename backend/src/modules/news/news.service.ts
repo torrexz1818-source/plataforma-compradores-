@@ -1,5 +1,4 @@
 import {
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -175,10 +174,6 @@ export class NewsService {
 
     if (data.parentId && !parentComment) {
       throw new NotFoundException('Comentario padre no encontrado');
-    }
-
-    if (data.parentId && author.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Solo admins pueden responder comentarios en Novedades');
     }
 
     const now = new Date();

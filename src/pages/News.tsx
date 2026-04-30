@@ -1,8 +1,8 @@
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ExternalLink, FileText, Heart, ImagePlus, Link, MessageCircle, Send } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import { ChevronDown, ExternalLink, FileText, Heart, ImagePlus, Link, MessageCircle, Send } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createNewsComment, createNewsPost, getNewsPosts, resolveApiAssetUrl, toggleNewsLike } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { NewsComment, NewsPost } from '@/types';
@@ -30,23 +30,59 @@ function formatRelativeTime(value: string) {
 
 const CommentBranch = ({
   comment,
-  isAdmin,
   postId,
   onReply,
   autoExpandReply,
+  isReply = false,
 }: {
   comment: NewsComment;
-  isAdmin: boolean;
   postId: string;
   onReply: (postId: string, payload: { content: string; parentId?: string }) => Promise<void>;
   autoExpandReply?: boolean;
+  isReply?: boolean;
 }) => {
+  const navigate = useNavigate();
   const [replyOpen, setReplyOpen] = useState(Boolean(autoExpandReply));
+  const [showReplies, setShowReplies] = useState(true);
   const [replyText, setReplyText] = useState('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const replyInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const initials = comment.user.fullName.split(' ').map((name) => name[0]).join('').slice(0, 2);
+  const commentDate = new Date(comment.createdAt).toLocaleString('es-PE', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
+
+  useEffect(() => {
+    if (replyOpen) {
+      replyInputRef.current?.focus();
+    }
+  }, [replyOpen]);
+
+  const handleReply = async () => {
+    if (!replyText.trim() || isSubmittingReply) return;
+
+    setIsSubmittingReply(true);
+    try {
+      await onReply(postId, { content: replyText, parentId: comment.id });
+      setReplyText('');
+      setReplyOpen(false);
+      setShowReplies(true);
+    } finally {
+      setIsSubmittingReply(false);
+    }
+  };
+
+  const handleReplyKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void handleReply();
+    }
+  };
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-2xl border border-primary/15 bg-white/80 px-4 py-3">
+    <div className={`${isReply ? 'ml-5 mt-3 border-l border-[rgba(14,16,158,0.12)] pl-4' : 'mt-4'} min-w-0 space-y-3`}>
+      <div className="rounded-[20px] border border-[rgba(14,16,158,0.06)] bg-[rgba(255,255,255,0.92)] px-4 py-3 shadow-[0_8px_22px_rgba(14,16,158,0.04)]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-foreground">{comment.user.fullName}</p>
@@ -54,53 +90,61 @@ const CommentBranch = ({
               {comment.user.company} · {formatRelativeTime(comment.createdAt)}
             </p>
           </div>
-          {isAdmin && !comment.replies.length && (
+          <button
+            type="button"
+            onClick={() => setReplyOpen((current) => !current)}
+            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[#0E109E] transition-colors hover:bg-[rgba(14,16,158,0.06)]"
+          >
+            <MessageCircle className="h-3.5 w-3.5" />
+            Responder
+          </button>
+          {comment.replies.length > 0 && (
             <button
               type="button"
-              onClick={() => setReplyOpen((current) => !current)}
-              className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              onClick={() => setShowReplies((current) => !current)}
+              className="mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[#0E109E] transition-colors hover:bg-[rgba(14,16,158,0.06)]"
             >
-              Responder
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showReplies ? 'rotate-180' : ''}`} />
+              {showReplies ? 'Ocultar respuestas' : `Ver respuestas (${comment.replies.length})`}
             </button>
           )}
         </div>
         <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/80">{comment.content}</p>
       </div>
 
-      {replyOpen && isAdmin && (
-        <div className="ml-4 rounded-2xl border border-primary/15 bg-primary/5 p-3">
+      {replyOpen && (
+        <div className="ml-4 rounded-2xl border border-[rgba(14,16,158,0.12)] bg-[rgba(255,255,255,0.92)] p-3">
           <Textarea
+            ref={replyInputRef}
             value={replyText}
             onChange={(event) => setReplyText(event.target.value)}
-            placeholder="Responder comentario"
-            className="min-h-[96px] rounded-xl bg-white"
+            onKeyDown={handleReplyKeyDown}
+            placeholder="Escribe una respuesta..."
+            className="min-h-[72px] w-full resize-none border-0 bg-transparent px-0 py-0 text-sm leading-6 shadow-none focus-visible:ring-0"
           />
           <div className="mt-3 flex justify-end">
             <Button
               type="button"
               size="sm"
-              disabled={!replyText.trim()}
-              onClick={async () => {
-                await onReply(postId, { content: replyText, parentId: comment.id });
-                setReplyText('');
-                setReplyOpen(false);
-              }}
+              className="h-9 min-w-[132px] rounded-full bg-[#B2EB4A] px-5 text-[#0E109E] hover:bg-[#B2EB4A]/85"
+              disabled={!replyText.trim() || isSubmittingReply}
+              onClick={() => void handleReply()}
             >
-              <Send className="mr-2 h-4 w-4" />
+              <Send className="mr-1 h-4 w-4" />
               Responder
             </Button>
           </div>
         </div>
       )}
 
-      {comment.replies.map((reply) => (
-        <div key={reply.id} className="ml-4 border-l border-primary/15 pl-4">
-          <div className="rounded-2xl border border-primary/15 bg-primary/5 px-4 py-3">
-            <p className="text-sm font-medium text-foreground">{reply.user.fullName}</p>
-            <p className="text-xs text-muted-foreground/70">{formatRelativeTime(reply.createdAt)}</p>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/80">{reply.content}</p>
-          </div>
-        </div>
+      {showReplies && comment.replies.map((reply) => (
+        <CommentBranch
+          key={reply.id}
+          comment={reply}
+          postId={postId}
+          onReply={onReply}
+          isReply
+        />
       ))}
     </div>
   );
@@ -108,25 +152,43 @@ const CommentBranch = ({
 
 const NewsCard = ({
   post,
-  isAdmin,
   highlighted,
   onToggleLike,
   onComment,
 }: {
   post: NewsPost;
-  isAdmin: boolean;
   highlighted: boolean;
   onToggleLike: (postId: string) => Promise<void>;
   onComment: (postId: string, payload: { content: string; parentId?: string }) => Promise<void>;
 }) => {
   const [commentsOpen, setCommentsOpen] = useState(highlighted);
   const [commentText, setCommentText] = useState('');
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   useEffect(() => {
     if (highlighted) {
       setCommentsOpen(true);
     }
   }, [highlighted]);
+
+  const handleSubmitComment = async () => {
+    if (!commentText.trim() || isSubmittingComment) return;
+
+    setIsSubmittingComment(true);
+    try {
+      await onComment(post.id, { content: commentText });
+      setCommentText('');
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
+
+  const handleCommentKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void handleSubmitComment();
+    }
+  };
 
   return (
     <motion.article
@@ -208,24 +270,38 @@ const NewsCard = ({
               className="overflow-hidden"
             >
               <div className="space-y-5 border-t border-primary/15 pt-5">
-                <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <h3 className="text-lg font-medium text-foreground">Comentarios ({post.commentsCount})</h3>
+                  <button
+                    type="button"
+                    className="rounded-full border border-[#5A31D5]/24 bg-[#5A31D5]/16 px-3 py-1.5 text-xs font-medium text-[#4B2BC7]"
+                  >
+                    Mas recientes
+                  </button>
+                </div>
+
+                <div className="rounded-[24px] border border-[#0E109E] bg-white p-3 shadow-sm">
                   <Textarea
                     value={commentText}
                     onChange={(event) => setCommentText(event.target.value)}
-                    placeholder="Escribe tu comentario"
-                    className="min-h-[110px] rounded-2xl bg-white"
+                    onKeyDown={handleCommentKeyDown}
+                    placeholder="Escribe un comentario publico..."
+                    className="min-h-[96px] w-full resize-none border-0 bg-transparent px-0 py-0 text-sm leading-6 shadow-none focus-visible:ring-0"
                   />
-                  <div className="mt-3 flex justify-end">
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-[#0E109E]">
+                      <Heart className="h-4 w-4" />
+                      <span>Comenta como en una publicacion social</span>
+                    </div>
                     <Button
                       type="button"
-                      disabled={!commentText.trim()}
-                      onClick={async () => {
-                        await onComment(post.id, { content: commentText });
-                        setCommentText('');
-                      }}
+                      size="sm"
+                      className="min-w-[132px] rounded-full bg-[#B2EB4A] px-5 text-[#0E109E] hover:bg-[#B2EB4A]/85"
+                      disabled={!commentText.trim() || isSubmittingComment}
+                      onClick={() => void handleSubmitComment()}
                     >
-                      <Send className="mr-2 h-4 w-4" />
-                      Publicar comentario
+                      <Send className="mr-1 h-4 w-4" />
+                      Publicar
                     </Button>
                   </div>
                 </div>
@@ -240,7 +316,6 @@ const NewsCard = ({
                     <CommentBranch
                       key={comment.id}
                       comment={comment}
-                      isAdmin={isAdmin}
                       postId={post.id}
                       onReply={onComment}
                       autoExpandReply={highlighted}
@@ -424,7 +499,6 @@ const News = () => {
             <NewsCard
               key={post.id}
               post={post}
-              isAdmin={isAdmin}
               highlighted={highlightedPostId === post.id}
               onToggleLike={async (postId) => {
                 await likeMutation.mutateAsync(postId);
