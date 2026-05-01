@@ -1,4 +1,4 @@
-name: Deploy To Namecheap cPanel
+name: Deploy Frontend And Render Backend
 
 on:
   push:
@@ -21,9 +21,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            backend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
@@ -32,22 +30,6 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL || 'https://api.buyernodus.com' }}
-
-      - name: Install backend dependencies
-        run: npm ci
-        working-directory: backend
-
-      - name: Build backend
-        run: npm run build
-        working-directory: backend
-
-      - name: Prepare backend package
-        run: |
-          mkdir -p .deploy/backend
-          cp backend/package.json .deploy/backend/package.json
-          cp backend/package-lock.json .deploy/backend/package-lock.json
-          cp backend/app.js .deploy/backend/app.js
-          cp -R backend/dist .deploy/backend/dist
 
       - name: Deploy frontend to public_html
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
@@ -61,52 +43,11 @@ jobs:
           server-dir: ${{ vars.CPANEL_FRONTEND_DIR || '/public_html/' }}
           state-name: .ftp-state-frontend.json
 
-      - name: Deploy backend bundle to app root
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.CPANEL_FTP_HOST }}
-          username: ${{ secrets.CPANEL_FTP_USERNAME }}
-          password: ${{ secrets.CPANEL_FTP_PASSWORD }}
-          protocol: ftp
-          port: ${{ secrets.CPANEL_FTP_PORT || 21 }}
-          local-dir: ./.deploy/backend/
-          server-dir: ${{ vars.CPANEL_BACKEND_DIR || '/backend/' }}
-          state-name: .ftp-state-backend.json
-
-      - name: Trigger Passenger restart
+      - name: Require Render deploy hook
+        if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' }}
         run: |
-          mkdir -p .deploy/restart
-          date -u +"%Y-%m-%dT%H:%M:%SZ" > .deploy/restart/restart.txt
-
-      - name: Upload restart file
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.CPANEL_FTP_HOST }}
-          username: ${{ secrets.CPANEL_FTP_USERNAME }}
-          password: ${{ secrets.CPANEL_FTP_PASSWORD }}
-          protocol: ftp
-          port: ${{ secrets.CPANEL_FTP_PORT || 21 }}
-          local-dir: ./.deploy/restart/
-          server-dir: ${{ vars.CPANEL_PASSENGER_TMP_DIR || '/api.buyernodus.com/tmp/' }}
-          state-name: .ftp-state-restart.json
+          echo "::error::Missing GitHub Actions secret RENDER_DEPLOY_HOOK_URL. Add the Render deploy hook URL as a repository secret to deploy the backend."
+          exit 1
 
       - name: Trigger Render backend deploy
-        if: ${{ env.RENDER_DEPLOY_HOOK_URL != '' }}
         run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
-
-      - name: Install backend dependencies and restart app over SSH
-        if: ${{ env.CPANEL_SSH_HOST != '' }}
-        env:
-          CPANEL_SSH_HOST: ${{ secrets.CPANEL_SSH_HOST }}
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.CPANEL_SSH_HOST }}
-          username: ${{ secrets.CPANEL_SSH_USERNAME }}
-          password: ${{ secrets.CPANEL_SSH_PASSWORD }}
-          port: ${{ secrets.CPANEL_SSH_PORT || 22 }}
-          script: |
-            cd ${{ vars.CPANEL_BACKEND_ABS_PATH || '/home/supptjug/backend' }}
-            npm install --omit=dev
-            npm run build
-            mkdir -p ${{ vars.CPANEL_PASSENGER_TMP_ABS_PATH || '/home/supptjug/api.buyernodus.com/tmp' }}
-            touch ${{ vars.CPANEL_PASSENGER_TMP_ABS_PATH || '/home/supptjug/api.buyernodus.com/tmp' }}/restart.txt
