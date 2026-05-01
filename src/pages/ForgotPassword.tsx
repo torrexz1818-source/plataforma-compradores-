@@ -64,7 +64,7 @@ const ForgotPassword = () => {
       const normalized = normalizeEmail(parsed.data.email);
       setEmail(normalized);
       const response = await requestPasswordReset(normalized);
-      setMessage(response.message);
+      setMessage('Ya se envio el correo de recuperacion. Revisa tu bandeja de entrada.');
       setStep('code');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo procesar la solicitud');
