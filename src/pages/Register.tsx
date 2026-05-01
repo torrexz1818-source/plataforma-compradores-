@@ -7,6 +7,7 @@ import { createSupplierOnboardingSession, registerSupplierOnboardingShare } from
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { z } from 'zod';
+import { normalizeEmail, validateRealEmail } from '@/lib/emailValidation';
 
 const registerSchema = z.object({
   fullName: z.string().trim().min(1, 'Nombre requerido').max(100),
@@ -17,8 +18,13 @@ const registerSchema = z.object({
   sector: z.string().trim().min(1, 'Sector requerido'),
   employees: z.string().optional(),
   phone: z.string().trim().min(1, 'Telefono requerido').max(20),
-  email: z.string().trim().email('Formato de correo invalido').max(255),
-  password: z.string().min(6, 'Minimo 6 caracteres'),
+  email: z.string().max(255).superRefine((value, ctx) => {
+    const result = validateRealEmail(value);
+    if (result !== true) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result });
+    }
+  }),
+  password: z.string().min(8, 'Minimo 8 caracteres'),
   role: z.enum(['buyer', 'supplier'], { required_error: 'Selecciona un tipo de cuenta' }),
   linkedin: z.string().trim().max(200).optional(),
   website: z.string().trim().max(200).optional(),
@@ -513,7 +519,7 @@ const Register = () => {
           form.role === 'supplier' && shareSessionId
             ? { sessionId: shareSessionId }
             : undefined,
-        email: form.email,
+        email: normalizeEmail(form.email),
         password: form.password,
         role: form.role as 'buyer' | 'supplier',
       });
@@ -541,7 +547,7 @@ const Register = () => {
     form.sector.trim().length > 0 &&
     form.phone.trim().length > 0 &&
     form.email.trim().length > 0 &&
-    form.password.length >= 6 &&
+    form.password.length >= 8 &&
     form.supplierType.trim().length > 0 &&
     form.offerCategories.length > 0;
   const supplierCanSubmit =
@@ -666,7 +672,13 @@ const Register = () => {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <FieldWrap label="Correo electronico" required error={errors.email}>
-                <Input type="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="ana@empresa.com" />
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => set('email', e.target.value)}
+                  onBlur={() => set('email', normalizeEmail(form.email))}
+                  placeholder="ana@empresa.com"
+                />
               </FieldWrap>
               <FieldWrap label="Numero de celular" required error={errors.phone}>
                 <Input type="tel" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="+51 999 999 999" />
@@ -890,7 +902,7 @@ const Register = () => {
                     type={showPw ? 'text' : 'password'}
                     value={form.password}
                     onChange={(e) => set('password', e.target.value)}
-                    placeholder="Minimo 6 caracteres"
+                    placeholder="Minimo 8 caracteres"
                     className="pr-16"
                   />
                   <button

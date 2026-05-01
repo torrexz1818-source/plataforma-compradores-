@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { motion } from 'framer-motion';
 import {
@@ -9,9 +9,15 @@ import {
 } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { normalizeEmail, validateRealEmail } from '@/lib/emailValidation';
 
 const emailSchema = z.object({
-  email: z.string().trim().email('Correo invalido'),
+  email: z.string().superRefine((value, ctx) => {
+    const result = validateRealEmail(value);
+    if (result !== true) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result });
+    }
+  }),
 });
 
 const codeSchema = z.object({
@@ -20,8 +26,8 @@ const codeSchema = z.object({
 
 const passwordSchema = z
   .object({
-    password: z.string().min(6, 'Minimo 6 caracteres'),
-    confirmPassword: z.string().min(6, 'Confirma tu contrasena'),
+    password: z.string().min(8, 'Minimo 8 caracteres'),
+    confirmPassword: z.string().min(8, 'Confirma tu contrasena'),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Las contrasenas no coinciden',
@@ -32,10 +38,13 @@ type Step = 'email' | 'code' | 'password' | 'done';
 
 const ForgotPassword = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>('email');
-  const [email, setEmail] = useState('');
+  const [searchParams] = useSearchParams();
+  const tokenFromUrl = searchParams.get('token')?.trim() || '';
+  const emailFromUrl = normalizeEmail(searchParams.get('email') || '');
+  const [step, setStep] = useState<Step>(tokenFromUrl && emailFromUrl ? 'password' : 'email');
+  const [email, setEmail] = useState(emailFromUrl);
   const [code, setCode] = useState('');
-  const [resetToken, setResetToken] = useState('');
+  const [resetToken, setResetToken] = useState(tokenFromUrl);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -52,7 +61,9 @@ const ForgotPassword = () => {
     setError('');
     setIsSubmitting(true);
     try {
-      const response = await requestPasswordReset(parsed.data.email);
+      const normalized = normalizeEmail(parsed.data.email);
+      setEmail(normalized);
+      const response = await requestPasswordReset(normalized);
       setMessage(response.message);
       setStep('code');
     } catch (err) {
@@ -94,11 +105,11 @@ const ForgotPassword = () => {
     setIsSubmitting(true);
     try {
       const response = await resetPasswordWithToken({
-        email,
+        email: normalizeEmail(email),
         resetToken,
         newPassword: parsed.data.password,
       });
-      setMessage(response.message);
+      setMessage(response.message || 'Tu contraseña fue actualizada correctamente. Ahora puedes iniciar sesión.');
       setStep('done');
     } catch (err) {
       setError(
@@ -121,7 +132,7 @@ const ForgotPassword = () => {
           Recuperar contrasena
         </h1>
         <p className="text-sm text-muted-foreground mb-5">
-          {step === 'email' && 'Ingresa tu correo para recibir un codigo de verificacion.'}
+          {step === 'email' && 'Ingresa tu correo para recibir instrucciones de restablecimiento.'}
           {step === 'code' &&
             'Revisa tu correo y escribe el codigo de 6 digitos.'}
           {step === 'password' && 'Define una nueva contrasena segura.'}
@@ -135,6 +146,7 @@ const ForgotPassword = () => {
               placeholder="tu@empresa.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => setEmail(normalizeEmail(email))}
             />
             <Button
               className="w-full"
@@ -177,7 +189,7 @@ const ForgotPassword = () => {
           <div className="space-y-4">
             <Input
               type="password"
-              placeholder="Nueva contrasena"
+              placeholder="Nueva contrasena (minimo 8 caracteres)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />

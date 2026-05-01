@@ -308,6 +308,104 @@ export class GoogleCalendarService {
     }
   }
 
+  async updateEvent(input: {
+    eventId: string;
+    title?: string;
+    description?: string;
+    startDateTime: string;
+    endDateTime: string;
+    attendeeEmails?: string[];
+    organizer?: UserCalendarConfig | null;
+  }): Promise<CalendarMeetingResult> {
+    const config = this.resolveCalendarConfig(input.organizer);
+    const accessToken = await this.getAccessToken(config.refreshToken);
+    const calendarId = config.calendarId || 'primary';
+    const timezone =
+      config.timezone ||
+      process.env.GOOGLE_CALENDAR_TIMEZONE?.trim() ||
+      process.env.APP_TIMEZONE?.trim() ||
+      'America/Lima';
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(input.eventId)}?sendUpdates=all`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          ...(input.title ? { summary: input.title } : {}),
+          ...(input.description ? { description: input.description } : {}),
+          start: {
+            dateTime: input.startDateTime,
+            timeZone: timezone,
+          },
+          end: {
+            dateTime: input.endDateTime,
+            timeZone: timezone,
+          },
+          ...(input.attendeeEmails
+            ? { attendees: input.attendeeEmails.map((email) => ({ email })) }
+            : {}),
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(
+        `No se pudo actualizar el evento en Google Calendar: ${message || response.statusText}`,
+      );
+    }
+
+    const data = (await response.json()) as {
+      id?: string;
+      htmlLink?: string;
+      hangoutLink?: string;
+      conferenceData?: {
+        entryPoints?: Array<{ uri?: string }>;
+      };
+    };
+
+    return {
+      eventId: data.id ?? input.eventId,
+      htmlLink: data.htmlLink,
+      meetLink:
+        data.hangoutLink ??
+        data.conferenceData?.entryPoints?.find((entry) => entry.uri)?.uri,
+      organizerCalendarId: calendarId,
+    };
+  }
+
+  async deleteEvent(input: {
+    eventId: string;
+    organizer?: UserCalendarConfig | null;
+  }): Promise<void> {
+    const config = this.resolveCalendarConfig(input.organizer);
+    const accessToken = await this.getAccessToken(config.refreshToken);
+    const calendarId = config.calendarId || 'primary';
+    const response = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(input.eventId)}?sendUpdates=all`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      },
+    );
+
+    if (response.status === 404 || response.status === 410) {
+      return;
+    }
+
+    if (!response.ok && response.status !== 204) {
+      const message = await response.text();
+      throw new Error(
+        `No se pudo cancelar el evento en Google Calendar: ${message || response.statusText}`,
+      );
+    }
+  }
+
   async exchangeAuthorizationCode(code: string): Promise<OAuthTokenExchangeResult> {
     const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -383,6 +481,13 @@ export class GoogleCalendarService {
   private resolveCalendarConfig(
     organizer?: UserCalendarConfig | null,
   ): UserCalendarConfig {
+    const mode = (process.env.GOOGLE_CALENDAR_MODE?.trim() || 'real').toLowerCase();
+    if (mode === 'disabled' || mode === 'mock') {
+      throw new Error(
+        'Google Calendar esta desactivado. Define GOOGLE_CALENDAR_MODE=real para crear eventos reales.',
+      );
+    }
+
     const refreshToken =
       organizer?.refreshToken?.trim() ||
       process.env.GOOGLE_REFRESH_TOKEN?.trim();

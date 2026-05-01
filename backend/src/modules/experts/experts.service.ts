@@ -515,6 +515,214 @@ export class ExpertsService {
     };
   }
 
+  async cancelAppointment(input: { appointmentId: string; userId: string }) {
+    const appointment = await this.collection().findOne({ id: input.appointmentId });
+
+    if (!appointment) {
+      throw new NotFoundException('Cita no encontrada');
+    }
+
+    if (![appointment.buyerId, appointment.expertId].includes(input.userId)) {
+      throw new ForbiddenException('No autorizado para cancelar esta cita');
+    }
+
+    if (appointment.status === 'cancelled') {
+      return { appointment: this.toPublicAppointment(appointment) };
+    }
+
+    const expertCalendarConnection = await this.calendarConnectionsCollection().findOne({
+      userId: appointment.expertId,
+    });
+    const buyerCalendarConnection = await this.calendarConnectionsCollection().findOne({
+      userId: appointment.buyerId,
+    });
+    const expertOrganizer = expertCalendarConnection
+      ? this.toCalendarConfig(expertCalendarConnection)
+      : undefined;
+    const buyerOrganizer = buyerCalendarConnection
+      ? this.toCalendarConfig(buyerCalendarConnection)
+      : undefined;
+    const sameGoogleEventCount = appointment.googleCalendarEventId
+      ? await this.collection().countDocuments({
+          id: { $ne: appointment.id },
+          googleCalendarEventId: appointment.googleCalendarEventId,
+          status: 'scheduled',
+        })
+      : 0;
+
+    if (
+      appointment.googleCalendarEventId &&
+      sameGoogleEventCount === 0
+    ) {
+      await this.calendarService.deleteEvent({
+        eventId: appointment.googleCalendarEventId,
+        organizer: expertOrganizer,
+      });
+    }
+
+    if (appointment.buyerGoogleCalendarEventId && buyerCalendarConnection) {
+      await this.calendarService.deleteEvent({
+        eventId: appointment.buyerGoogleCalendarEventId,
+        organizer: buyerOrganizer,
+      });
+    }
+
+    const updated: ExpertAppointmentRecord = {
+      ...appointment,
+      status: 'cancelled',
+      updatedAt: new Date(),
+    };
+
+    await this.collection().updateOne(
+      { id: appointment.id },
+      {
+        $set: {
+          status: updated.status,
+          updatedAt: updated.updatedAt,
+        },
+      },
+    );
+
+    return { appointment: this.toPublicAppointment(updated) };
+  }
+
+  async rescheduleAppointment(input: {
+    appointmentId: string;
+    userId: string;
+    startsAt: string;
+  }) {
+    const appointment = await this.collection().findOne({ id: input.appointmentId });
+
+    if (!appointment) {
+      throw new NotFoundException('Cita no encontrada');
+    }
+
+    if (![appointment.buyerId, appointment.expertId].includes(input.userId)) {
+      throw new ForbiddenException('No autorizado para reprogramar esta cita');
+    }
+
+    if (appointment.status !== 'scheduled') {
+      throw new BadRequestException('Solo se pueden reprogramar citas activas');
+    }
+
+    const startsAt = new Date(input.startsAt);
+    if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() <= Date.now()) {
+      throw new BadRequestException('La nueva fecha debe ser futura y valida');
+    }
+
+    const expert = await this.usersService.findExpertById(appointment.expertId);
+    if (!expert) {
+      throw new NotFoundException('Experto no encontrado');
+    }
+
+    const weekday = WEEKDAY_LABELS[startsAt.getDay()];
+    const dayConfig = this.getWeeklyAvailability(expert).find((item) => item.day === weekday);
+    if (!this.isValidSlot(startsAt, dayConfig)) {
+      throw new BadRequestException(
+        'Selecciona un horario valido dentro de la disponibilidad configurada por el experto',
+      );
+    }
+
+    const endsAt = new Date(startsAt.getTime() + 60 * 60 * 1000);
+    const sameSlotAppointments = await this.collection()
+      .find({
+        id: { $ne: appointment.id },
+        expertId: appointment.expertId,
+        startsAt,
+        status: 'scheduled',
+      })
+      .toArray();
+
+    if (sameSlotAppointments.length >= MAX_GROUP_PARTICIPANTS) {
+      throw new ConflictException('Este horario ya completo los 3 cupos disponibles.');
+    }
+
+    const expertCalendarConnection = await this.calendarConnectionsCollection().findOne({
+      userId: appointment.expertId,
+    });
+    const buyerCalendarConnection = await this.calendarConnectionsCollection().findOne({
+      userId: appointment.buyerId,
+    });
+    const expertOrganizer = expertCalendarConnection
+      ? this.toCalendarConfig(expertCalendarConnection)
+      : undefined;
+    const buyerOrganizer = buyerCalendarConnection
+      ? this.toCalendarConfig(buyerCalendarConnection)
+      : undefined;
+
+    if (expertCalendarConnection) {
+      const busyWindows = await this.calendarService.getBusyWindows({
+        startDateTime: startsAt.toISOString(),
+        endDateTime: endsAt.toISOString(),
+        organizer: expertOrganizer,
+      });
+
+      const isSameEventWindow = appointment.startsAt.getTime() === startsAt.getTime();
+      if (busyWindows.length > 0 && !isSameEventWindow) {
+        throw new ConflictException(
+          'El experto ya tiene un evento en Google Calendar para ese horario.',
+        );
+      }
+    }
+
+    let googleCalendarHtmlLink = appointment.googleCalendarHtmlLink;
+    let googleMeetLink = appointment.googleMeetLink;
+    if (appointment.googleCalendarEventId) {
+      const updatedEvent = await this.calendarService.updateEvent({
+        eventId: appointment.googleCalendarEventId,
+        title: 'Reunion grupal con experto Nexu',
+        description: appointment.topic,
+        startDateTime: startsAt.toISOString(),
+        endDateTime: endsAt.toISOString(),
+        attendeeEmails: [appointment.buyerEmail, appointment.expertEmail],
+        organizer: expertOrganizer,
+      });
+      googleCalendarHtmlLink = updatedEvent.htmlLink ?? googleCalendarHtmlLink;
+      googleMeetLink = updatedEvent.meetLink ?? googleMeetLink;
+    }
+
+    let buyerGoogleCalendarHtmlLink = appointment.buyerGoogleCalendarHtmlLink;
+    if (appointment.buyerGoogleCalendarEventId && buyerCalendarConnection) {
+      const updatedBuyerEvent = await this.calendarService.updateEvent({
+        eventId: appointment.buyerGoogleCalendarEventId,
+        title: `Reunion grupal con ${appointment.expertName} - Nexu Experts`,
+        description: appointment.topic,
+        startDateTime: startsAt.toISOString(),
+        endDateTime: endsAt.toISOString(),
+        attendeeEmails: [appointment.expertEmail, appointment.buyerEmail],
+        organizer: buyerOrganizer,
+      });
+      buyerGoogleCalendarHtmlLink =
+        updatedBuyerEvent.htmlLink ?? buyerGoogleCalendarHtmlLink;
+    }
+
+    const updated: ExpertAppointmentRecord = {
+      ...appointment,
+      startsAt,
+      endsAt,
+      googleCalendarHtmlLink,
+      googleMeetLink,
+      buyerGoogleCalendarHtmlLink,
+      updatedAt: new Date(),
+    };
+
+    await this.collection().updateOne(
+      { id: appointment.id },
+      {
+        $set: {
+          startsAt: updated.startsAt,
+          endsAt: updated.endsAt,
+          googleCalendarHtmlLink: updated.googleCalendarHtmlLink,
+          googleMeetLink: updated.googleMeetLink,
+          buyerGoogleCalendarHtmlLink: updated.buyerGoogleCalendarHtmlLink,
+          updatedAt: updated.updatedAt,
+        },
+      },
+    );
+
+    return { appointment: this.toPublicAppointment(updated) };
+  }
+
   async getDashboard(userId: string, role: string) {
     const isExpertDashboard = role === 'expert';
     const filters = isExpertDashboard

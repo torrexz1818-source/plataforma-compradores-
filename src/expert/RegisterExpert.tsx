@@ -7,11 +7,17 @@ import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { normalizeEmail, validateRealEmail } from '@/lib/emailValidation';
 
 const expertSchema = z.object({
   fullName: z.string().trim().min(1, 'Nombre requerido'),
-  email: z.string().trim().email('Correo invalido'),
-  password: z.string().min(6, 'Minimo 6 caracteres'),
+  email: z.string().max(255).superRefine((value, ctx) => {
+    const result = validateRealEmail(value);
+    if (result !== true) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result });
+    }
+  }),
+  password: z.string().min(8, 'Minimo 8 caracteres'),
   currentProfessionalProfile: z.string().trim().min(1, 'Perfil profesional actual requerido'),
   industry: z.string().trim().min(1, 'Industria requerida'),
   specialty: z.string().trim().min(1, 'Especialidad requerida'),
@@ -169,7 +175,7 @@ const RegisterExpert = () => {
         position: form.currentProfessionalProfile,
         sector: form.industry,
         description: form.biography,
-        email: form.email,
+        email: normalizeEmail(form.email),
         password: form.password,
         role: 'expert',
         expertProfile: {
@@ -271,7 +277,12 @@ const RegisterExpert = () => {
                 <Input value={form.fullName} onChange={(e) => setValue('fullName', e.target.value)} />
               </Field>
               <Field label="Email" required error={errors.email}>
-                <Input type="email" value={form.email} onChange={(e) => setValue('email', e.target.value)} />
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setValue('email', e.target.value)}
+                  onBlur={() => setValue('email', normalizeEmail(form.email))}
+                />
               </Field>
             </div>
 

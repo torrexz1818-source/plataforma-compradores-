@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
+  cancelExpertAppointment,
   createExpertAppointment,
   getExpertAvailability,
   getExpertProfile,
@@ -22,6 +23,7 @@ import {
   getMyExpertAvailabilitySettings,
   getMyExpertAppointments,
   getMyExpertCalendarConnection,
+  rescheduleExpertAppointment,
   updateMyExpertAvailabilitySettings,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -44,6 +46,12 @@ function getTomorrowInputValue() {
   const date = new Date();
   date.setDate(date.getDate() + 1);
   return date.toISOString().slice(0, 10);
+}
+
+function toDateTimeLocalValue(value: string) {
+  const date = new Date(value);
+  const timezoneOffsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - timezoneOffsetMs).toISOString().slice(0, 16);
 }
 
 const TIME_OPTIONS = Array.from({ length: 15 }, (_, index) =>
@@ -76,6 +84,7 @@ const NexuExperts = () => {
   );
   const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
   const [isMeetingsOpen, setIsMeetingsOpen] = useState(true);
+  const [rescheduleValues, setRescheduleValues] = useState<Record<string, string>>({});
 
   const expertsQuery = useQuery({
     queryKey: ['experts'],
@@ -187,6 +196,54 @@ const NexuExperts = () => {
     onError: (error) => {
       toast({
         title: 'No se pudo agendar',
+        description: error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
+        variant: 'destructive',
+      });
+    },
+  });
+  const cancelAppointmentMutation = useMutation({
+    mutationFn: cancelExpertAppointment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['experts', 'appointments', 'mine'] });
+      queryClient.invalidateQueries({ queryKey: ['experts'] });
+      queryClient.invalidateQueries({
+        queryKey: ['experts', selectedExpertId, 'availability', selectedDate],
+      });
+      toast({
+        title: 'Cita cancelada',
+        description: 'La reserva fue cancelada y se sincronizo con Google Calendar cuando correspondia.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'No se pudo cancelar',
+        description: error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
+        variant: 'destructive',
+      });
+    },
+  });
+  const rescheduleAppointmentMutation = useMutation({
+    mutationFn: ({ appointmentId, startsAt }: { appointmentId: string; startsAt: string }) =>
+      rescheduleExpertAppointment(appointmentId, { startsAt }),
+    onSuccess: (result) => {
+      setRescheduleValues((current) => {
+        const next = { ...current };
+        delete next[result.appointment.id];
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ['experts', 'appointments', 'mine'] });
+      queryClient.invalidateQueries({ queryKey: ['experts'] });
+      queryClient.invalidateQueries({
+        queryKey: ['experts', selectedExpertId, 'availability', selectedDate],
+      });
+      toast({
+        title: 'Cita reprogramada',
+        description: 'La nueva fecha se sincronizo con Google Calendar cuando correspondia.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'No se pudo reprogramar',
         description: error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
         variant: 'destructive',
       });
@@ -400,7 +457,51 @@ const NexuExperts = () => {
                           <p className="text-sm text-muted-foreground">
                             Correo de confirmacion: {meeting.emailSent ? 'enviado' : 'pendiente'}
                           </p>
+                          <p className="text-sm text-muted-foreground">
+                            Estado de Calendar:{' '}
+                            {meeting.googleCalendarEventId
+                              ? 'evento creado'
+                              : 'pendiente de sincronizacion'}
+                          </p>
                         </div>
+                        {meeting.status === 'scheduled' ? (
+                          <div className="mt-3 flex flex-wrap items-end gap-2">
+                            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
+                              Nueva fecha y hora
+                              <Input
+                                type="datetime-local"
+                                value={
+                                  rescheduleValues[meeting.id] ??
+                                  toDateTimeLocalValue(meeting.startsAt)
+                                }
+                                onChange={(event) =>
+                                  setRescheduleValues((current) => ({
+                                    ...current,
+                                    [meeting.id]: event.target.value,
+                                  }))
+                                }
+                                className="h-9 w-[220px] rounded-full border-primary/25 bg-white text-xs"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextValue =
+                                  rescheduleValues[meeting.id] ??
+                                  toDateTimeLocalValue(meeting.startsAt);
+                                rescheduleAppointmentMutation.mutate({
+                                  appointmentId: meeting.id,
+                                  startsAt: new Date(nextValue).toISOString(),
+                                });
+                              }}
+                              disabled={rescheduleAppointmentMutation.isPending}
+                              className="inline-flex h-9 items-center gap-2 rounded-full border border-primary/25 bg-white px-3 text-xs font-medium text-primary disabled:opacity-60"
+                            >
+                              <Clock3 className="h-3.5 w-3.5" />
+                              Reprogramar
+                            </button>
+                          </div>
+                        ) : null}
                         <div className="mt-3 flex flex-wrap gap-2">
                           {meeting.googleMeetLink ? (
                             <a
@@ -427,6 +528,21 @@ const NexuExperts = () => {
                               Ver en tu Calendar
                             </a>
                           ) : null}
+                          {meeting.status === 'scheduled' ? (
+                            <button
+                              type="button"
+                              onClick={() => cancelAppointmentMutation.mutate(meeting.id)}
+                              disabled={cancelAppointmentMutation.isPending}
+                              className="inline-flex items-center gap-2 rounded-full border border-destructive/25 bg-destructive/5 px-3 py-1.5 text-xs font-medium text-destructive disabled:opacity-60"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Cancelar cita
+                            </button>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full border border-muted bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                              Cancelada
+                            </span>
+                          )}
                         </div>
                         {!meeting.emailSent && meeting.emailError ? (
                           <p className="mt-3 text-xs text-destructive">{meeting.emailError}</p>

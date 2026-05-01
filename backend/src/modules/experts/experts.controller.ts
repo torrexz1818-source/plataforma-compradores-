@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpStatus,
   Param,
+  Patch,
   Post,
   Query,
   Res,
@@ -201,6 +203,42 @@ export class ExpertsController {
       expertId: body.expertId,
       startsAt: body.startsAt,
       topic: body.topic,
+    });
+  }
+
+  @Patch('appointments/:id')
+  async rescheduleAppointment(
+    @Param('id') id: string,
+    @Body() body: { startsAt?: string },
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    if (!body.startsAt?.trim()) {
+      throw new BadRequestException('La nueva fecha y hora son obligatorias');
+    }
+
+    return this.expertsService.rescheduleAppointment({
+      appointmentId: id,
+      userId: user.sub,
+      startsAt: body.startsAt,
+    });
+  }
+
+  @Delete('appointments/:id')
+  async cancelAppointment(
+    @Param('id') id: string,
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    return this.expertsService.cancelAppointment({
+      appointmentId: id,
+      userId: user.sub,
     });
   }
 }

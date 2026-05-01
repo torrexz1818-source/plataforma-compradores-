@@ -1148,6 +1148,30 @@ export async function createExpertAppointment(payload: {
   );
 }
 
+export async function rescheduleExpertAppointment(
+  appointmentId: string,
+  payload: { startsAt: string },
+) {
+  return apiRequest<{ appointment: ExpertAppointment }>(
+    `/experts/appointments/${appointmentId}`,
+    {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function cancelExpertAppointment(appointmentId: string) {
+  return apiRequest<{ appointment: ExpertAppointment }>(
+    `/experts/appointments/${appointmentId}`,
+    {
+      method: 'DELETE',
+      auth: true,
+    },
+  );
+}
+
 export async function getMyExpertCalendarConnection() {
   return apiRequest<ExpertCalendarConnectionStatus>('/experts/me/calendar', {
     auth: true,

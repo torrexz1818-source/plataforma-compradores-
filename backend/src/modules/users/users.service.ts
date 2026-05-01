@@ -79,6 +79,8 @@ type ProfileViewNotificationRecord = {
   notifiedAt: Date;
 };
 
+const DUPLICATE_EMAIL_MESSAGE =
+  'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.';
 
 @Injectable()
 export class UsersService {
@@ -89,16 +91,17 @@ export class UsersService {
   ) {}
 
   async createUser(data: CreateUserData): Promise<User> {
-    const existingUser = await this.findByEmail(data.email);
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const existingUser = await this.findByEmail(normalizedEmail);
 
     if (existingUser) {
-      throw new ConflictException('Email already in use');
+      throw new ConflictException(DUPLICATE_EMAIL_MESSAGE);
     }
 
     const now = new Date();
     const user: User = {
       id: crypto.randomUUID(),
-      email: data.email.toLowerCase(),
+      email: normalizedEmail,
       passwordHash: data.passwordHash,
       fullName: data.fullName,
       company: data.company,
@@ -128,7 +131,15 @@ export class UsersService {
       updatedAt: now,
     };
 
-    await this.usersRepository.create(user);
+    try {
+      await this.usersRepository.create(user);
+    } catch (error) {
+      if (this.isDuplicateKeyError(error)) {
+        throw new ConflictException(DUPLICATE_EMAIL_MESSAGE);
+      }
+
+      throw error;
+    }
     await this.ensureMembershipRecord(user);
     return user;
   }
@@ -1032,5 +1043,14 @@ export class UsersService {
 
   private escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  private isDuplicateKeyError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: number }).code === 11000
+    );
   }
 }

@@ -119,6 +119,19 @@ const OTP_RATE_LIMIT_MAX_REQUESTS = 5;
 const OTP_MAX_VERIFY_ATTEMPTS = 5;
 const SUPPLIER_ONBOARDING_REQUIRED_SHARES = 3;
 const SUPPLIER_ONBOARDING_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const TEMPORARY_EMAIL_DOMAINS = new Set([
+  '10minutemail.com',
+  '20minutemail.com',
+  'guerrillamail.com',
+  'mailinator.com',
+  'tempmail.com',
+  'temp-mail.org',
+  'throwaway.email',
+  'yopmail.com',
+]);
+const DUPLICATE_EMAIL_MESSAGE =
+  'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.';
 const DEFAULT_EXPERT_WEEKLY_AVAILABILITY = [
   {
     day: 'Lunes',
@@ -252,11 +265,11 @@ export class AuthService {
   }
 
   async register(data: RegisterRequestDto): Promise<AuthResponse> {
-    const email = this.normalizeEmail(data.email);
+    const email = await this.validateAndNormalizeEmail(data.email);
     const existingUser = await this.usersService.findByEmail(email);
 
     if (existingUser) {
-      throw new ConflictException('Email already in use');
+      throw new ConflictException(DUPLICATE_EMAIL_MESSAGE);
     }
 
     const supplierOnboardingSession =
@@ -267,7 +280,9 @@ export class AuthService {
         : null;
 
     const passwordHash = await bcrypt.hash(data.password, 10);
-    const user = await this.usersService.createUser({
+    let user: User;
+    try {
+      user = await this.usersService.createUser({
       email,
       passwordHash,
       fullName: data.fullName,
@@ -353,7 +368,14 @@ export class AuthService {
           : data.role === 'expert'
             ? UserRole.EXPERT
             : UserRole.BUYER,
-    });
+      });
+    } catch (error) {
+      if (this.isDuplicateKeyError(error)) {
+        throw new ConflictException(DUPLICATE_EMAIL_MESSAGE);
+      }
+
+      throw error;
+    }
 
     if (supplierOnboardingSession) {
       await this.consumeSupplierOnboardingSession(
@@ -442,6 +464,12 @@ export class AuthService {
 
   async requestPasswordReset(email: string, ipAddress: string) {
     const normalizedEmail = this.normalizeEmail(email);
+    if (!this.isEmailFormatValid(normalizedEmail)) {
+      return {
+        message:
+          'Si el correo está registrado, recibirás instrucciones para restablecer tu contraseña.',
+      };
+    }
     await this.applyOtpRateLimit(normalizedEmail, ipAddress);
 
     const user = await this.usersService.findByEmail(normalizedEmail);
@@ -456,6 +484,7 @@ export class AuthService {
         consumedAt: { $exists: false },
       });
 
+      const resetToken = crypto.randomUUID();
       await this.passwordResetCollection().insertOne({
         id: crypto.randomUUID(),
         email: normalizedEmail,
@@ -464,18 +493,21 @@ export class AuthService {
         attempts: 0,
         expiresAt,
         createdAt: now,
+        resetTokenHash: this.hashValue(resetToken),
+        resetTokenExpiresAt: expiresAt,
       });
 
       await this.emailService.sendPasswordResetOtp({
         to: user.email,
         fullName: user.fullName,
         code,
+        resetLink: this.buildPasswordResetLink(user.email, resetToken),
       });
     }
 
     return {
       message:
-        'Si el correo existe en nuestra plataforma, te enviaremos un codigo de verificacion.',
+        'Si el correo está registrado, recibirás instrucciones para restablecer tu contraseña.',
     };
   }
 
@@ -533,8 +565,8 @@ export class AuthService {
     resetToken: string,
     newPassword: string,
   ) {
-    if (!newPassword || newPassword.trim().length < 6) {
-      throw new BadRequestException('La nueva contrasena debe tener al menos 6 caracteres');
+    if (!newPassword || newPassword.trim().length < 8) {
+      throw new BadRequestException('La nueva contrasena debe tener al menos 8 caracteres');
     }
 
     const normalizedEmail = this.normalizeEmail(email);
@@ -574,7 +606,104 @@ export class AuthService {
   }
 
   private normalizeEmail(email: string): string {
-    return email.trim().toLowerCase();
+    return (email ?? '').trim().toLowerCase();
+  }
+
+  private async validateAndNormalizeEmail(email: string): Promise<string> {
+    const normalizedEmail = this.normalizeEmail(email);
+
+    if (!normalizedEmail) {
+      throw new BadRequestException('El correo es obligatorio');
+    }
+
+    if (/\s/.test(normalizedEmail) || !this.isEmailFormatValid(normalizedEmail)) {
+      throw new BadRequestException('Ingresa un correo electrónico válido');
+    }
+
+    const domain = normalizedEmail.split('@')[1]?.toLowerCase();
+    if (!domain || !domain.includes('.') || domain.startsWith('.') || domain.endsWith('.')) {
+      throw new BadRequestException('Ingresa un correo electrónico válido');
+    }
+
+    if (TEMPORARY_EMAIL_DOMAINS.has(domain)) {
+      throw new BadRequestException(
+        'No se permiten correos temporales. Usa un correo corporativo o personal real.',
+      );
+    }
+
+    await this.validateEmailWithOptionalProvider(normalizedEmail);
+    return normalizedEmail;
+  }
+
+  private isEmailFormatValid(email: string): boolean {
+    return EMAIL_REGEX.test(email) && email.length <= 254;
+  }
+
+  private async validateEmailWithOptionalProvider(email: string): Promise<void> {
+    const validationUrl = process.env.EMAIL_VALIDATION_API_URL?.trim();
+    const validationToken = process.env.EMAIL_VALIDATION_API_TOKEN?.trim();
+
+    if (!validationUrl) {
+      return;
+    }
+
+    try {
+      const url = new URL(validationUrl);
+      url.searchParams.set('email', email);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: validationToken
+          ? {
+              Authorization: `Bearer ${validationToken}`,
+            }
+          : undefined,
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = (await response.json()) as {
+        valid?: boolean;
+        disposable?: boolean;
+      };
+
+      if (payload.valid === false || payload.disposable === true) {
+        throw new BadRequestException('Ingresa un correo electrónico real y activo');
+      }
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+    }
+  }
+
+  private buildPasswordResetLink(email: string, resetToken: string): string | undefined {
+    const frontendBase =
+      process.env.FRONTEND_URL?.trim() ||
+      process.env.APP_URL?.trim() ||
+      process.env.PUBLIC_APP_URL?.trim();
+
+    if (!frontendBase) {
+      return undefined;
+    }
+
+    const url = new URL('/forgot-password', frontendBase);
+    url.searchParams.set('email', this.normalizeEmail(email));
+    url.searchParams.set('token', resetToken);
+    return url.toString();
+  }
+
+  private isDuplicateKeyError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: number }).code === 11000
+    );
   }
 
   private isDevelopmentEnvironment(): boolean {

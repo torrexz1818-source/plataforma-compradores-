@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { z } from 'zod';
+import { normalizeEmail } from '@/lib/emailValidation';
 
 const loginSchema = z.object({
   email: z.string().trim().email('Formato de correo invalido'),
@@ -37,7 +38,7 @@ const Login = () => {
     setIsSubmitting(true);
 
     try {
-      await login(form);
+      await login({ ...form, email: normalizeEmail(form.email) });
       navigate('/home');
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'No se pudo iniciar sesion');
@@ -75,6 +76,7 @@ const Login = () => {
                 type="email"
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onBlur={() => setForm((current) => ({ ...current, email: normalizeEmail(current.email) }))}
                 placeholder="tu@empresa.com"
               />
               {errors.email && <p className="text-xs text-destructive mt-1">{errors.email}</p>}
@@ -91,7 +93,7 @@ const Login = () => {
               {errors.password && <p className="text-xs text-destructive mt-1">{errors.password}</p>}
               <div className="mt-2 text-right">
                 <Link to="/forgot-password" className="text-xs text-primary font-medium hover:underline">
-                  Olvidaste tu contrasena?
+                  ¿Olvidaste tu contraseña?
                 </Link>
               </div>
             </div>

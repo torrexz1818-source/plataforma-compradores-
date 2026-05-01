@@ -7,6 +7,7 @@ type SendPasswordResetOtpData = {
   to: string;
   code: string;
   fullName: string;
+  resetLink?: string;
 };
 
 type ExpertAppointmentEmailData = {
@@ -85,20 +86,32 @@ export class EmailService {
 
   async sendPasswordResetOtp(data: SendPasswordResetOtpData): Promise<void> {
     this.ensureConfigured();
+    const resetLinkBlock = data.resetLink
+      ? `
+            <p>Tambien puedes cambiar tu contrasena directamente desde este enlace:</p>
+            <p><a href="${data.resetLink}" style="display:inline-block;background:#0E109E;color:#ffffff;padding:10px 16px;border-radius:8px;text-decoration:none;">Restablecer contrasena</a></p>
+          `
+      : '';
+    const textLines = [
+      `Hola ${data.fullName}, tu codigo es ${data.code}.`,
+      data.resetLink ? `Tambien puedes restablecer tu contrasena aqui: ${data.resetLink}` : '',
+      'Este acceso expira en 10 minutos.',
+    ].filter(Boolean);
 
     try {
       await this.transporter.sendMail({
         from: `"Soporte Supply Nexu" <${this.from}>`,
         to: data.to,
-        subject: 'Codigo de recuperacion',
-        text: `Hola ${data.fullName}, tu codigo es ${data.code}`,
+        subject: 'Recuperacion de contrasena',
+        text: textLines.join('\n'),
         html: `
           <div style="font-family: Arial, sans-serif;">
             <h2>Recuperar contrasena</h2>
             <p>Hola <strong>${data.fullName}</strong>,</p>
-            <p>Tu codigo es:</p>
+            <p>Tu codigo de verificacion es:</p>
             <h1 style="letter-spacing: 5px;">${data.code}</h1>
-            <p>Este codigo expira en 10 minutos.</p>
+            ${resetLinkBlock}
+            <p>Este acceso expira en 10 minutos.</p>
           </div>
         `,
       });
