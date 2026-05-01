@@ -349,15 +349,15 @@ const Landing = () => {
           </div>
         </section>
 
-        <section className="relative overflow-hidden bg-[#5A31D5] px-4 py-20 text-white sm:px-6 lg:py-28">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(178,235,74,0.12),transparent_24%),radial-gradient(circle_at_76%_78%,rgba(243,49,63,0.18),transparent_28%),linear-gradient(135deg,#5A31D5_0%,#3019B8_52%,#0E109E_100%)]" />
+        <section className="relative overflow-hidden bg-white px-4 py-20 text-[#0E109E] sm:px-6 lg:py-28">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(90,49,213,0.08),transparent_24%),radial-gradient(circle_at_76%_78%,rgba(243,49,63,0.07),transparent_28%)]" />
           <div className="mx-auto max-w-7xl">
             <div className="relative mx-auto max-w-3xl text-center">
-              <p className="text-xs font-bold uppercase tracking-[0.34em] text-[#B2EB4A]">Ecosistema</p>
-              <h2 className="mt-3 text-3xl font-bold leading-tight text-white sm:text-5xl">
+              <p className="text-xs font-bold uppercase tracking-[0.34em] text-[#5A31D5]">Ecosistema</p>
+              <h2 className="mt-3 text-3xl font-bold leading-tight text-[#0E109E] sm:text-5xl">
                 8 modulos para el comprador moderno
               </h2>
-              <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-white/66">
+              <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-[#0E109E]/68">
                 Cada modulo fue disenado para las necesidades del area de compras corporativa.
               </p>
             </div>
@@ -368,11 +368,11 @@ const Landing = () => {
                   className={
                     module.featured
                       ? 'group relative min-h-[178px] overflow-hidden rounded-lg border border-[#B2EB4A]/40 bg-[linear-gradient(135deg,#F3313F_0%,#5A31D5_100%)] p-6 shadow-[0_22px_60px_rgba(243,49,63,0.20)]'
-                      : 'group relative min-h-[178px] rounded-lg border border-white/18 bg-white/[0.035] p-6 shadow-[0_18px_42px_rgba(0,0,0,0.08)] backdrop-blur transition-colors hover:bg-white/[0.07]'
+                      : 'group relative min-h-[178px] rounded-lg border border-[#0E109E]/12 bg-white p-6 shadow-[0_18px_42px_rgba(14,16,158,0.08)] transition-colors hover:border-[#5A31D5]/22 hover:bg-[#0E109E]/[0.025]'
                   }
                 >
                   <div className="mb-5 flex items-center justify-between">
-                    <span className={module.featured ? 'text-xs font-bold text-white' : 'text-xs font-bold text-[#B2EB4A]'}>
+                    <span className={module.featured ? 'text-xs font-bold text-white' : 'text-xs font-bold text-[#5A31D5]'}>
                       {String(index + 1).padStart(2, '0')}
                     </span>
                     {module.badge && (
@@ -381,11 +381,15 @@ const Landing = () => {
                       </span>
                     )}
                   </div>
-                  <div className={module.featured ? 'mb-5 flex h-12 w-12 items-center justify-center rounded-md border border-white/34 bg-white/12 text-white' : 'mb-5 flex h-12 w-12 items-center justify-center rounded-md border border-[#B2EB4A] bg-[#0E109E]/60 text-[#B2EB4A]'}>
+                  <div className={module.featured ? 'mb-5 flex h-12 w-12 items-center justify-center rounded-md border border-white/34 bg-white/12 text-white' : 'mb-5 flex h-12 w-12 items-center justify-center rounded-md border border-[#5A31D5]/26 bg-[#5A31D5]/8 text-[#5A31D5]'}>
                     <module.icon className="h-5 w-5" />
                   </div>
-                  <h3 className="text-base font-bold leading-snug text-white">{module.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-white/62">{module.description}</p>
+                  <h3 className={module.featured ? 'text-base font-bold leading-snug text-white' : 'text-base font-bold leading-snug text-[#0E109E]'}>
+                    {module.title}
+                  </h3>
+                  <p className={module.featured ? 'mt-3 text-sm leading-6 text-white/74' : 'mt-3 text-sm leading-6 text-[#0E109E]/68'}>
+                    {module.description}
+                  </p>
                 </article>
               ))}
             </div>
