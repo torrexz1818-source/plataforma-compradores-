@@ -106,8 +106,8 @@ function BrandMark({ className = '' }: { className?: string }) {
   return (
     <img
       className={className}
-      src="/buyer-nodus-isotipo.svg"
-      alt="Isotipo Buyer Nodus"
+      src="/buyer-nodus-logo.svg"
+      alt="Logo Buyer Nodus"
       loading="eager"
       decoding="async"
     />
@@ -221,11 +221,10 @@ const Landing = () => {
           <button
             type="button"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className="flex items-center gap-2 text-left"
+            className="flex items-center text-left"
             aria-label="Ir al inicio de Buyer Nodus"
           >
-            <BrandMark className="h-9 w-9" />
-            <span className="text-sm font-bold tracking-[0.18em] text-white">BUYER <span className="text-[#F3313F]">NODUS</span></span>
+            <BrandMark className="h-10 w-auto" />
           </button>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="text-white hover:text-white">
@@ -455,8 +454,7 @@ const Landing = () => {
       <footer className="border-t border-white/12 bg-[#0E109E] px-4 py-8 text-white sm:px-6">
         <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-2">
-            <BrandMark className="h-9 w-9" />
-            <span className="text-sm font-bold tracking-[0.18em]">BUYER <span className="text-[#F3313F]">NODUS</span></span>
+            <BrandMark className="h-10 w-auto" />
           </div>
           <p className="text-xs text-white/58">
             © {new Date().getFullYear()} BUYER NODUS. Todos los derechos reservados.
