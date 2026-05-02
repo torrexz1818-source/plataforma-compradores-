@@ -3,7 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Copy, Share2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { createSupplierOnboardingSession, registerSupplierOnboardingShare } from '@/lib/api';
+import { createSupplierOnboardingSession, registerSupplierOnboardingShare, uploadSupplierOnboardingFile } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { z } from 'zod';
@@ -91,6 +91,21 @@ const VOLUMES = ['Menos de $5,000', '$5,000 - $20,000', '$20,000 - $100,000', '+
 const COVERAGES = ['Local (ciudad)', 'Nacional', 'Latinoamerica', 'Global'];
 const YEARS = ['Menos de 1 ano', '1-3 anos', '3-10 anos', '+10 anos'];
 const SUPPLIER_ONBOARDING_STORAGE_KEY = 'supplynexu_supplier_onboarding_session';
+const SUPPLIER_UPLOAD_ACCEPT = '.pdf,image/jpeg,image/png,image/webp,image/gif,image/svg+xml';
+const SUPPLIER_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
+
+type SupplierUploadFile = {
+  url: string;
+  name: string;
+  mimeType?: string;
+  size?: number;
+};
+
+type SupplierFileState = {
+  homologationCertificates: File[];
+  logoFile: File | null;
+  catalogFile: File | null;
+};
 
 function readStoredShareSessionId() {
   if (typeof window === 'undefined') {
@@ -269,6 +284,65 @@ function SocialInput({
   );
 }
 
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function SupplierFileInput({
+  label,
+  description,
+  accept = SUPPLIER_UPLOAD_ACCEPT,
+  multiple,
+  files,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  accept?: string;
+  multiple?: boolean;
+  files: File[];
+  onChange: (files: File[]) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-success/25 bg-success/10 p-4">
+      <label className="block text-[13px] font-medium text-foreground/80">
+        {label}
+      </label>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        {description}
+      </p>
+      <input
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        onChange={(event) => onChange(Array.from(event.target.files ?? []))}
+        className="mt-3 block w-full text-sm text-muted-foreground file:mr-4 file:rounded-lg file:border-0 file:bg-success file:px-4 file:py-2 file:text-sm file:font-medium file:text-success-foreground hover:file:bg-success/90"
+      />
+      {files.length > 0 && (
+        <div className="mt-3 space-y-2">
+          {files.map((file) => (
+            <div
+              key={`${file.name}-${file.lastModified}`}
+              className="flex items-center justify-between gap-3 rounded-lg border border-success/20 bg-white px-3 py-2 text-xs"
+            >
+              <span className="min-w-0 truncate font-medium text-foreground">
+                {file.name}
+              </span>
+              <span className="shrink-0 text-muted-foreground">
+                {formatFileSize(file.size)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProgressBar({ form }: { form: FormState }) {
   const requiredFields: (keyof FormState)[] = [
     'fullName',
@@ -345,6 +419,11 @@ const Register = () => {
   const [requiredShareCount, setRequiredShareCount] = useState(3);
   const [shareSessionId, setShareSessionId] = useState<string | null>(null);
   const [isPreparingShareSession, setIsPreparingShareSession] = useState(false);
+  const [supplierFiles, setSupplierFiles] = useState<SupplierFileState>({
+    homologationCertificates: [],
+    logoFile: null,
+    catalogFile: null,
+  });
 
   const set = (key: keyof FormState, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -370,6 +449,44 @@ const Register = () => {
     }
 
     return 'buyer';
+  };
+
+  const setSupplierFile = (key: keyof SupplierFileState, files: File[]) => {
+    const acceptedFiles = files.filter((file) => {
+      if (file.size > SUPPLIER_UPLOAD_MAX_BYTES) {
+        setSubmitError(`El archivo "${file.name}" supera el limite de ${formatFileSize(SUPPLIER_UPLOAD_MAX_BYTES)}.`);
+        return false;
+      }
+
+      return true;
+    });
+
+    setSupplierFiles((current) => ({
+      ...current,
+      [key]: key === 'homologationCertificates' ? acceptedFiles : acceptedFiles[0] ?? null,
+    }));
+  };
+
+  const uploadSupplierFiles = async (): Promise<{
+    homologationCertificates: SupplierUploadFile[];
+    logoFile?: SupplierUploadFile;
+    catalogFile?: SupplierUploadFile;
+  }> => {
+    const homologationCertificates = await Promise.all(
+      supplierFiles.homologationCertificates.map((file) => uploadSupplierOnboardingFile(file)),
+    );
+    const logoFile = supplierFiles.logoFile
+      ? await uploadSupplierOnboardingFile(supplierFiles.logoFile)
+      : undefined;
+    const catalogFile = supplierFiles.catalogFile
+      ? await uploadSupplierOnboardingFile(supplierFiles.catalogFile)
+      : undefined;
+
+    return {
+      homologationCertificates,
+      logoFile,
+      catalogFile,
+    };
   };
 
   const sharePageUrl =
@@ -478,6 +595,14 @@ const Register = () => {
       const supplierLocation = [normalizedCoverage, normalizedProvince, normalizedDistrict]
         .filter((value) => value.length > 0)
         .join(' - ');
+      const uploadedSupplierFiles =
+        form.role === 'supplier'
+          ? await uploadSupplierFiles()
+          : {
+              homologationCertificates: [],
+              logoFile: undefined,
+              catalogFile: undefined,
+            };
 
       const response = await register({
         fullName: form.fullName,
@@ -515,6 +640,9 @@ const Register = () => {
               province: normalizedProvince || undefined,
               district: normalizedDistrict || undefined,
               yearsInMarket: form.yearsInMarket || undefined,
+              homologationCertificates: uploadedSupplierFiles.homologationCertificates,
+              logoFile: uploadedSupplierFiles.logoFile,
+              catalogFile: uploadedSupplierFiles.catalogFile,
             }
           : undefined,
         supplierOnboarding:
@@ -868,6 +996,28 @@ const Register = () => {
                     ]}
                   />
                 </FieldWrap>
+                <div className="space-y-3">
+                  <SupplierFileInput
+                    label="Certificados de homologacion"
+                    description="Puedes subir uno o varios certificados en PDF o imagen."
+                    multiple
+                    files={supplierFiles.homologationCertificates}
+                    onChange={(files) => setSupplierFile('homologationCertificates', files)}
+                  />
+                  <SupplierFileInput
+                    label="Logo de la empresa"
+                    description="Sube una imagen en buena resolucion. Se aceptan PNG, JPG, WEBP, GIF o SVG."
+                    accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                    files={supplierFiles.logoFile ? [supplierFiles.logoFile] : []}
+                    onChange={(files) => setSupplierFile('logoFile', files)}
+                  />
+                  <SupplierFileInput
+                    label="Catalogo"
+                    description="Sube tu catalogo comercial en PDF o imagen."
+                    files={supplierFiles.catalogFile ? [supplierFiles.catalogFile] : []}
+                    onChange={(files) => setSupplierFile('catalogFile', files)}
+                  />
+                </div>
               </motion.div>
             )}
 

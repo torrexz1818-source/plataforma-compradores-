@@ -41,6 +41,24 @@ type AuthContextValue = {
       province?: string;
       district?: string;
       yearsInMarket?: string;
+      homologationCertificates?: Array<{
+        url: string;
+        name: string;
+        mimeType?: string;
+        size?: number;
+      }>;
+      logoFile?: {
+        url: string;
+        name: string;
+        mimeType?: string;
+        size?: number;
+      };
+      catalogFile?: {
+        url: string;
+        name: string;
+        mimeType?: string;
+        size?: number;
+      };
     };
     supplierOnboarding?: {
       sessionId: string;

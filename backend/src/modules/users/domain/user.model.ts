@@ -37,6 +37,9 @@ export interface User {
     province?: string;
     district?: string;
     yearsInMarket?: string;
+    homologationCertificates?: SupplierOnboardingFile[];
+    logoFile?: SupplierOnboardingFile;
+    catalogFile?: SupplierOnboardingFile;
     onboarding?: {
       sessionId?: string;
       shareCount?: number;
@@ -74,4 +77,11 @@ export interface User {
   avatarUrl?: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface SupplierOnboardingFile {
+  url: string;
+  name: string;
+  mimeType?: string;
+  size?: number;
 }

@@ -17,7 +17,7 @@ import { RegisterRequestDto } from './dto/register.request.dto';
 import { EmailService } from './email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { UsersService } from '../users/users.service';
-import { User } from '../users/domain/user.model';
+import { SupplierOnboardingFile, User } from '../users/domain/user.model';
 import { UserRole } from '../users/domain/user-role.enum';
 import { UserStatus } from '../users/domain/user-status.enum';
 import { MembershipRecord } from '../users/users.service';
@@ -320,6 +320,12 @@ export class AuthService {
             province: data.supplierProfile?.province?.trim(),
             district: data.supplierProfile?.district?.trim(),
             yearsInMarket: data.supplierProfile?.yearsInMarket?.trim(),
+            homologationCertificates:
+              data.supplierProfile?.homologationCertificates
+                ?.map((file) => this.normalizeUploadedSupplierFile(file))
+                .filter((file): file is SupplierOnboardingFile => Boolean(file)),
+            logoFile: this.normalizeUploadedSupplierFile(data.supplierProfile?.logoFile),
+            catalogFile: this.normalizeUploadedSupplierFile(data.supplierProfile?.catalogFile),
             onboarding: supplierOnboardingSession
               ? {
                   sessionId: supplierOnboardingSession.id,
@@ -607,6 +613,35 @@ export class AuthService {
 
   private normalizeEmail(email: string): string {
     return (email ?? '').trim().toLowerCase();
+  }
+
+  private normalizeUploadedSupplierFile(file?: {
+    url?: string;
+    name?: string;
+    mimeType?: string;
+    size?: number;
+  }): SupplierOnboardingFile | undefined {
+    const url = file?.url?.trim();
+
+    if (!url) {
+      return undefined;
+    }
+
+    const normalizedFile: SupplierOnboardingFile = {
+      url,
+      name: file?.name?.trim() || 'Archivo proveedor',
+    };
+
+    const mimeType = file?.mimeType?.trim();
+    if (mimeType) {
+      normalizedFile.mimeType = mimeType;
+    }
+
+    if (typeof file?.size === 'number') {
+      normalizedFile.size = file.size;
+    }
+
+    return normalizedFile;
   }
 
   private async validateAndNormalizeEmail(email: string): Promise<string> {

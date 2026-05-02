@@ -430,6 +430,9 @@ export async function register(payload: {
     province?: string;
     district?: string;
     yearsInMarket?: string;
+    homologationCertificates?: UploadedFileResponse['file'][];
+    logoFile?: UploadedFileResponse['file'];
+    catalogFile?: UploadedFileResponse['file'];
   };
   supplierOnboarding?: {
     sessionId: string;
@@ -583,6 +586,18 @@ export async function uploadFile(
       body: formData,
     },
   );
+
+  return data.file;
+}
+
+export async function uploadSupplierOnboardingFile(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const data = await apiRequest<UploadedFileResponse>('/uploads/supplier-onboarding', {
+    method: 'POST',
+    body: formData,
+  });
 
   return data.file;
 }

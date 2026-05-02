@@ -21,7 +21,16 @@ import { UploadsService } from './uploads.service';
 const uploadMaxFileSize =
   Number.parseInt(process.env.UPLOAD_MAX_FILE_SIZE_BYTES?.trim() || '', 10) || 50 * 1024 * 1024;
 
-type UploadPurpose = 'general' | 'messages' | 'posts' | 'resources';
+type UploadPurpose = 'general' | 'messages' | 'posts' | 'resources' | 'supplier-onboarding';
+
+const supplierOnboardingMimeTypes = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
+]);
 
 @Controller('uploads')
 export class UploadsController {
@@ -73,6 +82,51 @@ export class UploadsController {
     const normalizedPurpose = UploadsController.normalizePurpose(purpose);
     const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname || '')}`;
     const relativePath = `${normalizedPurpose}/${uniqueName}`;
+
+    return {
+      file: {
+        url: await this.uploadsService.saveBuffer({
+          buffer: file.buffer,
+          relativePath,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+        }),
+        name: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+      },
+    };
+  }
+
+  @Post('supplier-onboarding')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: uploadMaxFileSize,
+      },
+    }),
+  )
+  async uploadSupplierOnboardingFile(
+    @UploadedFile()
+    file?: {
+      originalname: string;
+      buffer: Buffer;
+      mimetype: string;
+      size: number;
+    },
+  ) {
+    if (!file) {
+      throw new BadRequestException('Selecciona un archivo para subir');
+    }
+
+    if (!supplierOnboardingMimeTypes.has(file.mimetype)) {
+      throw new BadRequestException('Solo se permiten archivos PDF o imagenes');
+    }
+
+    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${extname(file.originalname || '')}`;
+    const relativePath = `supplier-onboarding/${uniqueName}`;
 
     return {
       file: {
@@ -143,7 +197,7 @@ export class UploadsController {
   }
 
   private static normalizePurpose(value?: string): UploadPurpose {
-    if (value === 'messages' || value === 'posts' || value === 'resources') {
+    if (value === 'messages' || value === 'posts' || value === 'resources' || value === 'supplier-onboarding') {
       return value;
     }
 

@@ -33,6 +33,9 @@ export class RegisterRequestDto {
     province?: string;
     district?: string;
     yearsInMarket?: string;
+    homologationCertificates?: UploadedSupplierOnboardingFile[];
+    logoFile?: UploadedSupplierOnboardingFile;
+    catalogFile?: UploadedSupplierOnboardingFile;
   };
   supplierOnboarding?: {
     sessionId: string;
@@ -62,4 +65,11 @@ export class RegisterRequestDto {
     googleCalendarConnected?: boolean;
   };
   role?: 'buyer' | 'supplier' | 'expert';
+}
+
+export class UploadedSupplierOnboardingFile {
+  url: string;
+  name: string;
+  mimeType?: string;
+  size?: number;
 }
