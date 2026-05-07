@@ -19,6 +19,8 @@ interface CommentSectionProps {
   title?: string;
   emptyMessage?: string;
   composerPlaceholder?: string;
+  canComment?: boolean;
+  commentDisabledMessage?: string;
 }
 
 interface CommentItemProps {
@@ -26,9 +28,10 @@ interface CommentItemProps {
   onReply: (payload: { content: string; parentId?: string }) => Promise<void>;
   onCommentLiked?: (commentId: string, liked: boolean, likes: number) => void;
   isReply?: boolean;
+  canReply?: boolean;
 }
 
-const CommentItem = ({ comment, onReply, onCommentLiked, isReply = false }: CommentItemProps) => {
+const CommentItem = ({ comment, onReply, onCommentLiked, isReply = false, canReply = true }: CommentItemProps) => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const [liked, setLiked] = useState(comment.isLiked);
@@ -148,13 +151,15 @@ const CommentItem = ({ comment, onReply, onCommentLiked, isReply = false }: Comm
               <ThumbsUp className={`h-3.5 w-3.5 ${liked ? 'fill-[#F3313F]' : ''}`} />
               Me gusta {likeCount > 0 ? `${likeCount}` : ''}
             </button>
-            <button
-              onClick={() => setShowReply(!showReply)}
-              className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[#0E109E] transition-colors hover:bg-[rgba(14,16,158,0.06)]"
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-              Responder
-            </button>
+            {canReply && (
+              <button
+                onClick={() => setShowReply(!showReply)}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-[#0E109E] transition-colors hover:bg-[rgba(14,16,158,0.06)]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                Responder
+              </button>
+            )}
             {comment.replies.length > 0 && (
               <button
                 onClick={() => setShowReplies((current) => !current)}
@@ -194,7 +199,7 @@ const CommentItem = ({ comment, onReply, onCommentLiked, isReply = false }: Comm
           )}
 
           {showReplies && comment.replies.map((reply) => (
-            <CommentItem key={reply.id} comment={reply} onReply={onReply} onCommentLiked={onCommentLiked} isReply />
+            <CommentItem key={reply.id} comment={reply} onReply={onReply} onCommentLiked={onCommentLiked} isReply canReply={canReply} />
           ))}
         </div>
       </div>
@@ -219,6 +224,8 @@ const CommentSection = ({
   title = 'Comentarios',
   emptyMessage = 'Aun no hay comentarios.',
   composerPlaceholder = 'Escribe un comentario...',
+  canComment = true,
+  commentDisabledMessage = 'No tienes permisos para comentar en esta publicacion.',
 }: CommentSectionProps) => {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
@@ -305,35 +312,41 @@ const CommentSection = ({
         </div>
       </div>
 
-      <div className="mb-6 flex min-w-0 gap-3">
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#2620bf,#5a31d5)] text-xs font-semibold text-white shadow-[0_10px_24px_rgba(14,16,158,0.18)]">
-          {initials}
-        </div>
-        <div className="min-w-0 flex-1 rounded-[24px] border border-[rgba(14,16,158,0.35)] bg-white p-3 shadow-[0_12px_28px_rgba(14,16,158,0.06)]">
-          <Textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            onKeyDown={handleNewCommentKeyDown}
-            placeholder={composerPlaceholder}
-            className="min-h-[96px] w-full resize-none border-0 bg-transparent px-0 py-0 text-sm leading-6 shadow-none focus-visible:ring-0"
-          />
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-xs text-[rgba(14,16,158,0.72)]">
-              <Heart className="h-4 w-4" />
-              <span>Comenta como en una publicacion social</span>
+      {canComment ? (
+        <div className="mb-6 flex min-w-0 gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#2620bf,#5a31d5)] text-xs font-semibold text-white shadow-[0_10px_24px_rgba(14,16,158,0.18)]">
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1 rounded-[24px] border border-[rgba(14,16,158,0.35)] bg-white p-3 shadow-[0_12px_28px_rgba(14,16,158,0.06)]">
+            <Textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={handleNewCommentKeyDown}
+              placeholder={composerPlaceholder}
+              className="min-h-[96px] w-full resize-none border-0 bg-transparent px-0 py-0 text-sm leading-6 shadow-none focus-visible:ring-0"
+            />
+            <div className="mt-3 flex flex-col gap-3">
+              <div className="flex items-center gap-2 text-xs text-[rgba(14,16,158,0.72)]">
+                <Heart className="h-4 w-4" />
+                <span>Comenta como publicacion social</span>
+              </div>
+              <Button
+                size="sm"
+                className="w-full rounded-full bg-[#B2EB4A] px-5 text-[#0E109E] shadow-[0_10px_24px_rgba(178,235,74,0.24)] hover:bg-[#B2EB4A]/85"
+                disabled={!newComment.trim() || (commentMutation.isPending && !replyingParentId)}
+                onClick={() => void submitComment({ content: newComment })}
+              >
+                <Send className="mr-1 h-4 w-4" />
+                Publicar
+              </Button>
             </div>
-            <Button
-              size="sm"
-              className="min-w-[132px] rounded-full bg-[#B2EB4A] px-5 text-[#0E109E] shadow-[0_10px_24px_rgba(178,235,74,0.24)] hover:bg-[#B2EB4A]/85"
-              disabled={!newComment.trim() || (commentMutation.isPending && !replyingParentId)}
-              onClick={() => void submitComment({ content: newComment })}
-            >
-              <Send className="mr-1 h-4 w-4" />
-              Publicar
-            </Button>
           </div>
         </div>
-      </div>
+      ) : (
+        <p className="mb-6 rounded-2xl border border-[rgba(14,16,158,0.14)] bg-[rgba(14,16,158,0.04)] px-4 py-3 text-sm text-[rgba(14,16,158,0.72)]">
+          {commentDisabledMessage}
+        </p>
+      )}
 
       {commentMutation.error && (
         <p className="mb-4 text-xs text-destructive">
@@ -349,7 +362,7 @@ const CommentSection = ({
           <p className="rounded-2xl border border-dashed border-[rgba(14,16,158,0.16)] bg-white/75 px-4 py-5 text-center text-sm text-[rgba(14,16,158,0.68)]">{emptyMessage}</p>
         )}
         {sortedComments.map((comment) => (
-          <CommentItem key={comment.id} comment={comment} onReply={submitComment} onCommentLiked={onCommentLiked} />
+          <CommentItem key={comment.id} comment={comment} onReply={submitComment} onCommentLiked={onCommentLiked} canReply={canComment} />
         ))}
       </div>
     </div>

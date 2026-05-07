@@ -145,9 +145,9 @@ const SupplierPosts = () => {
 
   return (
     <div className="max-w-3xl mx-auto py-6 px-4">
-      <h1 className="text-xl font-bold text-foreground mb-1">Oportunidades de stock del proveedor</h1>
+      <h1 className="text-xl font-bold text-foreground mb-1">Ofertas del proveedor</h1>
       <p className="text-sm text-muted-foreground mb-6">
-        Publica oportunidades de stock y revisa los mensajes privados asociados a cada oportunidad.
+        Publica ofertas de stock y revisa los mensajes privados asociados a cada oferta.
       </p>
 
       <div className="bg-card rounded-xl p-5 mb-8">
@@ -199,11 +199,11 @@ const SupplierPosts = () => {
       </div>
 
       <h2 className="text-sm font-medium text-foreground mb-4 tracking-wide uppercase">
-        Oportunidades de stock anteriores
+        Ofertas anteriores
       </h2>
 
       {publicationsQuery.isLoading && (
-        <p className="text-sm text-muted-foreground mb-4">Cargando oportunidades de stock...</p>
+        <p className="text-sm text-muted-foreground mb-4">Cargando ofertas...</p>
       )}
 
       <div className="flex flex-col gap-5">

@@ -765,26 +765,6 @@ const Register = () => {
             </div>
             {errors.role && <p className="text-xs text-destructive -mt-4 mb-4">{errors.role}</p>}
 
-            {form.role && (
-              <motion.div
-                initial={{ opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-2 pb-4 mb-1 border-b border-border/50"
-              >
-                <span
-                  className={`text-[11px] font-medium px-3 py-1 rounded-full ${isBuyer ? 'bg-destructive/10 text-destructive' : 'bg-success/15 text-success-foreground'
-                    }`}
-                >
-                  {isBuyer ? 'Comprador' : 'Proveedor'}
-                </span>
-                <p className="text-[13px] text-muted-foreground">
-                  {isBuyer
-                    ? 'Encuentra proveedores verificados para tu empresa'
-                    : 'Conecta tu negocio con compradores calificados'}
-                </p>
-              </motion.div>
-            )}
-
             <ProgressBar form={form} />
 
             <SectionLabel>Datos personales</SectionLabel>

@@ -41,6 +41,43 @@ function isLiquidationPost(title: string, description: string, categorySlug: str
   ].some((keyword) => haystack.includes(keyword));
 }
 
+type SaleSegment = 'offer' | 'requirement';
+
+const saleSegments: Array<{
+  id: SaleSegment;
+  label: string;
+  title: string;
+  description: string;
+  publishTitle: string;
+  publishButton: string;
+  emptyMessage: string;
+  accent: string;
+  softAccent: string;
+}> = [
+  {
+    id: 'offer',
+    label: 'Publicaciones de ofertas',
+    title: 'Ofertas',
+    description: 'Publicaciones de ofertas y oportunidades de stock. Compradores y proveedores pueden publicar y comentar.',
+    publishTitle: 'Publicar oferta',
+    publishButton: 'Publicar oferta',
+    emptyMessage: 'No se encontraron ofertas activas.',
+    accent: '#0E109E',
+    softAccent: '#E6ECFF',
+  },
+  {
+    id: 'requirement',
+    label: 'Requerimientos',
+    title: 'Requerimientos',
+    description: 'Solicitudes publicadas por compradores. Los proveedores pueden comentar y responder con alternativas.',
+    publishTitle: 'Publicar requerimiento',
+    publishButton: 'Publicar requerimiento',
+    emptyMessage: 'No se encontraron requerimientos activos.',
+    accent: '#5A31D5',
+    softAccent: '#EEE8FF',
+  },
+];
+
 const SalePage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -52,23 +89,28 @@ const SalePage = () => {
   const [url, setUrl] = useState('');
   const [imagen, setImagen] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const canPublishLiquidation = isBuyerLikeRole(user?.role) || user?.role === 'supplier';
+  const [activeSegment, setActiveSegment] = useState<SaleSegment>('offer');
+  const activeSegmentConfig = saleSegments.find((segment) => segment.id === activeSegment) ?? saleSegments[0];
+  const activePostType = activeSegment === 'requirement' ? 'requirement' : 'liquidation';
+  const canPublish = activeSegment === 'requirement'
+    ? isBuyerLikeRole(user?.role)
+    : isBuyerLikeRole(user?.role) || user?.role === 'supplier';
 
   const { data: posts = [], isLoading, isError } = useQuery({
-    queryKey: ['sale-feed-posts'],
-    queryFn: () => getPosts({ type: 'liquidation' }),
+    queryKey: ['sale-feed-posts', activePostType],
+    queryFn: () => getPosts({ type: activePostType }),
   });
 
   const filtered = useMemo(
     () =>
       posts.filter(
         (post) =>
-          isLiquidationPost(post.title, post.description, post.category.slug) &&
+          (activeSegment === 'requirement' || isLiquidationPost(post.title, post.description, post.category.slug)) &&
           (post.author.company.toLowerCase().includes(search.toLowerCase()) ||
             post.description.toLowerCase().includes(search.toLowerCase()) ||
             post.title.toLowerCase().includes(search.toLowerCase())),
       ),
-    [posts, search],
+    [activeSegment, posts, search],
   );
 
   const createMutation = useMutation({
@@ -76,22 +118,23 @@ const SalePage = () => {
       const uploadedImage = imagen ? await uploadFile(imagen, 'posts') : null;
 
       return createPost({
-        title: titulo.trim() || 'Liquidacion',
+        title: titulo.trim() || (activeSegment === 'requirement' ? 'Requerimiento' : 'Oferta'),
         description: descripcion.trim() || 'Sin descripcion.',
         categoryId: 'cat-6',
-        type: 'liquidation',
+        type: activePostType,
         videoUrl: url.trim() || undefined,
         thumbnailUrl: uploadedImage?.url,
       });
     },
     onSuccess: async () => {
-      setFeedback('Liquidacion publicada exitosamente.');
+      setFeedback(activeSegment === 'requirement' ? 'Requerimiento publicado exitosamente.' : 'Oferta publicada exitosamente.');
       setTitulo('');
       setDescripcion('');
       setUrl('');
       setImagen(null);
       setPreview(null);
       await queryClient.invalidateQueries({ queryKey: ['sale-feed-posts'] });
+      await queryClient.invalidateQueries({ queryKey: ['sale-feed-posts', activePostType] });
       await queryClient.invalidateQueries({ queryKey: ['community-posts'] });
     },
     onError: (error: Error) => {
@@ -120,7 +163,7 @@ const SalePage = () => {
 
   const handleShare = async (postId: string) => {
     const basePath = user?.role === 'supplier' ? '/supplier/sale' : '/buyer/sale';
-    const url = `${window.location.origin}${basePath}/${postId}`;
+    const url = `${window.location.origin}${basePath}/${postId}?segment=${activeSegment}`;
     try {
       await navigator.clipboard.writeText(url);
       setFeedback('Enlace copiado al portapapeles.');
@@ -170,13 +213,13 @@ const SalePage = () => {
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <div className="mb-4 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-white/85">
-              Oportunidades stock
+              Ofertas
             </div>
             <h1 className="mb-3 text-2xl font-bold tracking-tight text-primary-foreground sm:text-3xl lg:text-4xl">
-              Liquidaciones de inventario
+              Ofertas
             </h1>
             <p className="max-w-xl text-sm leading-6 text-primary-foreground/85 sm:text-base sm:leading-7 lg:text-lg">
-              Publica oportunidades de stock y encuentra oportunidades activas en una vista clara.
+              Publica y revisa ofertas activas sin perder la estructura social del modulo.
             </p>
           </div>
 
@@ -184,50 +227,85 @@ const SalePage = () => {
             href="#liquidation-feed"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 py-2 text-center text-sm font-medium text-[#0E109E] shadow-sm transition-colors hover:bg-white/95 sm:px-8"
           >
-            Explorar oportunidades <ArrowRight className="h-4 w-4" />
+            Explorar publicaciones <ArrowRight className="h-4 w-4" />
           </a>
         </div>
       </motion.section>
 
+      <div className="mb-6 grid gap-3 sm:grid-cols-2">
+        {saleSegments.map((segment) => (
+          <button
+            key={segment.id}
+            type="button"
+            onClick={() => {
+              setActiveSegment(segment.id);
+              setFeedback('');
+            }}
+            className={`rounded-2xl border p-4 text-left transition-all ${
+              activeSegment === segment.id
+                ? 'border-transparent text-primary-foreground shadow-[0_18px_42px_rgba(14,16,158,0.18)]'
+                : 'border-primary/10 bg-white/85 text-foreground shadow-sm hover:-translate-y-0.5 hover:border-primary/25 hover:bg-white hover:shadow-[0_16px_34px_rgba(14,16,158,0.10)]'
+            }`}
+            style={activeSegment === segment.id ? { backgroundColor: segment.accent } : undefined}
+          >
+            <span
+              className={`mb-3 inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] ${
+                activeSegment === segment.id ? 'bg-white/15 text-white' : 'text-primary'
+              }`}
+              style={activeSegment === segment.id ? undefined : { backgroundColor: segment.softAccent }}
+            >
+              {segment.id === 'offer' ? 'Oferta' : 'Requerimiento'}
+            </span>
+            <span className="block text-xs font-semibold uppercase tracking-[0.16em] opacity-80">{segment.label}</span>
+            <span className="mt-2 block text-lg font-semibold">{segment.title}</span>
+            <span className={`mt-1 block text-sm leading-6 ${activeSegment === segment.id ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+              {segment.description}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <div className="relative mb-6">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary/55" />
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Buscar publicaciones..."
-          className="pl-10"
+          className="h-12 rounded-2xl border-primary/10 bg-white/90 pl-11 shadow-sm transition-all focus-visible:ring-primary/20"
         />
       </div>
 
-      {canPublishLiquidation && (
-        <div className="mb-6 rounded-3xl bg-white p-5 shadow-sm">
+      {canPublish && (
+        <div className="mb-6 rounded-3xl bg-white/95 p-5 shadow-[0_18px_52px_rgba(14,16,158,0.08)] ring-1 ring-primary/10">
           <div className="mb-4">
-            <h2 className="mb-1 text-lg font-medium text-foreground">Publicar liquidacion</h2>
+            <h2 className="mb-1 text-lg font-medium text-foreground">{activeSegmentConfig.publishTitle}</h2>
             <p className="text-sm text-muted-foreground">
-            Comparte una oportunidad disponible manteniendo la misma estructura del feed.
+              {activeSegment === 'requirement'
+                ? 'Describe lo que necesita tu empresa para que los proveedores puedan comentar.'
+                : 'Comparte una oferta disponible manteniendo la misma estructura del feed.'}
             </p>
           </div>
 
           <Input
             value={titulo}
             onChange={(event) => setTitulo(event.target.value)}
-            placeholder="Titulo de la liquidacion"
-            className="mb-3 h-11 rounded-xl"
+            placeholder={activeSegment === 'requirement' ? 'Titulo del requerimiento' : 'Titulo de la oferta'}
+            className="mb-3 h-11 rounded-xl border-primary/15 bg-[#F8FAFF] focus-visible:ring-primary/20"
           />
 
           <Textarea
             value={descripcion}
             onChange={(event) => setDescripcion(event.target.value)}
-            placeholder="Describe el stock, condiciones, cantidades o vigencia"
+            placeholder={activeSegment === 'requirement' ? 'Describe necesidad, cantidades, plazos o criterios de compra' : 'Describe el stock, condiciones, cantidades o vigencia'}
             rows={4}
-            className="mb-3 resize-none rounded-xl"
+            className="mb-3 resize-none rounded-xl border-primary/15 bg-[#F8FAFF] focus-visible:ring-primary/20"
           />
 
           <Input
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             placeholder="URL del producto o sitio (opcional)"
-            className="mb-4 h-11 rounded-xl"
+            className="mb-4 h-11 rounded-xl border-primary/15 bg-[#F8FAFF] focus-visible:ring-primary/20"
           />
 
           {preview && (
@@ -254,12 +332,18 @@ const SalePage = () => {
               onClick={handlePublicar}
               disabled={createMutation.isPending || (!titulo.trim() && !descripcion.trim())}
               size="sm"
-              className="h-11 w-full rounded-xl px-5 sm:w-auto"
+              className="h-11 w-full rounded-xl bg-primary px-5 text-primary-foreground shadow-[0_12px_24px_rgba(14,16,158,0.16)] transition-all hover:-translate-y-0.5 hover:bg-primary/95 active:translate-y-0 sm:w-auto"
             >
-              {createMutation.isPending ? 'Publicando...' : 'Publicar liquidacion'}
+              {createMutation.isPending ? 'Publicando...' : activeSegmentConfig.publishButton}
             </Button>
           </div>
         </div>
+      )}
+
+      {!canPublish && (
+        <p className="mb-6 rounded-2xl border border-primary/10 bg-primary/5 px-4 py-3 text-sm text-primary">
+          Los requerimientos solo pueden ser publicados por compradores. Como proveedor puedes comentarlos desde el detalle.
+        </p>
       )}
 
       {feedback && (
@@ -269,7 +353,7 @@ const SalePage = () => {
       )}
 
       {isLoading && <p className="text-muted-foreground text-sm">Cargando publicaciones...</p>}
-      {isError && <p className="text-destructive text-sm">No se pudo cargar el feed de oportunidades de stock.</p>}
+      {isError && <p className="text-destructive text-sm">No se pudo cargar el feed de ofertas.</p>}
 
       <div id="liquidation-feed" className="space-y-4">
         {filtered.map((post, i) => (
@@ -344,7 +428,7 @@ const SalePage = () => {
                 type="button"
                 onClick={() => {
                   if (!isBuyerLikeRole(user?.role)) {
-                    setFeedback('Solo compradores o expertos pueden dar like en Oportunidades de stock.');
+                    setFeedback('Solo compradores o expertos pueden dar like en ofertas.');
                     return;
                   }
                   if (post.isLiked) {
@@ -353,7 +437,7 @@ const SalePage = () => {
                   }
                   likeMutation.mutate(post.id);
                 }}
-                className={`flex items-center gap-1.5 rounded-2xl bg-white/75 px-3 py-2.5 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 rounded-2xl bg-white/85 px-3 py-2.5 text-sm font-medium shadow-sm transition-all hover:-translate-y-0.5 active:translate-y-0 ${
                   post.isLiked
                     ? 'text-red-600'
                     : 'text-[#0E109E] hover:bg-[rgba(247,42,58,0.12)] hover:text-red-600'
@@ -364,16 +448,16 @@ const SalePage = () => {
               <button
                 type="button"
                 onClick={() => handleShare(post.id)}
-                className="flex items-center gap-1.5 rounded-2xl bg-white/75 px-3 py-2.5 text-sm font-medium text-[#1D1AAE] transition-colors hover:bg-[rgba(29,26,174,0.06)] hover:text-[#1512A8]"
+                className="flex items-center gap-1.5 rounded-2xl bg-white/85 px-3 py-2.5 text-sm font-medium text-[#1D1AAE] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#E6ECFF] hover:text-[#1512A8] active:translate-y-0"
               >
                 <Share2 className="w-4 h-4" /> Compartir
               </button>
               <button
                 type="button"
                 onClick={() =>
-                  navigate(user?.role === 'supplier' ? `/supplier/sale/${post.id}` : `/buyer/sale/${post.id}`)
+                  navigate(`${user?.role === 'supplier' ? `/supplier/sale/${post.id}` : `/buyer/sale/${post.id}`}?segment=${activeSegment}`)
                 }
-                className="flex items-center gap-1.5 rounded-2xl bg-white/75 px-3 py-2.5 text-sm font-medium text-[#1D1AAE] transition-colors hover:bg-[rgba(29,26,174,0.06)] hover:text-[#1512A8]"
+                className="flex items-center gap-1.5 rounded-2xl bg-[#B2EB4A] px-3 py-2.5 text-sm font-semibold text-[#0E109E] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#c4f56c] active:translate-y-0"
               >
                 <Info className="w-4 h-4" /> Mas informacion
               </button>
@@ -383,7 +467,7 @@ const SalePage = () => {
       </div>
 
       {!isLoading && !isError && filtered.length === 0 && (
-        <p className="text-muted-foreground text-sm text-center py-12">No se encontraron oportunidades de stock activas.</p>
+        <p className="text-muted-foreground text-sm text-center py-12">{activeSegmentConfig.emptyMessage}</p>
       )}
     </div>
   );

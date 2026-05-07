@@ -18,8 +18,8 @@ const supplierModuleCards = [
     icon: Building2,
   },
   {
-    title: 'Oportunidades de stock',
-    description: 'Publica y revisa oportunidades de inventario disponibles.',
+    title: 'Ofertas',
+    description: 'Publica ofertas y responde requerimientos de compradores.',
     to: '/supplier/sale',
     icon: FileText,
   },

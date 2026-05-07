@@ -55,7 +55,7 @@ const baseModuleCards = [
     icon: Users,
   },
   {
-    title: 'Oportunidades de stock',
+    title: 'Ofertas',
     description: 'Publica productos y ofertas disponibles en liquidación.',
     to: '/buyer/sale',
     supplierTo: '/supplier/sale',

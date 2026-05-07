@@ -526,7 +526,7 @@ export async function getCategories() {
 }
 
 export async function getPosts(params: {
-  type?: 'educational' | 'community' | 'liquidation';
+  type?: 'educational' | 'community' | 'liquidation' | 'requirement';
   search?: string;
   categoryId?: string;
 }) {
@@ -557,7 +557,7 @@ export async function createPost(payload: {
   title: string;
   description: string;
   categoryId: string;
-  type?: 'educational' | 'community' | 'liquidation';
+  type?: 'educational' | 'community' | 'liquidation' | 'requirement';
   learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
   mediaType?: 'video' | 'image';
   videoUrl?: string;
@@ -644,7 +644,7 @@ export async function adminCreatePost(payload: {
   description: string;
   contentBody?: string;
   categoryId: string;
-  type: 'educational' | 'community' | 'liquidation';
+  type: 'educational' | 'community' | 'liquidation' | 'requirement';
   learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
   mediaType?: 'video' | 'image';
   videoUrl?: string;

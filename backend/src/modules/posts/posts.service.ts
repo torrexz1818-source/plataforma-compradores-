@@ -12,7 +12,7 @@ import { UserRole } from '../users/domain/user-role.enum';
 import { UserStatus } from '../users/domain/user-status.enum';
 import { UsersService } from '../users/users.service';
 
-type PostType = 'educational' | 'community' | 'liquidation';
+type PostType = 'educational' | 'community' | 'liquidation' | 'requirement';
 type LearningRouteId = 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
 type LearningRouteAlias = 'ruta_1' | 'ruta_2' | 'ruta_3' | 'ruta_4' | 'ruta_5';
 type PostStatus = 'draft' | 'published' | 'archived';
@@ -459,6 +459,10 @@ export class PostsService {
     if (type === 'educational' && !data.isAdmin) {
       throw new ForbiddenException('Only the administrator can publish educational videos');
     }
+
+    if (type === 'requirement' && !this.usersService.isBuyerLikeRole(author.role)) {
+      throw new ForbiddenException('Solo compradores pueden publicar requerimientos.');
+    }
     const category = await this.ensureCategoryExists(data.categoryId);
     const requiresLearningRoute = type === 'educational' && category.slug === 'contenido-educativo';
     const isSkillContent = type === 'educational' && category.slug === 'mejorar-skill';
@@ -552,6 +556,10 @@ export class PostsService {
 
     if (post.type === 'community' && author.role === UserRole.ADMIN) {
       throw new ForbiddenException('Solo compradores y proveedores pueden comentar en Comunidad');
+    }
+
+    if (post.type === 'requirement' && author.role !== UserRole.SUPPLIER) {
+      throw new ForbiddenException('Solo proveedores pueden comentar en requerimientos.');
     }
 
     if (data.parentId) {
@@ -1283,7 +1291,8 @@ export class PostsService {
     const titleByType: Record<PostType, string> = {
       community: 'Nueva publicacion en Comunidad',
       educational: `Nuevo contenido educativo: "${post.title}"`,
-      liquidation: 'Nueva publicacion de proveedor',
+      liquidation: 'Nueva oferta publicada',
+      requirement: 'Nuevo requerimiento publicado',
     };
     const url = this.getPostNotificationUrl(post);
 

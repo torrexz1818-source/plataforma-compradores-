@@ -8,7 +8,7 @@ import { UsersService } from '../users/users.service';
 type PostRecord = {
   id: string;
   authorId: string;
-  type: 'educational' | 'community' | 'liquidation';
+  type: 'educational' | 'community' | 'liquidation' | 'requirement';
   title: string;
   description: string;
   likedBy: string[];

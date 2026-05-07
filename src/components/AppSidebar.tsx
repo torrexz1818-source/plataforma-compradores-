@@ -2,6 +2,7 @@ import { BookOpen, Bot, BriefcaseBusiness, Building2, FileText, Home, LogOut, Ne
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/lib/auth';
 import { useLocation } from 'react-router-dom';
+import { BuyerNodusBrand } from '@/components/BuyerNodusBrand';
 import {
   Sidebar,
   SidebarContent,
@@ -20,7 +21,7 @@ const buyerNavItems = [
   { title: 'Contenido Educativo', icon: BookOpen },
   { title: 'Empleabilidad', url: '/empleabilidad', icon: BriefcaseBusiness, indent: true },
   { title: 'Nodus Experts', url: '/nexu-experts', icon: Users, indent: true },
-  { title: 'Oportunidades de stock', url: '/buyer/sale', icon: FileText },
+  { title: 'Ofertas', url: '/buyer/sale', icon: FileText },
   { title: 'Nodus IA', url: '/nexu-ia', icon: Bot },
   { title: 'Directorio de proveedores', url: '/buyer/directory', icon: Building2 },
 ];
@@ -52,9 +53,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarContent className="bg-sidebar">
         <div className={`p-4 ${collapsed ? 'px-2' : 'px-5'}`}>
-          <h1 className={`font-bold text-sidebar-foreground ${collapsed ? 'text-xs text-center' : 'text-lg'}`}>
-            {collapsed ? 'BN' : 'BUYER NODUS'}
-          </h1>
+          <BuyerNodusBrand collapsed={collapsed} className="text-sidebar-foreground" />
         </div>
 
         <SidebarGroup>

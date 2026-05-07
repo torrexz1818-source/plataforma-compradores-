@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Heart, MapPin, Star, Send } from 'lucide-react';
+import { Heart, MapPin, Star, Send, ExternalLink } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import BackButton from '@/components/BackButton';
+import CommentSection from '@/components/CommentSection';
 import {
   createConversation,
   getBuyerById,
@@ -13,12 +14,12 @@ import {
   getPostDetail,
   getPosts,
   getSupplierById,
-  getSupplierReviews,
   resolveApiAssetUrl,
   sendConversationMessage,
   togglePostLike,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { isBuyerLikeRole } from '@/lib/roles';
 
 function isLiquidationPost(title: string, description: string, categorySlug: string) {
   if (categorySlug === 'liquidaciones') {
@@ -47,23 +48,48 @@ const SaleDetailPage = () => {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const { id = '' } = useParams();
+  const [searchParams] = useSearchParams();
   const [mensaje, setMensaje] = useState('');
   const [feedback, setFeedback] = useState('');
+  const requestedSegment = searchParams.get('segment') === 'requirement'
+    ? 'requirement'
+    : searchParams.get('segment') === 'offer'
+      ? 'offer'
+      : null;
 
   const { data: posts = [] } = useQuery({
-    queryKey: ['sale-feed-posts'],
-    queryFn: () => getPosts({ type: 'liquidation' }),
+    queryKey: ['sale-feed-posts', 'all-segments'],
+    queryFn: async () => {
+      const [offers, requirements] = await Promise.all([
+        getPosts({ type: 'liquidation' }),
+        getPosts({ type: 'requirement' }),
+      ]);
+      return [...offers, ...requirements];
+    },
   });
 
-  const liquidationPosts = useMemo(
+  const salePosts = useMemo(
     () =>
-      posts.filter((post) => isLiquidationPost(post.title, post.description, post.category.slug)),
+      posts.filter((post) => post.type === 'requirement' || isLiquidationPost(post.title, post.description, post.category.slug)),
     [posts],
   );
 
   const selectedPost = useMemo(
-    () => liquidationPosts.find((post) => post.id === id) ?? liquidationPosts[0] ?? null,
-    [liquidationPosts, id],
+    () => {
+      const postById = salePosts.find((post) => post.id === id);
+      if (postById) return postById;
+
+      if (requestedSegment === 'requirement') {
+        return salePosts.find((post) => post.type === 'requirement') ?? null;
+      }
+
+      if (requestedSegment === 'offer') {
+        return salePosts.find((post) => post.type !== 'requirement') ?? null;
+      }
+
+      return salePosts[0] ?? null;
+    },
+    [salePosts, id, requestedSegment],
   );
 
   const saleListPath = user?.role === 'supplier' ? '/supplier/sale' : '/buyer/sale';
@@ -82,12 +108,6 @@ const SaleDetailPage = () => {
         ? getSupplierById(selectedPost?.author.id ?? '')
         : getBuyerById(selectedPost?.author.id ?? ''),
     enabled: Boolean(selectedPost?.author.id),
-  });
-
-  const supplierReviewsQuery = useQuery({
-    queryKey: ['supplier-reviews', selectedPost?.author.id],
-    queryFn: () => getSupplierReviews(selectedPost?.author.id ?? ''),
-    enabled: Boolean(selectedPost?.author.id && isSupplierAuthor),
   });
 
   const likeMutation = useMutation({
@@ -144,54 +164,81 @@ const SaleDetailPage = () => {
   });
 
   if (!selectedPost) {
-    return <p className="text-sm text-muted-foreground px-6 py-8">No hay oportunidades de stock activas.</p>;
+    return <p className="text-sm text-muted-foreground px-6 py-8">No hay ofertas o requerimientos activos.</p>;
   }
 
   const authorProfile = authorProfileQuery.data;
-  const supplierReviews = supplierReviewsQuery.data ?? [];
   const comments = postDetailQuery.data?.comments ?? [];
   const authorRoleLabel = isSupplierAuthor ? 'proveedor' : 'comprador';
   const canContact = user?.role !== selectedPost.author.role && user?.role !== 'admin';
+  const isRequirement = selectedPost.type === 'requirement';
+  const currentSegment = isRequirement ? 'requirement' : 'offer';
+  const visiblePosts = salePosts.filter((post) =>
+    isRequirement
+      ? post.type === 'requirement'
+      : post.type !== 'requirement',
+  );
+  const pageTitle = isRequirement ? 'Requerimientos' : 'Ofertas';
+  const canComment = isRequirement
+    ? user?.role === 'supplier'
+    : (isBuyerLikeRole(user?.role) || user?.role === 'supplier');
+  const segmentLabel = isRequirement ? 'Requerimiento' : 'Oferta';
+  const segmentAccentClass = isRequirement
+    ? 'bg-[#5A31D5] text-white ring-[#5A31D5]/25'
+    : 'bg-[#B2EB4A] text-[#0E109E] ring-[#B2EB4A]/40';
+  const segmentSoftClass = isRequirement
+    ? 'bg-[#EEE8FF] text-[#5A31D5] ring-[#5A31D5]/15'
+    : 'bg-[#E6ECFF] text-primary ring-primary/15';
 
   return (
     <div className="mx-auto w-full max-w-6xl px-3 py-5 sm:px-6 sm:py-8">
       <BackButton fallback={saleListPath} className="mb-4" />
-      <h1 className="text-2xl font-bold text-foreground mb-6">Oportunidades de stock</h1>
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">{pageTitle}</h1>
+        </div>
+        <Badge className={`w-fit rounded-full px-3 py-1 text-xs font-medium shadow-sm ring-1 ${segmentSoftClass}`}>
+          {visiblePosts.length} publicaciones activas
+        </Badge>
+      </div>
 
-      <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
-        {liquidationPosts.map((post) => (
+      <div className="mb-6 flex gap-2 overflow-x-auto rounded-[22px] bg-white/80 p-2 shadow-[0_14px_32px_rgba(14,16,158,0.07)] ring-1 ring-primary/10 [scrollbar-width:thin]">
+        {visiblePosts.map((post) => (
           <button
             key={post.id}
-            onClick={() => navigate(user?.role === 'supplier' ? `/supplier/sale/${post.id}` : `/buyer/sale/${post.id}`)}
-            className={`flex-shrink-0 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-all ${
+            onClick={() => navigate(`${user?.role === 'supplier' ? `/supplier/sale/${post.id}` : `/buyer/sale/${post.id}`}?segment=${currentSegment}`)}
+            className={`flex min-w-[132px] flex-shrink-0 items-center rounded-2xl px-3 py-2 text-left text-sm font-medium transition-all ${
               selectedPost.id === post.id
-                ? 'bg-primary/10 text-primary ring-1 ring-primary/25 shadow-[0_10px_22px_rgba(14,16,158,0.10)] hover:bg-primary/15 active:bg-primary/20'
-                : 'bg-card/95 text-primary ring-1 ring-primary/20 hover:bg-primary/5 hover:ring-primary/30'
+                ? `${isRequirement ? 'bg-[#5A31D5]' : 'bg-primary'} text-white shadow-[0_12px_24px_rgba(14,16,158,0.18)]`
+                : `${isRequirement ? 'text-[#5A31D5] ring-[#5A31D5]/15 hover:bg-[#EEE8FF]' : 'text-primary ring-primary/10 hover:bg-primary/5'} bg-white ring-1 hover:-translate-y-0.5`
             }`}
           >
-            {post.author.company}
+            <span className="truncate text-sm font-semibold">{post.author.company}</span>
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-4 items-start">
-        <div className="bg-card rounded-2xl overflow-hidden min-h-[420px] flex items-center justify-center shadow-sm ring-1 ring-black/5">
+      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-[0.95fr_1.25fr_1.15fr]">
+        <div className="group flex min-h-[420px] h-full items-center justify-center overflow-hidden rounded-[24px] bg-card shadow-[0_18px_52px_rgba(14,16,158,0.08)] ring-1 ring-white/70 transition-all hover:-translate-y-0.5 hover:shadow-[0_24px_64px_rgba(14,16,158,0.12)]">
           {selectedPost.thumbnailUrl ? (
             <img
               src={resolveApiAssetUrl(selectedPost.thumbnailUrl)}
               alt="Publicacion"
-              className="w-full h-full object-cover"
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
             />
           ) : (
-            <div className="w-full h-full min-h-[420px] bg-muted/60 flex items-center justify-center">
-              <span className="text-muted-foreground text-sm">Sin imagen</span>
+            <div className="flex h-full min-h-[420px] w-full flex-col items-center justify-center gap-3 bg-[linear-gradient(135deg,#EEF3FF,#F8FAFF)]">
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ring-1 ${segmentSoftClass}`}>
+                {segmentLabel}
+              </span>
+              <span className="text-sm font-medium text-primary/60">Sin imagen</span>
             </div>
           )}
         </div>
 
-        <div className="bg-card rounded-2xl overflow-hidden flex flex-col shadow-sm ring-1 ring-black/5">
-          <div className="flex items-center gap-3 px-4 py-4">
-            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-semibold text-sm flex-shrink-0 ring-1 ring-primary/10">
+        <div className="flex h-full flex-col overflow-hidden rounded-[24px] bg-card shadow-[0_18px_52px_rgba(14,16,158,0.08)] ring-1 ring-white/70 transition-all hover:shadow-[0_24px_64px_rgba(14,16,158,0.11)]">
+          <div className="flex items-center gap-3 px-5 py-5">
+            <div className={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-sm font-semibold shadow-sm ring-1 ${segmentSoftClass}`}>
               {selectedPost.author.company.charAt(0)}
             </div>
             <div>
@@ -206,8 +253,12 @@ const SaleDetailPage = () => {
             </div>
           </div>
 
-          <div className="px-4 py-3 flex-1">
-            <p className="text-sm text-foreground leading-7">
+          <div className="px-5 py-3 flex-1">
+            <Badge variant="secondary" className={`mb-3 rounded-full px-3 text-xs font-semibold ring-1 ${segmentAccentClass}`}>
+              {segmentLabel}
+            </Badge>
+            <h2 className="mb-3 text-2xl font-bold leading-tight tracking-tight text-foreground">{selectedPost.title}</h2>
+            <p className="rounded-2xl bg-[#F8FAFF] px-4 py-3 text-sm leading-7 text-foreground/85 ring-1 ring-primary/10">
               {selectedPost.description}
             </p>
             {selectedPost.videoUrl && (
@@ -215,14 +266,14 @@ const SaleDetailPage = () => {
                 href={selectedPost.videoUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-block mt-3 rounded-full bg-primary/5 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+                className="mt-3 inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm font-medium text-primary shadow-sm ring-1 ring-primary/10 transition-all hover:-translate-y-0.5 hover:bg-primary/5"
               >
-                Ver enlace de la publicacion
+                Ver enlace de la publicacion <ExternalLink className="h-3.5 w-3.5" />
               </a>
             )}
           </div>
 
-          <div className="px-4 pb-4 pt-3">
+          <div className="px-5 pb-4 pt-3">
             <p className="text-xs font-medium text-primary mb-2">
               {canContact ? `Contactar ${authorRoleLabel}` : `Publicacion del ${authorRoleLabel}`}
             </p>
@@ -230,12 +281,12 @@ const SaleDetailPage = () => {
               value={mensaje}
               onChange={(e) => setMensaje(e.target.value)}
               placeholder={`Escribe tu mensaje para contactar al ${authorRoleLabel}...`}
-              className="text-sm resize-none mb-2 rounded-2xl border-primary/25 bg-primary/5 shadow-none focus-visible:ring-primary/25"
+              className="mb-3 resize-none rounded-2xl border-primary/15 bg-[#F8FAFF] text-sm shadow-none focus-visible:ring-primary/25"
               rows={3}
             />
             <Button
               size="sm"
-              className="w-full rounded-full bg-secondary text-secondary-foreground shadow-none transition-all hover:bg-secondary/90 disabled:opacity-60"
+              className="w-full rounded-full bg-[#B2EB4A] font-semibold text-[#0E109E] shadow-[0_10px_22px_rgba(178,235,74,0.25)] transition-all hover:-translate-y-0.5 hover:bg-[#c4f56c] active:translate-y-0 disabled:opacity-60"
               onClick={() => {
                 if (!canContact) {
                   setFeedback(`Solo el perfil opuesto puede contactar a este ${authorRoleLabel}.`);
@@ -250,11 +301,11 @@ const SaleDetailPage = () => {
             </Button>
           </div>
 
-          <div className="px-4 pb-4 pt-1 flex items-center gap-2">
+          <div className="px-5 pb-5 pt-1 flex items-center gap-2">
             <button
               onClick={() => {
                 if (user?.role !== 'buyer') {
-                  setFeedback('Solo compradores pueden dar like en Oportunidades de stock.');
+                  setFeedback('Solo compradores pueden dar like en ofertas.');
                   return;
                 }
                 if (selectedPost.isLiked) {
@@ -263,7 +314,7 @@ const SaleDetailPage = () => {
                 }
                 likeMutation.mutate(selectedPost.id);
               }}
-              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600"
+              className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-sm text-muted-foreground transition-all hover:-translate-y-0.5 hover:bg-red-50 hover:text-red-600 active:translate-y-0"
             >
               <Heart
                 className={`w-4 h-4 ${
@@ -275,13 +326,13 @@ const SaleDetailPage = () => {
               </span>
             </button>
             <span className="text-xs text-muted-foreground">
-              · {new Date(selectedPost.createdAt).toLocaleString()}
+              - {new Date(selectedPost.createdAt).toLocaleString()}
             </span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <div className="bg-card rounded-2xl p-4 shadow-sm ring-1 ring-black/5">
+        <div className="flex h-full flex-col gap-4">
+          <div className="rounded-[24px] bg-card p-4 shadow-[0_18px_52px_rgba(14,16,158,0.08)] ring-1 ring-white/70 transition-all hover:-translate-y-0.5 hover:shadow-[0_24px_64px_rgba(14,16,158,0.11)]">
             <button
               type="button"
               onClick={() => navigate(`/perfil/${selectedPost.author.role}/${selectedPost.author.id}`)}
@@ -297,7 +348,7 @@ const SaleDetailPage = () => {
               {authorProfile?.location ?? 'Sin ubicacion'}
             </div>
             <div className="flex items-center gap-2 mt-2">
-              <Badge variant="secondary" className="rounded-full bg-primary/10 px-3 text-xs text-primary ring-1 ring-primary/15">
+              <Badge variant="secondary" className={`rounded-full px-3 text-xs ring-1 ${segmentSoftClass}`}>
                 {authorProfile?.sector ?? selectedPost.author.sector ?? 'General'}
               </Badge>
               {isSupplierAuthor && authorProfile && 'averageRating' in authorProfile && 'reviewsCount' in authorProfile && (
@@ -310,81 +361,23 @@ const SaleDetailPage = () => {
             </div>
           </div>
 
-          <div className="bg-card rounded-2xl p-4 shadow-sm ring-1 ring-black/5">
-            <p className="text-sm font-medium text-foreground mb-3">
-              {isSupplierAuthor ? 'Comentarios de compradores' : 'Comentarios de la publicacion'}
-            </p>
-            <div className="flex flex-col gap-3">
-              {isSupplierAuthor && supplierReviews.length > 0
-                ? supplierReviews.map((c) => (
-                    <div key={c.id} className="flex items-start gap-2">
-                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-shrink-0">
-                        {c.buyer.name.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-1">
-                          <p className="text-xs font-medium text-foreground truncate">
-                            {c.buyer.name}
-                          </p>
-                          <div className="flex items-center gap-0.5 flex-shrink-0">
-                            <Star className="w-3 h-3 fill-destructive text-destructive" />
-                            <span className="text-xs text-muted-foreground">{c.rating}.0</span>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/perfil/buyer/${c.buyer.id}`)}
-                          className="text-xs text-muted-foreground hover:text-primary"
-                        >
-                          {c.buyer.company}
-                        </button>
-                        <p className="text-xs text-foreground mt-0.5">{c.comment}</p>
-                      </div>
-                    </div>
-                  ))
-                : comments.map((c) => (
-                    <div key={c.id} className="flex items-start gap-2">
-                      <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-shrink-0">
-                        {c.user.fullName.charAt(0)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (c.user.role === 'buyer' || c.user.role === 'supplier') {
-                              navigate(`/perfil/${c.user.role}/${c.user.id}`);
-                            }
-                          }}
-                          className="text-xs font-medium text-foreground truncate hover:text-primary"
-                        >
-                          {c.user.fullName}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (c.user.role === 'buyer' || c.user.role === 'supplier') {
-                              navigate(`/perfil/${c.user.role}/${c.user.id}`);
-                            }
-                          }}
-                          className="text-xs text-muted-foreground hover:text-primary"
-                        >
-                          {c.user.company}
-                        </button>
-                        <p className="text-xs text-foreground mt-0.5">{c.content}</p>
-                      </div>
-                    </div>
-                  ))}
-              {!isSupplierAuthor && comments.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Aun no hay comentarios para esta publicacion.
-                </p>
-              )}
-              {isSupplierAuthor && supplierReviews.length === 0 && comments.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  Aun no hay comentarios para este proveedor.
-                </p>
-              )}
-            </div>
+          <div className="flex-1 rounded-[24px] bg-card p-4 shadow-[0_18px_52px_rgba(14,16,158,0.08)] ring-1 ring-white/70 transition-all hover:shadow-[0_24px_64px_rgba(14,16,158,0.11)]">
+            <CommentSection
+              postId={selectedPost.id}
+              comments={comments}
+              title={isRequirement ? 'Comentarios de proveedores' : 'Comentarios'}
+              emptyMessage={isRequirement ? 'Aun no hay respuestas de proveedores.' : 'Aun no hay comentarios para esta oferta.'}
+              composerPlaceholder={isRequirement ? 'Comenta tu propuesta, disponibilidad o alternativa...' : 'Escribe un comentario sobre esta oferta...'}
+              canComment={canComment}
+              commentDisabledMessage={
+                isRequirement
+                  ? 'Solo los proveedores pueden comentar en requerimientos.'
+                  : 'Solo compradores, expertos y proveedores pueden comentar en ofertas.'
+              }
+              onCommentAdded={() => {
+                void queryClient.invalidateQueries({ queryKey: ['post-detail', selectedPost.id] });
+              }}
+            />
           </div>
         </div>
       </div>

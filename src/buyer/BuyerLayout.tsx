@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth';
 import NotificationBell from '@/components/NotificationBell';
 import MessageBell from '@/components/MessageBell';
 import HomeAccessButton from '@/components/HomeAccessButton';
+import { BuyerNodusBrand } from '@/components/BuyerNodusBrand';
 import { isBuyerLikeRole } from '@/lib/roles';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -22,7 +23,7 @@ const buyerNavItems = [
       { to: '/nexu-experts', label: 'Nodus Experts', icon: Users },
     ],
   },
-  { to: '/buyer/sale', label: 'Oportunidades de stock', icon: FileText },
+  { to: '/buyer/sale', label: 'Ofertas', icon: FileText },
   { to: '/nexu-ia', label: 'Nodus IA', icon: Bot },
   { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
 ];
@@ -142,7 +143,7 @@ const BuyerLayout = () => {
     <>
       <div className={cn('border-b border-white/15 py-4', isCollapsed ? 'px-2 text-center' : 'px-4')}>
         <div className={cn('flex items-center', isCollapsed ? 'justify-center' : 'justify-between gap-3')}>
-          <p className={cn('font-bold tracking-tight', isCollapsed ? 'text-sm' : 'text-xl')}>{isCollapsed ? 'BN' : 'BUYER NODUS'}</p>
+          <BuyerNodusBrand collapsed={isCollapsed} />
           <button
             type="button"
             onClick={() => setCollapsed((current) => !current)}
@@ -261,9 +262,9 @@ const BuyerLayout = () => {
         )}
         style={{ transition: 'margin 0.25s ease' }}
       >
-        <div className="mx-auto w-full max-w-7xl min-w-0 px-[clamp(12px,4vw,20px)] py-3 sm:px-6 sm:py-6 2xl:max-w-[1440px]">
-          <div className="sticky top-3 z-40 mb-5 flex w-full justify-center sm:justify-end">
-            <div className="topbar-shell relative flex w-full min-w-0 items-center justify-between gap-2 rounded-2xl px-3 py-3 sm:w-fit sm:gap-3 sm:px-4">
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-[clamp(12px,4vw,20px)] pt-3 sm:px-6 sm:pt-6 2xl:max-w-[1440px]">
+          <div className="relative z-20 mb-6 flex w-full justify-center sm:justify-end">
+            <div className="topbar-shell flex w-full min-w-0 items-center justify-between gap-2 rounded-2xl px-3 py-3 sm:w-fit sm:gap-3 sm:px-4">
               <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
                   <button

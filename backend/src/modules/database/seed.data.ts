@@ -81,7 +81,7 @@ export type SeedPost = {
   description: string;
   contentBody?: string;
   learningRoute?: 'ruta-1' | 'ruta-2' | 'ruta-3' | 'ruta-4' | 'ruta-5';
-  type: 'educational' | 'community' | 'liquidation';
+  type: 'educational' | 'community' | 'liquidation' | 'requirement';
   mediaType?: 'video' | 'image';
   videoUrl?: string;
   thumbnailUrl?: string;

@@ -44,11 +44,10 @@
   .topbar-shell {
     background: var(--topbar-bg);
     color: var(--text-on-light);
-    border-bottom: 1px solid var(--border-soft);
+    border: 1px solid var(--border-soft);
     box-shadow: var(--shadow-topbar);
-    position: sticky;
-    top: 0;
-    z-index: 30;
+    position: relative;
+    z-index: 20;
   }
 
   .navbar-sticky {

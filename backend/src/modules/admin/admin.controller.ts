@@ -31,7 +31,7 @@ type CreateManagedPostBody = {
   description: string;
   contentBody?: string;
   categoryId: string;
-  type: 'educational' | 'community' | 'liquidation';
+  type: 'educational' | 'community' | 'liquidation' | 'requirement';
   learningRoute?: string;
   mediaType?: 'video' | 'image';
   videoUrl?: string;

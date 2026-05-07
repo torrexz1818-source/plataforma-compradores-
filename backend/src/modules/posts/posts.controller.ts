@@ -18,7 +18,7 @@ type CreatePostBody = {
   title: string;
   description: string;
   categoryId: string;
-  type?: 'educational' | 'community' | 'liquidation';
+  type?: 'educational' | 'community' | 'liquidation' | 'requirement';
   learningRoute?: string;
   mediaType?: 'video' | 'image';
   videoUrl?: string;
@@ -77,7 +77,7 @@ export class PostsController {
   @Get()
   listPosts(
     @Query('search') search: string | undefined,
-    @Query('type') type: 'educational' | 'community' | 'liquidation' | undefined,
+    @Query('type') type: 'educational' | 'community' | 'liquidation' | 'requirement' | undefined,
     @Query('categoryId') categoryId: string | undefined,
     @Req() request: Request,
   ): Promise<unknown> {

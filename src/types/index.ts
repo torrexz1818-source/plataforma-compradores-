@@ -123,7 +123,7 @@ export interface Post {
     saves: number;
     comments: number;
   };
-  type: 'educational' | 'community' | 'liquidation';
+  type: 'educational' | 'community' | 'liquidation' | 'requirement';
   likes: number;
   comments: number;
   shares: number;
