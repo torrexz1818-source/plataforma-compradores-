@@ -38,7 +38,6 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { useProposalComparison } from '@/features/proposal-comparison/useProposalComparison';
-import type { ProposalComparisonCriterion } from '@/features/proposal-comparison/proposalComparisonApi';
 import {
   useDownloadTermsPdf,
   useGenerateTermsOfReference,
@@ -59,16 +58,6 @@ const iconMap = {
   TrendingUp,
   TriangleAlert,
 };
-
-const defaultProposalCriteria: ProposalComparisonCriterion[] = [
-  { name: 'Precio', weight: 25 },
-  { name: 'Alcance técnico', weight: 20 },
-  { name: 'Condiciones comerciales', weight: 15 },
-  { name: 'Garantía', weight: 10 },
-  { name: 'Experiencia', weight: 10 },
-  { name: 'Certificaciones', weight: 10 },
-  { name: 'Riesgo operativo', weight: 10 },
-];
 
 function getAgentIcon(icon: string) {
   return iconMap[icon as keyof typeof iconMap] ?? Bot;
@@ -275,9 +264,6 @@ const NexuIA = () => {
   const [uploadedComparisonFiles, setUploadedComparisonFiles] = useState<File[]>([]);
   const [comparisonService, setComparisonService] = useState('');
   const [comparisonObjective, setComparisonObjective] = useState('');
-  const [comparisonCriteriaText, setComparisonCriteriaText] = useState(
-    JSON.stringify(defaultProposalCriteria, null, 2),
-  );
   const proposalComparisonMutation = useProposalComparison();
   const [termsInitialDescription, setTermsInitialDescription] = useState('');
   const [termsFields, setTermsFields] = useState<Record<string, string>>({});
@@ -339,7 +325,6 @@ const NexuIA = () => {
     setUploadedComparisonFiles([]);
     setComparisonService('');
     setComparisonObjective('');
-    setComparisonCriteriaText(JSON.stringify(defaultProposalCriteria, null, 2));
     setAgentInputs({});
     proposalComparisonMutation.reset();
     setTermsInitialDescription('');
@@ -433,9 +418,6 @@ const NexuIA = () => {
           ...(curatedAgentsById.get(detailQuery.data.id) ?? {}),
         }
       : undefined;
-  const selectedAgentExecutions = (executionsQuery.data ?? []).filter(
-    (execution) => execution.agentId === selectedAgent?.id,
-  );
   const isDetailView = Boolean(routeAgentId);
   const isQuoteComparator =
     selectedAgent?.id === 'agent-quote-comparator' ||
@@ -507,28 +489,11 @@ const NexuIA = () => {
       return;
     }
 
-    let parsedCriteria: ProposalComparisonCriterion[];
-
-    try {
-      parsedCriteria = JSON.parse(comparisonCriteriaText) as ProposalComparisonCriterion[];
-      if (!Array.isArray(parsedCriteria)) {
-        throw new Error('Los criterios deben ser una lista.');
-      }
-    } catch {
-      toast({
-        title: 'Criterios inválidos',
-        description: 'Revisa que los criterios estén en formato JSON válido.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     proposalComparisonMutation.mutate(
       {
         title: selectedAgent.name,
         service: comparisonService.trim(),
         objective: comparisonObjective.trim(),
-        criteria: parsedCriteria,
         files: uploadedComparisonFiles,
       },
       {
@@ -1104,17 +1069,6 @@ const NexuIA = () => {
                               />
                             </div>
 
-                            <div className="space-y-1.5">
-                              <label className="text-sm font-medium text-foreground/80">
-                                Criterios de evaluación
-                              </label>
-                              <Textarea
-                                value={comparisonCriteriaText}
-                                onChange={(event) => setComparisonCriteriaText(event.target.value)}
-                                className="min-h-[152px] rounded-2xl border-primary/15 font-mono text-xs"
-                              />
-                            </div>
-
                             <div className="space-y-2">
                               <label className="text-sm font-medium text-foreground/80">
                                 Subir propuestas de proveedores
@@ -1410,6 +1364,140 @@ const NexuIA = () => {
                         </p>
                       </div>
 
+                      {proposalComparisonResult.executive_comparison_table?.length ? (
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Resumen ejecutivo comparativo</p>
+                          <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
+                            <table className="w-full min-w-[680px] text-left text-sm">
+                              <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                <tr>
+                                  <th className="px-4 py-3 font-medium">Dato clave</th>
+                                  {proposalComparisonResult.suppliers.map((supplier) => (
+                                    <th key={supplier.supplier_name} className="px-4 py-3 font-medium">
+                                      {supplier.supplier_name}
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {proposalComparisonResult.executive_comparison_table.map((row) => (
+                                  <tr key={row.row_label} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 font-medium text-foreground">{row.row_label}</td>
+                                    {proposalComparisonResult.suppliers.map((supplier) => (
+                                      <td key={`${row.row_label}-${supplier.supplier_name}`} className="px-4 py-3 text-muted-foreground">
+                                        {row.values[supplier.supplier_name] || 'No especificado'}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {proposalComparisonResult.evaluation_matrix?.criteria.length ? (
+                        <div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Matriz de evaluación comparativa</p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
+                              {proposalComparisonResult.auto_generated_criteria_note}
+                            </p>
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
+                              Escala de valoración: 1 = Muy deficiente | 2 = Deficiente | 3 = Aceptable | 4 = Bueno | 5 = Excelente. Puntaje ponderado = Valoración × Peso.
+                            </p>
+                          </div>
+                          <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
+                            <table className="w-full min-w-[760px] text-left text-sm">
+                              <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                <tr>
+                                  <th className="px-4 py-3 font-medium">N°</th>
+                                  <th className="px-4 py-3 font-medium">Criterio</th>
+                                  <th className="px-4 py-3 font-medium">Peso %</th>
+                                  {proposalComparisonResult.suppliers.map((supplier) => (
+                                    <th key={supplier.supplier_name} className="px-4 py-3 font-medium">
+                                      {supplier.supplier_name}
+                                    </th>
+                                  ))}
+                                  <th className="px-4 py-3 font-medium">Observaciones</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {proposalComparisonResult.evaluation_matrix.criteria.map((criterion) => (
+                                  <tr key={`${criterion.number}-${criterion.criterion}`} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 text-muted-foreground">{criterion.number}</td>
+                                    <td className="px-4 py-3 font-medium text-foreground">{criterion.criterion}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{criterion.weight_percent}%</td>
+                                    {proposalComparisonResult.suppliers.map((supplier) => (
+                                      <td key={`${criterion.criterion}-${supplier.supplier_name}`} className="px-4 py-3 text-muted-foreground">
+                                        {criterion.ratings[supplier.supplier_name] ?? 'No especificado'}
+                                      </td>
+                                    ))}
+                                    <td className="px-4 py-3 text-muted-foreground">{criterion.observations}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {proposalComparisonResult.evaluation_matrix?.weighted_totals.length ? (
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Puntaje ponderado total</p>
+                          <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
+                            <table className="w-full min-w-[480px] text-left text-sm">
+                              <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                <tr>
+                                  <th className="px-4 py-3 font-medium">Proveedor</th>
+                                  <th className="px-4 py-3 font-medium">Puntaje ponderado</th>
+                                  <th className="px-4 py-3 font-medium">Ranking</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {proposalComparisonResult.evaluation_matrix.weighted_totals.map((item) => (
+                                  <tr key={item.supplier_name} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 font-medium text-foreground">{item.supplier_name}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.weighted_score.toFixed(2)} / 5.00</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.ranking_position}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {proposalComparisonResult.criteria_guide?.length ? (
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Guía de criterios</p>
+                          <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
+                            <table className="w-full min-w-[760px] text-left text-sm">
+                              <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                <tr>
+                                  <th className="px-4 py-3 font-medium">N°</th>
+                                  <th className="px-4 py-3 font-medium">Criterio</th>
+                                  <th className="px-4 py-3 font-medium">Peso %</th>
+                                  <th className="px-4 py-3 font-medium">Escala de valoración 1 a 5</th>
+                                  <th className="px-4 py-3 font-medium">Fuente de verificación</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {proposalComparisonResult.criteria_guide.map((item) => (
+                                  <tr key={`${item.number}-${item.criterion}`} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 text-muted-foreground">{item.number}</td>
+                                    <td className="px-4 py-3 font-medium text-foreground">{item.criterion}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.weight_percent}%</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.evaluation_scale_description}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.verification_source}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null}
+
                       <div>
                         <p className="text-sm font-medium text-foreground">Ranking</p>
                         <div className="mt-3 space-y-2">
@@ -1423,7 +1511,7 @@ const NexuIA = () => {
                                   {item.position}. {item.supplier_name}
                                 </p>
                                 <Badge className="bg-primary text-white hover:bg-primary">
-                                  {item.score}/100
+                                  {item.weighted_score ? `${item.weighted_score.toFixed(2)}/5` : `${item.score}/100`}
                                 </Badge>
                               </div>
                               <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.reason}</p>
@@ -1507,36 +1595,6 @@ const NexuIA = () => {
                 <p className="text-sm text-muted-foreground/70">
                   Elige un agente del catalogo para ver descripcion completa, beneficios e inputs.
                 </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-primary/15 shadow-sm">
-            <CardHeader>
-              <CardDescription>Historial de ejecuciones</CardDescription>
-              <CardTitle className="text-xl text-foreground">Automatizaciones recientes</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {executionsQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground/70">Cargando historial...</p>
-              ) : selectedAgentExecutions.length ? (
-                selectedAgentExecutions.slice(0, 4).map((execution) => (
-                  <div key={execution.id} className="rounded-[22px] border border-primary/15 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-foreground">{execution.agentName}</p>
-                      <Badge variant="outline" className="border-primary/15 text-muted-foreground">
-                        {formatDateTime(execution.executedAt)}
-                      </Badge>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      {String(execution.outputData.summary ?? 'Ejecucion completada')}
-                    </p>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-[24px] border border-dashed border-primary/15 bg-primary/5 p-6 text-sm text-muted-foreground/70">
-                  Aun no hay ejecuciones para este agente. Ejecutalo para generar el primer historial.
-                </div>
               )}
             </CardContent>
           </Card>

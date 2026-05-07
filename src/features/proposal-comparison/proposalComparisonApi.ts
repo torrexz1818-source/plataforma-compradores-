@@ -1,12 +1,8 @@
-export type ProposalComparisonCriterion = {
-  name: string;
-  weight: number;
-};
-
 export type ProposalComparisonRankingItem = {
   position: number;
   supplier_name: string;
   score: number;
+  weighted_score?: number;
   reason: string;
   main_strengths: string[];
   main_risks: string[];
@@ -41,15 +37,61 @@ export type ProposalComparisonRow = {
   comment: string;
 };
 
+export type ProposalEvaluationScale = {
+  min: number;
+  max: number;
+  labels: Record<string, string>;
+  weighted_score_formula: string;
+};
+
+export type ProposalEvaluationMatrixCriterion = {
+  number: number;
+  criterion: string;
+  weight_percent: number;
+  ratings: Record<string, number>;
+  observations: string;
+};
+
+export type ProposalWeightedTotal = {
+  supplier_name: string;
+  weighted_score: number;
+  ranking_position: number;
+};
+
+export type ProposalEvaluationMatrix = {
+  title: string;
+  weight_sum: number;
+  criteria: ProposalEvaluationMatrixCriterion[];
+  weighted_totals: ProposalWeightedTotal[];
+};
+
+export type ProposalCriteriaGuideItem = {
+  number: number;
+  criterion: string;
+  weight_percent: number;
+  evaluation_scale_description: string;
+  verification_source: string;
+};
+
+export type ProposalExecutiveComparisonRow = {
+  row_label: string;
+  values: Record<string, string | null>;
+};
+
 export type ProposalComparisonResult = {
   analysis_title: string;
   service: string;
   objective: string | null;
   executive_summary: string;
   recommended_supplier: string;
+  auto_generated_criteria_note?: string;
+  evaluation_scale?: ProposalEvaluationScale;
+  evaluation_matrix?: ProposalEvaluationMatrix;
+  criteria_guide?: ProposalCriteriaGuideItem[];
   ranking: ProposalComparisonRankingItem[];
   suppliers: ProposalComparisonSupplier[];
   comparison_table: ProposalComparisonRow[];
+  executive_comparison_table?: ProposalExecutiveComparisonRow[];
   global_risks: string[];
   missing_information: string[];
   questions_for_suppliers: string[];
@@ -61,7 +103,6 @@ export type AnalyzeProposalComparisonPayload = {
   title?: string;
   service: string;
   objective?: string;
-  criteria: ProposalComparisonCriterion[];
   files: File[];
 };
 
@@ -91,7 +132,6 @@ export async function analyzeProposalComparison(
     formData.append('objective', payload.objective.trim());
   }
 
-  formData.append('criteria', JSON.stringify(payload.criteria));
   payload.files.forEach((file) => formData.append('files', file, file.name));
 
   let response: Response;

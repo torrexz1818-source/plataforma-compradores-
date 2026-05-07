@@ -1,19 +1,31 @@
 SYSTEM_PROMPT = """
-Actúa como analista senior de compras corporativas.
-Compara propuestas de proveedores usando como contexto principal el servicio, producto o categoría indicado por el comprador.
-No elijas automáticamente al proveedor más barato.
-Evalúa el equilibrio entre precio, alcance técnico, condiciones comerciales, forma de pago, garantía, certificaciones, experiencia, riesgo operativo, exclusiones, observaciones, claridad de propuesta e información faltante.
+Actua como analista senior de compras corporativas.
+Debes comparar propuestas de proveedores y generar una matriz de evaluacion ponderada.
+No pidas criterios manuales al usuario.
+Define automaticamente los criterios de evaluacion adecuados segun el tipo de compra/servicio, el objetivo del comprador y la informacion contenida en las propuestas.
+Asigna pesos porcentuales que sumen 100%.
+Califica a cada proveedor del 1 al 5 por criterio:
+1 = Muy deficiente, 2 = Deficiente, 3 = Aceptable, 4 = Bueno, 5 = Excelente.
+Explica en observaciones por que se asignan esas calificaciones.
+Genera una guia de criterios con escala de 1 a 5 y fuente de verificacion.
+Calcula el puntaje ponderado total: suma(valoracion * peso_percent / 100). El maximo posible es 5.00.
+Recomienda el proveedor con mejor equilibrio tecnico, comercial y de riesgo.
+No elijas automaticamente al proveedor mas barato.
 
-Debes detectar condiciones como pago adelantado, pago a 30 días, 50% al inicio y 50% al final, contrato mínimo, renovación automática, vigencia de oferta, reajustes, garantía, penalidades, descuentos por incumplimiento, exclusiones, servicios no incluidos, certificaciones ISO, SCTR, EPPs, supervisión, app de control, plan de contingencias y referencias comerciales.
+Evalua precio, alcance tecnico, condiciones comerciales, forma de pago, garantia, certificaciones, experiencia, riesgo operativo, exclusiones, observaciones, claridad de propuesta e informacion faltante.
+Detecta condiciones como pago adelantado, pago a 30 dias, 50% al inicio y 50% al final, contrato minimo, renovacion automatica, vigencia de oferta, reajustes, garantia, penalidades, descuentos por incumplimiento, exclusiones, servicios no incluidos, certificaciones ISO, SCTR, EPPs, supervision, app de control, plan de contingencias y referencias comerciales.
 
 Reglas:
-- Devuelve exclusivamente JSON válido, sin markdown ni comentarios.
-- El resultado debe estar en español.
+- Devuelve exclusivamente JSON valido, sin markdown ni comentarios.
+- El resultado debe estar en espanol.
 - No inventes datos no presentes en las propuestas.
 - Si un dato no aparece, usa null o "No especificado".
-- Justifica el ranking y la recomendación.
-- Señala información faltante y preguntas concretas para los proveedores.
-- Mantén un tono profesional, claro y útil para un comprador corporativo.
+- Penaliza informacion faltante, incumplimientos criticos y propuestas incompletas.
+- Si falta informacion clave, el proveedor no debe recibir 5 en ese criterio.
+- Precio no debe dominar todo el analisis por si solo.
+- Justifica el ranking y la recomendacion.
+- Senala informacion faltante y preguntas concretas para los proveedores.
+- Manten un tono profesional, claro y util para un comprador corporativo.
 """
 
 
@@ -21,17 +33,14 @@ def build_user_prompt(
     title: str | None,
     service: str,
     objective: str | None,
-    criteria: list[dict],
     documents: list[dict],
 ) -> str:
     return f"""
-Título del análisis: {title or "Comparativo de propuestas de proveedores"}
-Servicio, producto o categoría a comparar: {service}
+Titulo del analisis: {title or "Comparativo de propuestas de proveedores"}
+Servicio, producto o categoria a comparar: {service}
 Objetivo de la compra: {objective or "No especificado"}
-Criterios de evaluación sugeridos por el comprador:
-{criteria}
 
-Propuestas extraídas:
+Propuestas extraidas:
 {documents}
 
 Devuelve un JSON con esta estructura exacta:
@@ -41,11 +50,57 @@ Devuelve un JSON con esta estructura exacta:
   "objective": "string",
   "executive_summary": "string",
   "recommended_supplier": "string",
+  "auto_generated_criteria_note": "Los criterios y pesos fueron generados automaticamente por IA segun el tipo de compra/servicio y la informacion contenida en las propuestas.",
+  "evaluation_scale": {{
+    "min": 1,
+    "max": 5,
+    "labels": {{
+      "1": "Muy deficiente",
+      "2": "Deficiente",
+      "3": "Aceptable",
+      "4": "Bueno",
+      "5": "Excelente"
+    }},
+    "weighted_score_formula": "Puntaje ponderado = Valoracion x Peso"
+  }},
+  "evaluation_matrix": {{
+    "title": "Matriz de evaluacion comparativa de proveedores",
+    "weight_sum": 100,
+    "criteria": [
+      {{
+        "number": 1,
+        "criterion": "string",
+        "weight_percent": 10,
+        "ratings": {{
+          "Proveedor A": 5,
+          "Proveedor B": 4
+        }},
+        "observations": "string"
+      }}
+    ],
+    "weighted_totals": [
+      {{
+        "supplier_name": "string",
+        "weighted_score": 4.25,
+        "ranking_position": 1
+      }}
+    ]
+  }},
+  "criteria_guide": [
+    {{
+      "number": 1,
+      "criterion": "string",
+      "weight_percent": 10,
+      "evaluation_scale_description": "5 = ... | 4 = ... | 3 = ... | 2 = ... | 1 = ...",
+      "verification_source": "string"
+    }}
+  ],
   "ranking": [
     {{
       "position": 1,
       "supplier_name": "string",
       "score": 0,
+      "weighted_score": 0,
       "reason": "string",
       "main_strengths": ["string"],
       "main_risks": ["string"]
@@ -85,10 +140,19 @@ Devuelve un JSON con esta estructura exacta:
       "comment": "string"
     }}
   ],
+  "executive_comparison_table": [
+    {{
+      "row_label": "Precio",
+      "values": {{
+        "Proveedor A": "string",
+        "Proveedor B": "string"
+      }}
+    }}
+  ],
   "global_risks": ["string"],
   "missing_information": ["string"],
   "questions_for_suppliers": ["string"],
   "final_recommendation": "string",
-  "disclaimer": "Este análisis es una recomendación asistida por IA y debe ser validado por el comprador antes de tomar una decisión final."
+  "disclaimer": "Este analisis es una recomendacion asistida por IA y debe ser validado por el comprador antes de tomar una decision final."
 }}
 """

@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
@@ -8,40 +7,14 @@ from app.agents.proposal_comparison.schemas import ExtractedDocument, ProposalCo
 from app.agents.proposal_comparison.scoring import normalize_ranking
 from app.ai.llm_client import analyze_with_openai
 from app.config import get_settings
-from app.document_processing.file_detector import detect_file_type, validate_allowed_file
-from app.document_processing.text_cleaner import clean_text
-from app.document_processing.pdf_reader import read_pdf
-from app.document_processing.docx_reader import read_docx
-from app.document_processing.xlsx_reader import read_xlsx
 from app.document_processing.csv_reader import read_csv
+from app.document_processing.docx_reader import read_docx
+from app.document_processing.file_detector import detect_file_type, validate_allowed_file
 from app.document_processing.image_ocr import read_image
-from app.utils.temp_files import save_upload_temporarily, cleanup_files
-
-
-DEFAULT_CRITERIA = [
-    {"name": "Precio", "weight": 25},
-    {"name": "Alcance técnico", "weight": 20},
-    {"name": "Condiciones comerciales", "weight": 15},
-    {"name": "Garantía", "weight": 10},
-    {"name": "Experiencia", "weight": 10},
-    {"name": "Certificaciones", "weight": 10},
-    {"name": "Riesgo operativo", "weight": 10},
-]
-
-
-def parse_criteria(criteria: str | None) -> list[dict]:
-    if not criteria:
-        return DEFAULT_CRITERIA
-
-    try:
-        parsed = json.loads(criteria)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="Los criterios deben enviarse como JSON válido.") from exc
-
-    if not isinstance(parsed, list):
-        raise HTTPException(status_code=400, detail="Los criterios deben ser una lista JSON.")
-
-    return parsed
+from app.document_processing.pdf_reader import read_pdf
+from app.document_processing.text_cleaner import clean_text
+from app.document_processing.xlsx_reader import read_xlsx
+from app.utils.temp_files import cleanup_files, save_upload_temporarily
 
 
 def extract_text_from_file(path: Path, filename: str) -> ExtractedDocument:
@@ -92,7 +65,9 @@ async def analyze_proposals(
             detail=f"Puedes subir como máximo {settings.max_files_per_analysis} archivos por análisis.",
         )
 
-    parsed_criteria = parse_criteria(criteria)
+    # criteria se conserva en la firma por compatibilidad con clientes antiguos,
+    # pero este agente ahora genera criterios y pesos automaticamente.
+    _ = criteria
     temp_paths: list[Path] = []
 
     try:
@@ -123,9 +98,21 @@ async def analyze_proposals(
             for doc in extracted_documents
         ]
 
-        prompt = build_user_prompt(title, service, objective, parsed_criteria, documents_for_prompt)
+        prompt = build_user_prompt(title, service, objective, documents_for_prompt)
         raw_result = await analyze_with_openai(prompt)
         normalized_result = normalize_ranking(raw_result)
+
+        if len(normalized_result.get("suppliers", [])) < 2:
+            raise HTTPException(
+                status_code=502,
+                detail="La IA no pudo identificar al menos dos proveedores en las propuestas.",
+            )
+
+        if not normalized_result.get("evaluation_matrix", {}).get("criteria"):
+            raise HTTPException(
+                status_code=502,
+                detail="La IA no pudo generar criterios de evaluación para la matriz comparativa.",
+            )
 
         normalized_result.setdefault("analysis_title", title or "Comparativo de propuestas de proveedores")
         normalized_result.setdefault("service", service)
