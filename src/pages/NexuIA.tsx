@@ -6,6 +6,7 @@ import {
   Bot,
   BrainCircuit,
   CheckCircle2,
+  Download,
   FileSpreadsheet,
   FileText,
   FileCheck2,
@@ -28,7 +29,6 @@ import {
   getAgents,
   getMyAgentExecutions,
   runAgent,
-  runN8nComparativeWebhook,
 } from '@/lib/api';
 import type { Agent } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
+import { useProposalComparison } from '@/features/proposal-comparison/useProposalComparison';
+import type { ProposalComparisonCriterion } from '@/features/proposal-comparison/proposalComparisonApi';
+import {
+  useDownloadTermsPdf,
+  useGenerateTermsOfReference,
+  useTermsFormSchema,
+} from '@/features/terms-of-reference/useTermsOfReference';
+import {
+  validateTermsFiles,
+  type TermsFormField,
+} from '@/features/terms-of-reference/termsOfReferenceApi';
 
 const iconMap = {
   Bot,
@@ -48,6 +59,16 @@ const iconMap = {
   TrendingUp,
   TriangleAlert,
 };
+
+const defaultProposalCriteria: ProposalComparisonCriterion[] = [
+  { name: 'Precio', weight: 25 },
+  { name: 'Alcance técnico', weight: 20 },
+  { name: 'Condiciones comerciales', weight: 15 },
+  { name: 'Garantía', weight: 10 },
+  { name: 'Experiencia', weight: 10 },
+  { name: 'Certificaciones', weight: 10 },
+  { name: 'Riesgo operativo', weight: 10 },
+];
 
 function getAgentIcon(icon: string) {
   return iconMap[icon as keyof typeof iconMap] ?? Bot;
@@ -66,7 +87,7 @@ const curatedAgents: Agent[] = [
     slug: 'comparativos-propuestas-proveedores',
     name: 'Comparativos de propuestas de proveedores',
     description:
-      'Compara propuestas de distintos proveedores y entrega un resumen ejecutivo con recomendacion final.',
+      'Sube propuestas de proveedores y recibe una tabla comparativa con condiciones, riesgos, ranking y recomendación final.',
     longDescription:
       'Centraliza propuestas comerciales, analiza diferencias clave y genera un comparativo orientado a decision para procesos RFQ, licitaciones privadas y compras recurrentes.',
     category: 'Compras',
@@ -84,7 +105,7 @@ const curatedAgents: Agent[] = [
       'Mejora trazabilidad para auditoria interna',
     ],
     inputs: ['Archivos de propuestas'],
-    outputs: ['PDF comparativo', 'Ranking recomendado', 'Resumen ejecutivo'],
+    outputs: ['Tabla comparativa', 'Ranking recomendado', 'Resumen ejecutivo', 'Recomendación final'],
     isActive: true,
     accentColor: '#0f766e',
     icon: 'Scale',
@@ -252,7 +273,19 @@ const NexuIA = () => {
   const [selectedAutomationType, setSelectedAutomationType] = useState('Todos');
   const [agentInputs, setAgentInputs] = useState<Record<string, string>>({});
   const [uploadedComparisonFiles, setUploadedComparisonFiles] = useState<File[]>([]);
-  const [n8nComparativeResult, setN8nComparativeResult] = useState<Record<string, unknown> | null>(null);
+  const [comparisonService, setComparisonService] = useState('');
+  const [comparisonObjective, setComparisonObjective] = useState('');
+  const [comparisonCriteriaText, setComparisonCriteriaText] = useState(
+    JSON.stringify(defaultProposalCriteria, null, 2),
+  );
+  const proposalComparisonMutation = useProposalComparison();
+  const [termsInitialDescription, setTermsInitialDescription] = useState('');
+  const [termsFields, setTermsFields] = useState<Record<string, string>>({});
+  const [termsSafetyRequirements, setTermsSafetyRequirements] = useState<string[]>([]);
+  const [termsFiles, setTermsFiles] = useState<File[]>([]);
+  const termsFormSchemaMutation = useTermsFormSchema();
+  const termsGenerateMutation = useGenerateTermsOfReference();
+  const termsPdfMutation = useDownloadTermsPdf();
 
   const agentsQuery = useQuery({
     queryKey: ['agents'],
@@ -304,8 +337,18 @@ const NexuIA = () => {
 
   useEffect(() => {
     setUploadedComparisonFiles([]);
+    setComparisonService('');
+    setComparisonObjective('');
+    setComparisonCriteriaText(JSON.stringify(defaultProposalCriteria, null, 2));
     setAgentInputs({});
-    setN8nComparativeResult(null);
+    proposalComparisonMutation.reset();
+    setTermsInitialDescription('');
+    setTermsFields({});
+    setTermsSafetyRequirements([]);
+    setTermsFiles([]);
+    termsFormSchemaMutation.reset();
+    termsGenerateMutation.reset();
+    termsPdfMutation.reset();
   }, [routeAgentId]);
 
   const activateMutation = useMutation({
@@ -340,38 +383,6 @@ const NexuIA = () => {
     onError: (error) => {
       toast({
         title: 'No se pudo ejecutar',
-        description: error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
-        variant: 'destructive',
-      });
-    },
-  });
-
-  const n8nComparativeMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedAgent) {
-        throw new Error('Selecciona un agente.');
-      }
-
-      if (!uploadedComparisonFiles.length) {
-        throw new Error('Sube al menos un PDF, Excel, CSV o documento para enviar a n8n.');
-      }
-
-      return runN8nComparativeWebhook({
-        agentId: selectedAgent.id,
-        agentName: selectedAgent.name,
-        files: uploadedComparisonFiles,
-      });
-    },
-    onSuccess: (result) => {
-      setN8nComparativeResult(result);
-      toast({
-        title: 'Flujo n8n ejecutado',
-        description: 'El comparativo fue generado y ya se muestra en esta vista.',
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: 'No se pudo ejecutar n8n',
         description: error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
         variant: 'destructive',
       });
@@ -428,7 +439,11 @@ const NexuIA = () => {
   const isDetailView = Boolean(routeAgentId);
   const isQuoteComparator =
     selectedAgent?.id === 'agent-quote-comparator' ||
-    selectedAgent?.slug === 'comparador-cotizaciones';
+    selectedAgent?.slug === 'comparador-cotizaciones' ||
+    selectedAgent?.slug === 'comparativos-propuestas-proveedores';
+  const isTermsReference =
+    selectedAgent?.id === 'agent-terms-reference' ||
+    selectedAgent?.slug === 'elaboracion-terminos-referencia';
 
   const marketplaceStats = [
     {
@@ -469,12 +484,323 @@ const NexuIA = () => {
     setUploadedComparisonFiles(files);
   };
 
-  const comparativePdfUrl =
-    typeof n8nComparativeResult?.pdfUrl === 'string' ? n8nComparativeResult.pdfUrl : '';
-  const comparativePdfFileName =
-    typeof n8nComparativeResult?.fileName === 'string'
-      ? n8nComparativeResult.fileName
-      : 'comparativo-cotizaciones.pdf';
+  const handleProposalComparison = () => {
+    if (!selectedAgent) {
+      return;
+    }
+
+    if (!comparisonService.trim()) {
+      toast({
+        title: 'Falta el servicio o categoría',
+        description: 'Indica qué servicio, producto o categoría deseas comparar.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (uploadedComparisonFiles.length < 2) {
+      toast({
+        title: 'Faltan propuestas',
+        description: 'Sube al menos 2 propuestas de proveedores para iniciar el análisis.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    let parsedCriteria: ProposalComparisonCriterion[];
+
+    try {
+      parsedCriteria = JSON.parse(comparisonCriteriaText) as ProposalComparisonCriterion[];
+      if (!Array.isArray(parsedCriteria)) {
+        throw new Error('Los criterios deben ser una lista.');
+      }
+    } catch {
+      toast({
+        title: 'Criterios inválidos',
+        description: 'Revisa que los criterios estén en formato JSON válido.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    proposalComparisonMutation.mutate(
+      {
+        title: selectedAgent.name,
+        service: comparisonService.trim(),
+        objective: comparisonObjective.trim(),
+        criteria: parsedCriteria,
+        files: uploadedComparisonFiles,
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Análisis completado',
+            description: 'El comparativo ya está listo para revisar.',
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: 'No se pudo analizar',
+            description:
+              error instanceof Error
+                ? error.message
+                : 'No se pudo conectar con el AI Engine o completar el análisis.',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
+  };
+
+  const updateTermsField = (name: string, value: string) => {
+    setTermsFields((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleCreateTermsForm = () => {
+    if (!termsInitialDescription.trim()) {
+      toast({
+        title: 'Describe primero qué necesitas realizar.',
+        description: 'Agrega una descripción inicial para crear el formulario inteligente.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    termsFormSchemaMutation.mutate(termsInitialDescription.trim(), {
+      onSuccess: (schema) => {
+        const nextFields: Record<string, string> = {};
+        schema.form_sections.forEach((section) => {
+          section.fields.forEach((field) => {
+            if (field.type !== 'file' && field.type !== 'multiselect') {
+              nextFields[field.name] = termsFields[field.name] ?? '';
+            }
+          });
+        });
+        nextFields.requirement_type = nextFields.requirement_type || schema.requirement_type;
+        nextFields.category = nextFields.category || schema.detected_category;
+        setTermsFields(nextFields);
+        setTermsSafetyRequirements(schema.recommended_safety_requirements);
+        toast({
+          title: 'Formulario inteligente creado',
+          description: 'Revisa la categoría sugerida y completa los campos del requerimiento.',
+        });
+      },
+      onError: (error) => {
+        toast({
+          title: 'No se pudo generar el formulario inteligente. Intenta nuevamente.',
+          description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
+          variant: 'destructive',
+        });
+      },
+    });
+  };
+
+  const handleTermsFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    const validationMessage = validateTermsFiles(files);
+    if (validationMessage) {
+      toast({
+        title: validationMessage,
+        description: 'Formatos soportados: PDF, DOCX, XLSX, CSV, JPG, JPEG y PNG.',
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
+    setTermsFiles(files);
+  };
+
+  const handleToggleSafetyRequirement = (value: string) => {
+    setTermsSafetyRequirements((current) =>
+      current.includes(value) ? current.filter((item) => item !== value) : [...current, value],
+    );
+  };
+
+  const handleGenerateTerms = () => {
+    const requiredFields = ['title', 'requirement_type', 'objective', 'scope', 'deliverables', 'justification'];
+    const hasMissingRequired = requiredFields.some((field) => !termsFields[field]?.trim());
+
+    if (!termsInitialDescription.trim()) {
+      toast({
+        title: 'Describe primero qué necesitas realizar.',
+        description: 'Ese texto inicial ayuda a la IA a contextualizar el término de referencia.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (hasMissingRequired) {
+      toast({
+        title: 'Completa los campos obligatorios antes de generar el término de referencia.',
+        description: 'Revisa nombre, tipo, objetivo, alcance, entregables y justificación.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const dynamicFormData = Object.fromEntries(
+      Object.entries(termsFields).filter(([key]) => key.startsWith('dynamic_')),
+    );
+
+    termsGenerateMutation.mutate(
+      {
+        initialDescription: termsInitialDescription.trim(),
+        fields: termsFields,
+        safetyRequirements: termsSafetyRequirements,
+        dynamicFormData,
+        files: termsFiles,
+      },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Término de referencia generado',
+            description: 'El documento ya está listo para revisar y descargar.',
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: 'No se pudo generar el término de referencia. Intenta nuevamente.',
+            description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
+  };
+
+  const handleDownloadTermsPdf = () => {
+    if (!termsGenerateMutation.data) {
+      return;
+    }
+
+    termsPdfMutation.mutate(termsGenerateMutation.data, {
+      onError: (error) => {
+        toast({
+          title: 'No se pudo descargar el PDF.',
+          description: error instanceof Error ? error.message : 'Intenta nuevamente.',
+          variant: 'destructive',
+        });
+      },
+    });
+  };
+
+  const proposalComparisonResult = proposalComparisonMutation.data;
+  const termsFormSchema = termsFormSchemaMutation.data;
+  const termsResult = termsGenerateMutation.data;
+
+  const renderTermsField = (field: TermsFormField) => {
+    if (field.type === 'file') {
+      return (
+        <div key={field.name} className="space-y-2">
+          <label className="text-sm font-medium text-foreground/80">{field.label}</label>
+          <p className="text-xs leading-5 text-muted-foreground/70">
+            Puedes subir planos con medidas, fichas técnicas, fotos, croquis, documentos previos,
+            Excel con cantidades, manuales técnicos o imágenes del estado actual.
+          </p>
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-primary/5 px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
+            <Upload className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium text-foreground">Subir documentos de apoyo</p>
+              <p className="mt-1 text-xs text-muted-foreground/70">
+                PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. Máximo 8 archivos.
+              </p>
+            </div>
+            <input
+              type="file"
+              multiple
+              accept=".pdf,.docx,.xlsx,.csv,.jpg,.jpeg,.png"
+              onChange={handleTermsFilesChange}
+              className="hidden"
+            />
+          </label>
+          {termsFiles.length ? (
+            <div className="space-y-2 rounded-2xl border border-primary/15 bg-white p-3">
+              {termsFiles.map((file) => {
+                const isSpreadsheet = file.name.endsWith('.xls') || file.name.endsWith('.xlsx') || file.name.endsWith('.csv');
+                const FileIcon = isSpreadsheet ? FileSpreadsheet : FileText;
+                return (
+                  <div key={`${file.name}-${file.size}`} className="flex items-center justify-between gap-3 rounded-xl bg-primary/5 px-3 py-2">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-sm text-foreground/80">{file.name}</span>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground/70">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (field.type === 'multiselect') {
+      return (
+        <div key={field.name} className="space-y-2">
+          <label className="text-sm font-medium text-foreground/80">{field.label}</label>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {field.options.map((option) => (
+              <label key={option} className="flex items-center gap-2 rounded-xl border border-primary/15 bg-white px-3 py-2 text-sm text-foreground/80">
+                <input
+                  type="checkbox"
+                  checked={termsSafetyRequirements.includes(option)}
+                  onChange={() => handleToggleSafetyRequirement(option)}
+                  className="h-4 w-4 rounded border-primary/25"
+                />
+                {option}
+              </label>
+            ))}
+          </div>
+          {termsSafetyRequirements.includes('Otro') ? (
+            <Input
+              value={termsFields.safety_other ?? ''}
+              onChange={(event) => updateTermsField('safety_other', event.target.value)}
+              placeholder="Describe el requisito de seguridad adicional"
+              className="rounded-xl border-primary/15"
+            />
+          ) : null}
+        </div>
+      );
+    }
+
+    if (field.type === 'select') {
+      return (
+        <div key={field.name} className="space-y-1.5">
+          <label className="text-sm font-medium text-foreground/80">{field.label}</label>
+          <select
+            value={termsFields[field.name] ?? ''}
+            onChange={(event) => updateTermsField(field.name, event.target.value)}
+            className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground"
+            required={field.required}
+          >
+            <option value="">Selecciona una opción</option>
+            {field.options.map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+        </div>
+      );
+    }
+
+    const Control = field.type === 'textarea' ? Textarea : Input;
+    return (
+      <div key={field.name} className="space-y-1.5">
+        <label className="text-sm font-medium text-foreground/80">
+          {field.label}
+          {field.required ? <span className="text-destructive"> *</span> : null}
+        </label>
+        <Control
+          value={termsFields[field.name] ?? ''}
+          onChange={(event) => updateTermsField(field.name, event.target.value)}
+          placeholder={field.placeholder}
+          className={field.type === 'textarea' ? 'min-h-[96px] rounded-2xl border-primary/15' : 'rounded-xl border-primary/15'}
+          required={field.required}
+        />
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 pb-8">
@@ -679,26 +1005,134 @@ const NexuIA = () => {
                         Inputs requeridos
                       </p>
                       <div className="mt-3 space-y-3">
-                        {isQuoteComparator ? (
+                        {isTermsReference ? (
                           <>
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-medium text-foreground/80">
+                                Describe qué necesitas realizar
+                              </label>
+                              <Textarea
+                                value={termsInitialDescription}
+                                onChange={(event) => setTermsInitialDescription(event.target.value)}
+                                placeholder="Ejemplo: Necesito mantenimiento de luminarias en planta, reparación de paredes con humedad, implementación de estacionamiento, inspección de equipos de aire acondicionado, compra de laptops..."
+                                className="min-h-[112px] rounded-2xl border-primary/15"
+                                required
+                              />
+                            </div>
+                            <Button
+                              type="button"
+                              className="rounded-full bg-primary hover:bg-primary"
+                              onClick={handleCreateTermsForm}
+                              disabled={termsFormSchemaMutation.isPending}
+                            >
+                              <Sparkles className="mr-2 h-4 w-4" />
+                              {termsFormSchemaMutation.isPending ? 'Creando formulario inteligente...' : 'Crear formulario inteligente'}
+                            </Button>
+
+                            {termsFormSchema ? (
+                              <div className="space-y-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                                <div className="grid gap-3 md:grid-cols-3">
+                                  <div className="rounded-xl bg-white p-3">
+                                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+                                      Categoría sugerida
+                                    </p>
+                                    <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.detected_category}</p>
+                                  </div>
+                                  <div className="rounded-xl bg-white p-3">
+                                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+                                      Tipo
+                                    </p>
+                                    <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.requirement_type}</p>
+                                  </div>
+                                  <div className="rounded-xl bg-white p-3">
+                                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
+                                      Complejidad
+                                    </p>
+                                    <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.complexity}</p>
+                                  </div>
+                                </div>
+
+                                {termsFormSchema.notes_for_buyer.length ? (
+                                  <div className="rounded-xl border border-primary/15 bg-white p-3">
+                                    <p className="text-sm font-medium text-foreground">Puntos sugeridos para aclarar</p>
+                                    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                                      {termsFormSchema.notes_for_buyer.map((note) => (
+                                        <li key={note}>- {note}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : null}
+
+                                {termsFormSchema.form_sections.map((section) => (
+                                  <div key={section.section_title} className="space-y-3 rounded-2xl border border-primary/15 bg-white p-4">
+                                    <p className="text-sm font-medium text-foreground">{section.section_title}</p>
+                                    <div className="space-y-3">
+                                      {section.fields.map((field) => renderTermsField(field))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : isQuoteComparator ? (
+                          <>
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-medium text-foreground/80">
+                                Servicio, producto o categoría a comparar
+                              </label>
+                              <p className="text-xs text-muted-foreground/70">
+                                Aquí indica para qué son las propuestas que vas a comparar.
+                              </p>
+                              <Textarea
+                                value={comparisonService}
+                                onChange={(event) => setComparisonService(event.target.value)}
+                                placeholder="Ejemplo: Servicio de limpieza integral de oficinas 300 m², pintado de paredes, compra de laptops, mantenimiento preventivo, proveedor logístico…"
+                                className="min-h-[92px] rounded-2xl border-primary/15"
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-medium text-foreground/80">
+                                Objetivo de la compra
+                              </label>
+                              <Textarea
+                                value={comparisonObjective}
+                                onChange={(event) => setComparisonObjective(event.target.value)}
+                                placeholder="Ejemplo: Seleccionar el proveedor más conveniente considerando precio, alcance, garantía, condiciones comerciales y riesgo operativo."
+                                className="min-h-[92px] rounded-2xl border-primary/15"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-sm font-medium text-foreground/80">
+                                Criterios de evaluación
+                              </label>
+                              <Textarea
+                                value={comparisonCriteriaText}
+                                onChange={(event) => setComparisonCriteriaText(event.target.value)}
+                                className="min-h-[152px] rounded-2xl border-primary/15 font-mono text-xs"
+                              />
+                            </div>
+
                             <div className="space-y-2">
                               <label className="text-sm font-medium text-foreground/80">
-                                Archivos de cotizaciones
+                                Subir propuestas de proveedores
                               </label>
                               <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-primary/5 px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
                                 <Upload className="h-5 w-5 text-muted-foreground" />
                                 <div>
                                   <p className="text-sm font-medium text-foreground">
-                                    Subir PDF, Excel, CSV, Word u otros soportes
+                                    Subir PDF, DOCX, Excel, CSV o imágenes
                                   </p>
                                   <p className="mt-1 text-xs text-muted-foreground/70">
-                                    Puedes cargar varios archivos a la vez para tu flujo de n8n.
+                                    Carga 2 a 5 propuestas. Los archivos se procesan temporalmente.
                                   </p>
                                 </div>
                                 <input
                                   type="file"
                                   multiple
-                                  accept=".pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.png,.jpg,.jpeg"
+                                  accept=".pdf,.xlsx,.csv,.docx,.png,.jpg,.jpeg"
                                   onChange={handleComparisonFilesChange}
                                   className="hidden"
                                 />
@@ -749,7 +1183,7 @@ const NexuIA = () => {
                             </div>
                           ))
                         )}
-                        {!isQuoteComparator ? (
+                        {!isQuoteComparator && !isTermsReference ? (
                           <div className="space-y-1.5">
                             <label className="text-sm font-medium text-foreground/80">
                               Contexto adicional
@@ -793,17 +1227,29 @@ const NexuIA = () => {
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    {isQuoteComparator ? (
+                    {isTermsReference ? (
                       <Button
                         type="button"
                         className="rounded-full bg-primary hover:bg-primary"
-                        onClick={() => n8nComparativeMutation.mutate()}
-                        disabled={n8nComparativeMutation.isPending}
+                        onClick={handleGenerateTerms}
+                        disabled={!termsFormSchema || termsGenerateMutation.isPending}
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
-                        {n8nComparativeMutation.isPending
-                          ? 'Enviando a n8n...'
-                          : 'Ejecutar'}
+                        {termsGenerateMutation.isPending
+                          ? 'Generando término de referencia...'
+                          : 'Generar término de referencia'}
+                      </Button>
+                    ) : isQuoteComparator ? (
+                      <Button
+                        type="button"
+                        className="rounded-full bg-primary hover:bg-primary"
+                        onClick={handleProposalComparison}
+                        disabled={proposalComparisonMutation.isPending}
+                      >
+                        <PlayCircle className="mr-2 h-4 w-4" />
+                        {proposalComparisonMutation.isPending
+                          ? 'Analizando propuestas…'
+                          : 'Analizar propuestas'}
                       </Button>
                     ) : (
                       <>
@@ -841,30 +1287,218 @@ const NexuIA = () => {
                     </div>
                   ) : null}
 
-                  {isQuoteComparator && comparativePdfUrl ? (
-                    <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
-                      <p className="text-sm font-medium text-foreground">PDF comparativo generado</p>
-                      <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                        El flujo generó el comparativo final en PDF.
-                      </p>
-                      <div className="mt-4 flex flex-wrap gap-3">
-                        <a
-                          href={comparativePdfUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-white transition hover:bg-primary"
+                  {isTermsReference && termsResult ? (
+                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Resumen del requerimiento</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                            {termsResult.executive_summary}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="rounded-full"
+                          onClick={handleDownloadTermsPdf}
+                          disabled={termsPdfMutation.isPending}
                         >
-                          <FileText className="h-4 w-4" />
-                          Ver PDF
-                        </a>
-                        <a
-                          href={comparativePdfUrl}
-                          download={comparativePdfFileName}
-                          className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-white px-4 py-2 text-sm font-medium text-foreground/80 transition hover:border-primary/35 hover:text-foreground"
-                        >
-                          <ArrowRight className="h-4 w-4" />
-                          Descargar PDF
-                        </a>
+                          <Download className="mr-2 h-4 w-4" />
+                          {termsPdfMutation.isPending ? 'Preparando PDF...' : 'Descargar PDF'}
+                        </Button>
+                      </div>
+
+                      <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
+                          Documento generado
+                        </p>
+                        <div className="mt-3 space-y-4 text-sm leading-6 text-muted-foreground">
+                          <div>
+                            <p className="font-medium text-foreground">Objetivo</p>
+                            <p>{termsResult.generated_document.objective}</p>
+                          </div>
+                          <div>
+                            <p className="font-medium text-foreground">Alcance</p>
+                            <p>{termsResult.generated_document.scope}</p>
+                          </div>
+                          {[
+                            ['Características técnicas', termsResult.generated_document.technical_characteristics],
+                            ['Actividades requeridas', termsResult.generated_document.required_activities],
+                            ['Producto final / entregables', termsResult.generated_document.final_deliverables],
+                            ['Requisitos de seguridad', termsResult.generated_document.safety_requirements],
+                            ['Condiciones para proveedores', termsResult.generated_document.supplier_conditions],
+                            ['Anexos sugeridos', termsResult.generated_document.suggested_annexes],
+                          ].map(([title, items]) => (
+                            <div key={String(title)}>
+                              <p className="font-medium text-foreground">{String(title)}</p>
+                              <ul className="mt-1 space-y-1">
+                                {(items as string[]).map((item) => (
+                                  <li key={item}>- {item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Información faltante</p>
+                          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                            {termsResult.missing_information.map((item) => (
+                              <li key={item}>- {item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Recomendaciones</p>
+                          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                            {termsResult.buyer_recommendations.map((item) => (
+                              <li key={item}>- {item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Validación de calidad</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {termsResult.quality_check.is_complete ? 'Documento completo según la validación básica.' : 'Requiere completar secciones antes de enviarlo.'}
+                          </p>
+                          {termsResult.quality_check.warnings.length ? (
+                            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                              {termsResult.quality_check.warnings.map((item) => (
+                                <li key={item}>- {item}</li>
+                              ))}
+                            </ul>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      {termsResult.supporting_documents_summary.length ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Documentos de apoyo leídos</p>
+                          <div className="mt-3 space-y-2">
+                            {termsResult.supporting_documents_summary.map((doc) => (
+                              <div key={doc.file_name} className="rounded-xl bg-primary/5 p-3 text-sm text-muted-foreground">
+                                <p className="font-medium text-foreground">{doc.file_name}</p>
+                                <p>Tipo detectado: {doc.detected_type}</p>
+                                {doc.limitations.length ? <p>Advertencias: {doc.limitations.join('; ')}</p> : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <p className="text-xs leading-5 text-muted-foreground/70">{termsResult.disclaimer}</p>
+                    </div>
+                  ) : null}
+
+                  {isQuoteComparator && proposalComparisonResult ? (
+                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          {proposalComparisonResult.executive_summary}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
+                          Proveedor recomendado
+                        </p>
+                        <p className="mt-2 text-lg font-semibold text-foreground">
+                          {proposalComparisonResult.recommended_supplier}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Ranking</p>
+                        <div className="mt-3 space-y-2">
+                          {proposalComparisonResult.ranking.map((item) => (
+                            <div
+                              key={`${item.position}-${item.supplier_name}`}
+                              className="rounded-2xl border border-primary/15 bg-white p-3"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-foreground">
+                                  {item.position}. {item.supplier_name}
+                                </p>
+                                <Badge className="bg-primary text-white hover:bg-primary">
+                                  {item.score}/100
+                                </Badge>
+                              </div>
+                              <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.reason}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Tabla comparativa</p>
+                        <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
+                          <table className="w-full min-w-[680px] text-left text-sm">
+                            <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                              <tr>
+                                <th className="px-4 py-3 font-medium">Criterio</th>
+                                {proposalComparisonResult.suppliers.map((supplier) => (
+                                  <th key={supplier.supplier_name} className="px-4 py-3 font-medium">
+                                    {supplier.supplier_name}
+                                  </th>
+                                ))}
+                                <th className="px-4 py-3 font-medium">Comentario</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {proposalComparisonResult.comparison_table.map((row) => (
+                                <tr key={row.criterion} className="border-t border-primary/10">
+                                  <td className="px-4 py-3 font-medium text-foreground">{row.criterion}</td>
+                                  {proposalComparisonResult.suppliers.map((supplier) => (
+                                    <td key={`${row.criterion}-${supplier.supplier_name}`} className="px-4 py-3 text-muted-foreground">
+                                      {row.values[supplier.supplier_name] || 'No especificado'}
+                                    </td>
+                                  ))}
+                                  <td className="px-4 py-3 text-muted-foreground">{row.comment}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Riesgos globales</p>
+                          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                            {proposalComparisonResult.global_risks.map((item) => (
+                              <li key={item}>- {item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Información faltante</p>
+                          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                            {proposalComparisonResult.missing_information.map((item) => (
+                              <li key={item}>- {item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Preguntas sugeridas</p>
+                          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                            {proposalComparisonResult.questions_for_suppliers.map((item) => (
+                              <li key={item}>- {item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                        <p className="text-sm font-medium text-foreground">Recomendación final</p>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          {proposalComparisonResult.final_recommendation}
+                        </p>
+                        <p className="mt-3 text-xs leading-5 text-muted-foreground/70">
+                          {proposalComparisonResult.disclaimer}
+                        </p>
                       </div>
                     </div>
                   ) : null}
