@@ -1,5 +1,33 @@
 services:
   - type: web
+    name: buyernodus-ai-engine
+    runtime: python
+    rootDir: ai-engine
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: MAX_FILES_PER_ANALYSIS
+        value: "5"
+      - key: MAX_FILE_SIZE_MB
+        value: "10"
+      - key: DELETE_TEMP_FILES
+        value: "true"
+      - key: STORE_UPLOADS
+        value: "false"
+      - key: STORE_EXTRACTED_TEXT
+        value: "false"
+      - key: CORS_ORIGINS
+        value: https://buyernodus.com,https://www.buyernodus.com,http://localhost:5173,http://127.0.0.1:5173
+
+  - type: web
     name: buyernodus-backend
     runtime: node
     rootDir: backend
