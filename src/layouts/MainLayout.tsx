@@ -88,7 +88,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
         { to: '/nexu-experts', label: 'Nodus Experts', icon: Users },
       ],
     },
-    { to: '/buyer/sale', label: 'Ofertas', icon: FileText },
+    { to: '/buyer/sale', label: 'Ofertas y requerimientos', icon: FileText },
     { to: '/nexu-ia', label: 'Nodus IA', icon: Bot },
     { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
   ];

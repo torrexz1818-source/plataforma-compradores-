@@ -13,7 +13,7 @@ const supplierNavItems = [
   { to: '/supplier/inicio', label: 'Inicio', icon: LayoutDashboard },
   { to: '/supplier/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/supplier/directory', label: 'Directorio de compradores', icon: Building2 },
-  { to: '/supplier/sale', label: 'Ofertas', icon: FileText },
+  { to: '/supplier/sale', label: 'Ofertas y requerimientos', icon: FileText },
 ];
 
 const buyerNavItems = [
@@ -29,7 +29,7 @@ const buyerNavItems = [
       { to: '/nexu-experts', label: 'Nodus Experts', icon: Users },
     ],
   },
-  { to: '/buyer/sale', label: 'Ofertas', icon: FileText },
+  { to: '/buyer/sale', label: 'Ofertas y requerimientos', icon: FileText },
   { to: '/nexu-ia', label: 'Nodus IA', icon: Bot },
   { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
 ];

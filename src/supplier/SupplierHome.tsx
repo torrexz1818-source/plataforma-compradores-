@@ -18,8 +18,8 @@ const supplierModuleCards = [
     icon: Building2,
   },
   {
-    title: 'Ofertas',
-    description: 'Publica ofertas y responde requerimientos de compradores.',
+    title: 'Ofertas y requerimientos',
+    description: 'Convierte tu inventario inmovilizado en oportunidades de venta y publica tus requerimientos.',
     to: '/supplier/sale',
     icon: FileText,
   },

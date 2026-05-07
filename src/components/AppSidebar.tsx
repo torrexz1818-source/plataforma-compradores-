@@ -21,7 +21,7 @@ const buyerNavItems = [
   { title: 'Contenido Educativo', icon: BookOpen },
   { title: 'Empleabilidad', url: '/empleabilidad', icon: BriefcaseBusiness, indent: true },
   { title: 'Nodus Experts', url: '/nexu-experts', icon: Users, indent: true },
-  { title: 'Ofertas', url: '/buyer/sale', icon: FileText },
+  { title: 'Ofertas y requerimientos', url: '/buyer/sale', icon: FileText },
   { title: 'Nodus IA', url: '/nexu-ia', icon: Bot },
   { title: 'Directorio de proveedores', url: '/buyer/directory', icon: Building2 },
 ];

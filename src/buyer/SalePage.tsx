@@ -78,6 +78,9 @@ const saleSegments: Array<{
   },
 ];
 
+const saleModuleTitle = 'Ofertas y requerimientos';
+const saleModuleDescription = 'Convierte tu inventario inmovilizado en oportunidades de venta y publica tus requerimientos.';
+
 const SalePage = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -213,13 +216,13 @@ const SalePage = () => {
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <div className="mb-4 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-white/85">
-              Ofertas
+              {saleModuleTitle}
             </div>
             <h1 className="mb-3 text-2xl font-bold tracking-tight text-primary-foreground sm:text-3xl lg:text-4xl">
-              Ofertas
+              {saleModuleTitle}
             </h1>
             <p className="max-w-xl text-sm leading-6 text-primary-foreground/85 sm:text-base sm:leading-7 lg:text-lg">
-              Publica y revisa ofertas activas sin perder la estructura social del modulo.
+              {saleModuleDescription}
             </p>
           </div>
 

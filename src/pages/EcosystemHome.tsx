@@ -55,8 +55,8 @@ const baseModuleCards = [
     icon: Users,
   },
   {
-    title: 'Ofertas',
-    description: 'Publica productos y ofertas disponibles en liquidación.',
+    title: 'Ofertas y requerimientos',
+    description: 'Convierte tu inventario inmovilizado en oportunidades de venta y publica tus requerimientos.',
     to: '/buyer/sale',
     supplierTo: '/supplier/sale',
     icon: FileText,
