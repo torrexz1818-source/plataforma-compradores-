@@ -40,6 +40,7 @@ MAX_FILE_SIZE_MB=10
 DELETE_TEMP_FILES=true
 STORE_UPLOADS=false
 STORE_EXTRACTED_TEXT=false
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,https://buyernodus.com,https://www.buyernodus.com
 ```
 
 No hardcodees claves API en el código.

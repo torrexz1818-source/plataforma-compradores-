@@ -25,6 +25,16 @@ class Settings(BaseModel):
     store_extracted_text: bool = Field(
         default_factory=lambda: os.getenv("STORE_EXTRACTED_TEXT", "false").lower() == "true"
     )
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            origin.strip().rstrip("/")
+            for origin in os.getenv(
+                "CORS_ORIGINS",
+                "http://localhost:5173,http://127.0.0.1:5173,https://buyernodus.com,https://www.buyernodus.com",
+            ).split(",")
+            if origin.strip()
+        ]
+    )
     temp_dir: Path = BASE_DIR / "temp"
 
 
