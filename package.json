@@ -8,6 +8,7 @@
     "dev:frontend": "vite",
     "dev:backend": "npm --prefix backend run start:dev",
     "build": "vite build",
+    "postbuild": "node scripts/copy-spa-routes.cjs",
     "build:backend": "npm --prefix backend run build",
     "build:all": "npm run build && npm run build:backend",
     "build:dev": "vite build --mode development",
