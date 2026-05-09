@@ -28,8 +28,10 @@ import {
   getAgentDetail,
   getAgents,
   getMyAgentExecutions,
+  recordAgentUsage,
   runAgent,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import type { Agent } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,6 +49,14 @@ import {
   validateTermsFiles,
   type TermsFormField,
 } from '@/features/terms-of-reference/termsOfReferenceApi';
+import { downloadAgentResultPdf } from '@/lib/agentPdf';
+
+const aiPlanLimits: Record<string, number> = {
+  free: 1,
+  basic: 1,
+  professional: 3,
+  premium: Number.POSITIVE_INFINITY,
+};
 
 const iconMap = {
   Bot,
@@ -256,6 +266,7 @@ const curatedAgents: Agent[] = [
 const NexuIA = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { id: routeAgentId } = useParams();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
@@ -272,6 +283,7 @@ const NexuIA = () => {
   const termsFormSchemaMutation = useTermsFormSchema();
   const termsGenerateMutation = useGenerateTermsOfReference();
   const termsPdfMutation = useDownloadTermsPdf();
+  const [limitNotice, setLimitNotice] = useState('');
 
   const agentsQuery = useQuery({
     queryKey: ['agents'],
@@ -445,8 +457,57 @@ const NexuIA = () => {
     },
   ];
 
+  const getUsageKey = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    return `nodus-ia-usage:${user?.id ?? 'guest'}:${today}`;
+  };
+
+  const canRunNodusIa = () => {
+    const plan = user?.membership?.plan ?? 'free';
+    const limit = aiPlanLimits[plan] ?? aiPlanLimits.free;
+
+    if (!Number.isFinite(limit)) {
+      setLimitNotice('');
+      return true;
+    }
+
+    const used = Number(localStorage.getItem(getUsageKey()) ?? '0');
+    if (used >= limit) {
+      setLimitNotice('Has alcanzado el límite de tu plan. Cambia de plan para seguir usando Nodus IA.');
+      return false;
+    }
+
+    setLimitNotice('');
+    return true;
+  };
+
+  const registerNodusIaUsage = () => {
+    const key = getUsageKey();
+    const used = Number(localStorage.getItem(key) ?? '0');
+    localStorage.setItem(key, String(used + 1));
+  };
+
+  const logAgentUsage = (agentId: string, operationName: string, result: Record<string, unknown>) => {
+    const outputTokens = Math.max(1, Math.round(JSON.stringify(result).length / 4));
+    void recordAgentUsage({
+      agentId,
+      operationName,
+      model: 'AI Engine',
+      outputTokens,
+      totalTokens: outputTokens,
+      outputData: {
+        status: 'completed',
+        summary: String(result.executive_summary ?? result.final_recommendation ?? 'Resultado generado'),
+      },
+    }).catch(() => undefined);
+  };
+
   const handleRunAgent = () => {
     if (!selectedAgent) {
+      return;
+    }
+
+    if (!canRunNodusIa()) {
       return;
     }
 
@@ -455,10 +516,15 @@ const NexuIA = () => {
       return acc;
     }, {});
 
-    runMutation.mutate({
-      agentId: selectedAgent.id,
-      inputData,
-    });
+    runMutation.mutate(
+      {
+        agentId: selectedAgent.id,
+        inputData,
+      },
+      {
+        onSuccess: () => registerNodusIaUsage(),
+      },
+    );
   };
 
   const handleComparisonFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -468,6 +534,10 @@ const NexuIA = () => {
 
   const handleProposalComparison = () => {
     if (!selectedAgent) {
+      return;
+    }
+
+    if (!canRunNodusIa()) {
       return;
     }
 
@@ -497,7 +567,9 @@ const NexuIA = () => {
         files: uploadedComparisonFiles,
       },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          registerNodusIaUsage();
+          logAgentUsage(selectedAgent.id, 'Comparativo de propuestas de proveedores', result as unknown as Record<string, unknown>);
           toast({
             title: 'Análisis completado',
             description: 'El comparativo ya está listo para revisar.',
@@ -603,6 +675,10 @@ const NexuIA = () => {
       return;
     }
 
+    if (!canRunNodusIa()) {
+      return;
+    }
+
     const dynamicFormData = Object.fromEntries(
       Object.entries(termsFields).filter(([key]) => key.startsWith('dynamic_')),
     );
@@ -616,7 +692,11 @@ const NexuIA = () => {
         files: termsFiles,
       },
       {
-        onSuccess: () => {
+        onSuccess: (result) => {
+          registerNodusIaUsage();
+          if (selectedAgent) {
+            logAgentUsage(selectedAgent.id, 'Elaboración de términos de referencia', result as unknown as Record<string, unknown>);
+          }
           toast({
             title: 'Término de referencia generado',
             description: 'El documento ya está listo para revisar y descargar.',
@@ -646,6 +726,32 @@ const NexuIA = () => {
           variant: 'destructive',
         });
       },
+    });
+  };
+
+  const handleDownloadProposalPdf = () => {
+    if (!proposalComparisonResult) {
+      return;
+    }
+
+    downloadAgentResultPdf({
+      title: 'Comparativos de propuestas de proveedores',
+      userName: user?.fullName,
+      result: proposalComparisonResult,
+      fileName: 'comparativo-propuestas-nodus-ia.pdf',
+    });
+  };
+
+  const handleDownloadRunPdf = () => {
+    if (!runMutation.data) {
+      return;
+    }
+
+    downloadAgentResultPdf({
+      title: selectedAgent?.name ?? 'Resultado Nodus IA',
+      userName: user?.fullName,
+      result: runMutation.data.execution.outputData,
+      fileName: 'resultado-nodus-ia.pdf',
     });
   };
 
@@ -1180,6 +1286,20 @@ const NexuIA = () => {
                     </div>
                   </div>
 
+                  {limitNotice ? (
+                    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+                      <p className="font-medium">{limitNotice}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-3 rounded-full"
+                        onClick={() => navigate('/perfil')}
+                      >
+                        Cambiar de plan
+                      </Button>
+                    </div>
+                  ) : null}
+
                   <div className="flex flex-wrap gap-3">
                     {isTermsReference ? (
                       <Button
@@ -1190,7 +1310,7 @@ const NexuIA = () => {
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         {termsGenerateMutation.isPending
-                          ? 'Generando término de referencia...'
+                          ? 'Nodus IA está trabajando en tu solicitud…'
                           : 'Generar término de referencia'}
                       </Button>
                     ) : isQuoteComparator ? (
@@ -1202,7 +1322,7 @@ const NexuIA = () => {
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         {proposalComparisonMutation.isPending
-                          ? 'Analizando propuestas…'
+                          ? 'Nodus IA está trabajando en tu solicitud…'
                           : 'Analizar propuestas'}
                       </Button>
                     ) : (
@@ -1223,15 +1343,27 @@ const NexuIA = () => {
                           disabled={runMutation.isPending}
                         >
                           <PlayCircle className="mr-2 h-4 w-4" />
-                          {runMutation.isPending ? 'Ejecutando...' : 'Ejecutar agente'}
+                          {runMutation.isPending ? 'Nodus IA está trabajando en tu solicitud…' : 'Ejecutar agente'}
                         </Button>
                       </>
                     )}
                   </div>
 
+                  {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || runMutation.isPending) ? (
+                    <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
+                      Nodus IA está trabajando en tu solicitud…
+                    </div>
+                  ) : null}
+
                   {runMutation.data?.execution.agentId === selectedAgent.id ? (
                     <div className="rounded-[24px] border border-success/15 bg-success/15 p-4">
-                      <p className="text-sm font-medium text-success-foreground">Resultado mas reciente</p>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <p className="text-sm font-medium text-success-foreground">Resultado mas reciente</p>
+                        <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadRunPdf}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Descargar PDF
+                        </Button>
+                      </div>
                       <p className="mt-2 text-sm text-success-foreground">
                         {String(runMutation.data.execution.outputData.summary ?? 'Ejecucion completada')}
                       </p>
@@ -1348,13 +1480,18 @@ const NexuIA = () => {
 
                   {isQuoteComparator && proposalComparisonResult ? (
                     <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>
-                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                          {proposalComparisonResult.executive_summary}
-                        </p>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                            {proposalComparisonResult.executive_summary}
+                          </p>
+                        </div>
+                        <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadProposalPdf}>
+                          <Download className="mr-2 h-4 w-4" />
+                          Descargar PDF
+                        </Button>
                       </div>
-
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                           Proveedor recomendado

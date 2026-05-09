@@ -27,6 +27,7 @@ type CreateUserData = Pick<
   buyerProfile?: User['buyerProfile'];
   supplierProfile?: User['supplierProfile'];
   expertProfile?: User['expertProfile'];
+  status?: UserStatus;
 };
 
 type SupplierReviewRecord = {
@@ -125,7 +126,7 @@ export class UsersService {
           : data.role === UserRole.SUPPLIER
             ? UserRole.SUPPLIER
             : UserRole.BUYER,
-      status: UserStatus.ACTIVE,
+      status: data.status ?? UserStatus.ACTIVE,
       points: 0,
       createdAt: now,
       updatedAt: now,
@@ -157,7 +158,7 @@ export class UsersService {
     await this.membershipsCollection().insertOne({
       userId: user.id,
       userRole: user.role,
-      plan: 'basic',
+      plan: 'free',
       status: 'pending',
       adminApproved: false,
       createdAt: new Date(),
@@ -215,7 +216,7 @@ export class UsersService {
     const next: MembershipRecord = {
       userId: data.userId,
       userRole: user.role,
-      plan: data.plan ?? existing?.plan ?? 'basic',
+      plan: data.plan ?? existing?.plan ?? 'free',
       status: nextStatus,
       adminApproved: nextApproved,
       approvedAt:
@@ -913,8 +914,8 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.status === UserStatus.DISABLED) {
-      throw new ForbiddenException('User is disabled');
+    if (user.status !== UserStatus.ACTIVE) {
+      throw new ForbiddenException('User is not active');
     }
 
     return user;
@@ -974,6 +975,142 @@ export class UsersService {
     if (!result.matchedCount) {
       throw new NotFoundException('User not found');
     }
+  }
+
+  async updateOwnProfile(
+    userId: string,
+    data: {
+      fullName?: string;
+      company?: string;
+      commercialName?: string;
+      position?: string;
+      phone?: string;
+      ruc?: string;
+      sector?: string;
+      location?: string;
+      description?: string;
+      employeeCount?: string;
+      digitalPresence?: User['digitalPresence'];
+      buyerProfile?: User['buyerProfile'];
+      supplierProfile?: User['supplierProfile'];
+      expertProfile?: User['expertProfile'];
+    },
+  ): Promise<Omit<User, 'passwordHash'>> {
+    const user = await this.requireActiveUser(userId);
+    const updatedAt = new Date();
+    const updates: Partial<User> = { updatedAt };
+
+    if (typeof data.fullName === 'string') {
+      const fullName = data.fullName.trim();
+      if (fullName) {
+        updates.fullName = fullName;
+      }
+    }
+
+    if (typeof data.company === 'string') {
+      const company = data.company.trim();
+      if (company) {
+        updates.company = company;
+      }
+    }
+
+    if (typeof data.commercialName === 'string') {
+      updates.commercialName = data.commercialName.trim();
+    }
+
+    if (typeof data.position === 'string') {
+      updates.position = data.position.trim();
+    }
+
+    if (typeof data.phone === 'string') {
+      updates.phone = data.phone.trim();
+    }
+
+    if (typeof data.ruc === 'string') {
+      updates.ruc = data.ruc.trim();
+    }
+
+    if (typeof data.sector === 'string') {
+      updates.sector = data.sector.trim();
+    }
+
+    if (typeof data.location === 'string') {
+      updates.location = data.location.trim();
+    }
+
+    if (typeof data.description === 'string') {
+      updates.description = data.description.trim();
+    }
+
+    if (typeof data.employeeCount === 'string') {
+      updates.employeeCount = data.employeeCount.trim();
+    }
+
+    if (data.digitalPresence) {
+      updates.digitalPresence = {
+        linkedin: data.digitalPresence.linkedin?.trim(),
+        website: data.digitalPresence.website?.trim(),
+        whatsapp: data.digitalPresence.whatsapp?.trim(),
+        instagram: data.digitalPresence.instagram?.trim(),
+      };
+    }
+
+    if (data.buyerProfile && user.role === UserRole.BUYER) {
+      updates.buyerProfile = {
+        ...user.buyerProfile,
+        interestCategories: data.buyerProfile.interestCategories,
+        purchaseVolume: data.buyerProfile.purchaseVolume?.trim(),
+        isCompanyDigitalized: data.buyerProfile.isCompanyDigitalized?.trim(),
+        usesGenerativeAI: data.buyerProfile.usesGenerativeAI?.trim(),
+      };
+    }
+
+    if (data.supplierProfile && user.role === UserRole.SUPPLIER) {
+      updates.supplierProfile = {
+        ...user.supplierProfile,
+        supplierType: data.supplierProfile.supplierType?.trim(),
+        productsOrServices: data.supplierProfile.productsOrServices,
+        hasDigitalCatalog: data.supplierProfile.hasDigitalCatalog?.trim(),
+        isCompanyDigitalized: data.supplierProfile.isCompanyDigitalized?.trim(),
+        usesGenerativeAI: data.supplierProfile.usesGenerativeAI?.trim(),
+        coverage: data.supplierProfile.coverage?.trim(),
+        province: data.supplierProfile.province?.trim(),
+        district: data.supplierProfile.district?.trim(),
+        yearsInMarket: data.supplierProfile.yearsInMarket?.trim(),
+      };
+    }
+
+    if (data.expertProfile && user.role === UserRole.EXPERT) {
+      updates.expertProfile = {
+        ...user.expertProfile,
+        currentProfessionalProfile: data.expertProfile.currentProfessionalProfile?.trim(),
+        industry: data.expertProfile.industry?.trim(),
+        specialty: data.expertProfile.specialty?.trim(),
+        experience: data.expertProfile.experience?.trim(),
+        skills: data.expertProfile.skills,
+        biography: data.expertProfile.biography?.trim(),
+        companies: data.expertProfile.companies?.trim(),
+        education: data.expertProfile.education?.trim(),
+        achievements: data.expertProfile.achievements?.trim(),
+        photo: data.expertProfile.photo?.trim(),
+        service: data.expertProfile.service?.trim(),
+        availabilityDays: data.expertProfile.availabilityDays,
+        googleCalendarConnected: user.expertProfile?.googleCalendarConnected ?? false,
+      };
+    }
+
+    await this.usersRepository.updateOne(
+      { id: userId },
+      {
+        $set: updates,
+      },
+    );
+
+    return this.toSafeUser({
+      ...user,
+      ...updates,
+      updatedAt,
+    });
   }
 
   async updateExpertProfile(

@@ -41,7 +41,7 @@ const Index = () => {
           </p>
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => navigate('/community')} className="font-medium">
-              Comunidad <ArrowRight className="w-4 h-4 ml-1" />
+              Inteligencia colectiva <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
             <Button
               variant="outline"

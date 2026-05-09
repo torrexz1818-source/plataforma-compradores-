@@ -28,7 +28,18 @@ type AgentExecutionRecord = {
   userId: string;
   inputData: Record<string, unknown>;
   outputData: Record<string, unknown>;
+  operationName?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  costAmount?: number;
   executedAt: Date;
+};
+
+const TOKEN_PRICING = {
+  inputPerMillion: Number(process.env.AI_INPUT_TOKEN_USD_PER_MILLION ?? 0.15),
+  outputPerMillion: Number(process.env.AI_OUTPUT_TOKEN_USD_PER_MILLION ?? 0.6),
 };
 
 @Injectable()
@@ -97,6 +108,79 @@ export class AgentsService {
     }));
   }
 
+  async listUsageForAdmin() {
+    const executions = await this.executionsCollection()
+      .find({})
+      .sort({ executedAt: -1 })
+      .limit(200)
+      .toArray();
+
+    const [agents, users] = await Promise.all([
+      this.agentsCollection()
+        .find({ id: { $in: [...new Set(executions.map((execution) => execution.agentId))] } })
+        .toArray(),
+      this.usersService.findManyByIds([...new Set(executions.map((execution) => execution.userId))]),
+    ]);
+    const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
+    const usersById = new Map(users.map((user) => [user.id, user]));
+
+    return executions.map((execution) => {
+      const user = usersById.get(execution.userId);
+      const agent = agentsById.get(execution.agentId);
+
+      return {
+        id: execution.id,
+        userId: execution.userId,
+        userName: user?.fullName ?? 'Usuario',
+        userRole: user?.role ?? 'buyer',
+        agentName: agent?.name ?? execution.agentId,
+        operationName: execution.operationName ?? 'Ejecucion de agente',
+        model: execution.model ?? 'No especificado',
+        inputTokens: execution.inputTokens ?? 0,
+        outputTokens: execution.outputTokens ?? 0,
+        totalTokens: execution.totalTokens ?? 0,
+        costAmount: execution.costAmount ?? 0,
+        createdAt: execution.executedAt.toISOString(),
+      };
+    });
+  }
+
+  async recordExternalUsage(input: {
+    agentId: string;
+    userId: string;
+    operationName?: string;
+    model?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    costAmount?: number;
+    outputData?: Record<string, unknown>;
+  }) {
+    await this.usersService.requireActiveUser(input.userId);
+    const tokenStats = this.normalizeTokenUsage({
+      inputData: {},
+      outputData: input.outputData ?? {},
+      inputTokens: input.inputTokens,
+      outputTokens: input.outputTokens,
+      totalTokens: input.totalTokens,
+      costAmount: input.costAmount,
+    });
+    const execution: AgentExecutionRecord = {
+      id: crypto.randomUUID(),
+      agentId: input.agentId,
+      userId: input.userId,
+      inputData: {},
+      outputData: input.outputData ?? {},
+      operationName: input.operationName ?? 'Operacion externa',
+      model: input.model ?? 'No especificado',
+      ...tokenStats,
+      executedAt: new Date(),
+    };
+
+    await this.executionsCollection().insertOne(execution);
+    return { success: true, id: execution.id };
+  }
+
   async activateAgent(agentId: string) {
     const agent = await this.findAgent(agentId);
 
@@ -142,12 +226,16 @@ export class AgentsService {
     }
 
     const outputData = this.buildAgentOutput(agent, input.inputData, user.fullName);
+    const tokenStats = this.normalizeTokenUsage({ inputData: input.inputData, outputData });
     const execution: AgentExecutionRecord = {
       id: crypto.randomUUID(),
       agentId: agent.id,
       userId: input.userId,
       inputData: input.inputData,
       outputData,
+      operationName: 'Ejecucion de agente',
+      model: 'mock-local',
+      ...tokenStats,
       executedAt: new Date(),
     };
 
@@ -161,8 +249,34 @@ export class AgentsService {
         agentName: agent.name,
         inputData: execution.inputData,
         outputData: execution.outputData,
+        totalTokens: execution.totalTokens,
+        costAmount: execution.costAmount,
         executedAt: execution.executedAt.toISOString(),
       },
+    };
+  }
+
+  private normalizeTokenUsage(input: {
+    inputData: Record<string, unknown>;
+    outputData: Record<string, unknown>;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    costAmount?: number;
+  }) {
+    const inputTokens = Math.max(0, Math.round(input.inputTokens ?? JSON.stringify(input.inputData).length / 4));
+    const outputTokens = Math.max(0, Math.round(input.outputTokens ?? JSON.stringify(input.outputData).length / 4));
+    const totalTokens = Math.max(input.totalTokens ?? inputTokens + outputTokens, inputTokens + outputTokens);
+    const costAmount =
+      input.costAmount ??
+      (inputTokens / 1_000_000) * TOKEN_PRICING.inputPerMillion +
+        (outputTokens / 1_000_000) * TOKEN_PRICING.outputPerMillion;
+
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens,
+      costAmount: Number(costAmount.toFixed(6)),
     };
   }
 

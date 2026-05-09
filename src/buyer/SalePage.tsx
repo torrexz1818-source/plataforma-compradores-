@@ -219,7 +219,7 @@ const SalePage = () => {
               {saleModuleTitle}
             </div>
             <h1 className="mb-3 text-2xl font-bold tracking-tight text-primary-foreground sm:text-3xl lg:text-4xl">
-              {saleModuleTitle}
+              Economía circular
             </h1>
             <p className="max-w-xl text-sm leading-6 text-primary-foreground/85 sm:text-base sm:leading-7 lg:text-lg">
               {saleModuleDescription}

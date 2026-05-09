@@ -6,6 +6,7 @@ import {
   Get,
   NotFoundException,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -20,6 +21,83 @@ import { UsersService } from './users.service';
 @UseGuards(AuthenticatedGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Patch('me/profile')
+  async updateMyProfile(
+    @Body() body: {
+      fullName?: string;
+      company?: string;
+      commercialName?: string;
+      position?: string;
+      phone?: string;
+      ruc?: string;
+      sector?: string;
+      location?: string;
+      description?: string;
+      employeeCount?: string;
+      digitalPresence?: {
+        linkedin?: string;
+        website?: string;
+        whatsapp?: string;
+        instagram?: string;
+      };
+      buyerProfile?: {
+        interestCategories?: string[];
+        purchaseVolume?: string;
+        isCompanyDigitalized?: string;
+        usesGenerativeAI?: string;
+      };
+      supplierProfile?: {
+        supplierType?: string;
+        productsOrServices?: string[];
+        hasDigitalCatalog?: string;
+        isCompanyDigitalized?: string;
+        usesGenerativeAI?: string;
+        coverage?: string;
+        province?: string;
+        district?: string;
+        yearsInMarket?: string;
+      };
+      expertProfile?: {
+        currentProfessionalProfile?: string;
+        industry?: string;
+        specialty?: string;
+        experience?: string;
+        skills?: string[];
+        biography?: string;
+        companies?: string;
+        education?: string;
+        achievements?: string;
+        photo?: string;
+        service?: string;
+        availabilityDays?: string[];
+      };
+    },
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    return {
+      user: await this.usersService.updateOwnProfile(user.sub, {
+        fullName: body.fullName,
+        company: body.company,
+        commercialName: body.commercialName,
+        position: body.position,
+        phone: body.phone,
+        ruc: body.ruc,
+        sector: body.sector,
+        location: body.location,
+        description: body.description,
+        employeeCount: body.employeeCount,
+        digitalPresence: body.digitalPresence,
+        buyerProfile: body.buyerProfile,
+        supplierProfile: body.supplierProfile,
+        expertProfile: body.expertProfile,
+      }),
+    };
+  }
 
   @Get('buyer-sectors')
   async getBuyerSectors() {

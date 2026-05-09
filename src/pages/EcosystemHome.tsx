@@ -11,6 +11,7 @@ import {
   Newspaper,
   Users,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth';
@@ -31,7 +32,7 @@ const baseModuleCards = [
     icon: Newspaper,
   },
   {
-    title: 'Comunidad',
+    title: 'Inteligencia colectiva',
     description: 'Conecta con compradores, proveedores y profesionales del sector.',
     to: '/community',
     icon: MessageCircle,
@@ -115,9 +116,16 @@ const EcosystemHome = () => {
 
       <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {moduleCards.map((module, index) => (
-          <Card
+          <motion.div
             key={module.title}
-            className="group h-full overflow-hidden rounded-2xl shadow-[var(--shadow-card)] transition-[transform,box-shadow,background] duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-elevated)]"
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, delay: index * 0.04, ease: 'easeOut' }}
+            whileHover={{ y: -6, scale: 1.01 }}
+            whileTap={{ scale: 0.99 }}
+          >
+          <Card
+            className="group h-full overflow-hidden rounded-2xl shadow-[var(--shadow-card)] transition-[box-shadow,background] duration-200 hover:shadow-[var(--shadow-elevated)]"
           >
             <Link
               to={module.to}
@@ -150,6 +158,7 @@ const EcosystemHome = () => {
               </CardContent>
             </Link>
           </Card>
+          </motion.div>
         ))}
       </section>
     </div>

@@ -111,12 +111,12 @@ const MessageBell = () => {
         onClick={() => setOpen((value) => !value)}
         className={`relative inline-flex h-11 w-11 items-center justify-center rounded-xl border transition-colors sm:h-10 sm:w-10 sm:rounded-md ${
           open
-            ? 'border-[#0E109E]/35 bg-[#0E109E]/10'
-            : 'border-border bg-card hover:bg-[#0E109E]/10 active:bg-[#0E109E]/15'
+            ? 'border-primary/35 bg-primary/10 text-primary'
+            : 'border-primary/15 bg-white text-primary hover:bg-primary/5 active:bg-primary/10'
         }`}
         aria-label="Abrir mensajeria"
       >
-        <MessageCircle className="h-5 w-5 text-foreground sm:h-4 sm:w-4" />
+        <MessageCircle className="h-5 w-5 text-primary sm:h-4 sm:w-4" />
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-primary text-white text-[10px] font-medium flex items-center justify-center">
             {formattedCount}

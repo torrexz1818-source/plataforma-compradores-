@@ -17,7 +17,7 @@ import {
 
 const buyerNavItems = [
   { title: 'Dashboard', url: '/buyer/dashboard', icon: Home },
-  { title: 'Comunidad', url: '/community', icon: Users },
+  { title: 'Inteligencia colectiva', url: '/community', icon: Users },
   { title: 'Contenido Educativo', icon: BookOpen },
   { title: 'Empleabilidad', url: '/empleabilidad', icon: BriefcaseBusiness, indent: true },
   { title: 'Nodus Experts', url: '/nexu-experts', icon: Users, indent: true },

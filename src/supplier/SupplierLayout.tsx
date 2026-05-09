@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { BookOpen, Bot, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, FileText, LayoutDashboard, LogOut, Menu, MessageCircle, Newspaper, Shield, Store, Users } from 'lucide-react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import NotificationBell from '@/components/NotificationBell';
 import MessageBell from '@/components/MessageBell';
-import HomeAccessButton from '@/components/HomeAccessButton';
+import UserMenu from '@/components/UserMenu';
 import { BuyerNodusBrand } from '@/components/BuyerNodusBrand';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
@@ -19,7 +19,7 @@ const supplierNavItems = [
 const buyerNavItems = [
   { to: '/buyer/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/novedades', label: 'Novedades', icon: Newspaper },
-  { to: '/community', label: 'Comunidad', icon: MessageCircle },
+  { to: '/community', label: 'Inteligencia colectiva', icon: MessageCircle },
   {
     to: '/contenido-educativo',
     label: 'Contenido educativo',
@@ -47,6 +47,7 @@ const SupplierLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
+  const shouldShowTopbar = location.pathname !== '/inicio' && location.pathname !== '/supplier/inicio';
   const roleBadge = isAdmin
     ? {
         label: 'Administrador',
@@ -243,24 +244,6 @@ const SupplierLayout = () => {
         ))}
       </nav>
 
-      <div className={cn('mt-auto flex-shrink-0 border-t border-white/10 py-3', isCollapsed ? 'px-2 text-center' : 'px-4')}>
-        {!isCollapsed && <p className="text-xs text-white/65">Sesion iniciada</p>}
-        <p className={cn('font-medium truncate', isCollapsed ? 'text-xs' : 'text-sm')}>
-          {isCollapsed ? (user?.fullName?.slice(0, 2).toUpperCase() ?? 'PR') : (user?.fullName ?? 'Proveedor')}
-        </p>
-        <button
-          type="button"
-          onClick={() => {
-            onNavigate?.();
-            handleLogout();
-          }}
-          className={cn('mt-3 inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-white/20 py-2 text-sm font-medium text-white/90 transition-colors hover:bg-white/10', isCollapsed ? 'w-11 px-0' : 'w-full px-3')}
-          aria-label={isCollapsed ? 'Cerrar sesion' : undefined}
-        >
-          <LogOut className="w-4 h-4" />
-          {!isCollapsed && 'Cerrar sesion'}
-        </button>
-      </div>
     </>
   );
 
@@ -283,9 +266,9 @@ const SupplierLayout = () => {
         )}
         style={{ transition: 'margin 0.25s ease' }}
       >
-        <div className="mx-auto w-full max-w-7xl min-w-0 px-[clamp(12px,4vw,20px)] pt-3 sm:px-6 sm:pt-6 2xl:max-w-[1440px]">
-          <div className="relative z-20 mb-6 flex w-full justify-center sm:justify-end">
-            <div className="topbar-shell flex w-full min-w-0 items-center justify-between gap-2 rounded-2xl px-3 py-3 sm:w-fit sm:gap-3 sm:px-4">
+        {shouldShowTopbar && (
+        <div className="sticky top-0 z-20 w-full bg-[var(--gradient-soft)]/95 px-[clamp(12px,4vw,20px)] py-3 backdrop-blur sm:px-6">
+          <div className="topbar-shell flex w-full min-w-0 items-center justify-between gap-2 rounded-none px-3 py-3 sm:gap-3 sm:px-4">
               <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
                   <button
@@ -311,16 +294,21 @@ const SupplierLayout = () => {
                   {renderSidebarContent(() => setMobileMenuOpen(false), false)}
                 </SheetContent>
               </Sheet>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground sm:hidden">
-                {user?.fullName ?? 'Proveedor'}
-              </span>
+              <Link
+                to="/inicio"
+                className="min-w-0 flex-1 truncate text-base font-bold text-primary sm:text-xl lg:text-2xl"
+              >
+                ¿Qué quieres hacer hoy en el ecosistema?
+              </Link>
               <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <MessageBell />
               <NotificationBell />
-              <HomeAccessButton />
+              <UserMenu />
               </div>
-            </div>
           </div>
+        </div>
+        )}
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-[clamp(12px,4vw,20px)] pb-6 pt-3 sm:px-6 2xl:max-w-[1440px]">
           <Outlet />
         </div>
       </main>

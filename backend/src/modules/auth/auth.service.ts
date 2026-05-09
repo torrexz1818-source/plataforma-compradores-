@@ -374,6 +374,7 @@ export class AuthService {
           : data.role === 'expert'
             ? UserRole.EXPERT
             : UserRole.BUYER,
+      status: data.role === 'supplier' ? UserStatus.PENDING : UserStatus.ACTIVE,
       });
     } catch (error) {
       if (this.isDuplicateKeyError(error)) {
@@ -391,6 +392,7 @@ export class AuthService {
       );
     }
 
+    if (user.status === UserStatus.ACTIVE) {
     const isBuyer = this.usersService.isBuyerLikeRole(user.role);
     const targetUsers = await this.usersService.listActiveUsersByRolesInSector(
       isBuyer ? [UserRole.SUPPLIER] : [UserRole.BUYER, UserRole.EXPERT],
@@ -419,6 +421,7 @@ export class AuthService {
         }),
       ),
     );
+    }
 
     return {
       accessToken: await this.signToken(user),

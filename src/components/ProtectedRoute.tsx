@@ -2,6 +2,7 @@ import { ReactElement } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { isBuyerLikeRole } from '@/lib/roles';
+import SupplierApprovalStatus from '@/components/SupplierApprovalStatus';
 
 type AllowedRole = 'buyer' | 'supplier' | 'expert';
 
@@ -43,6 +44,10 @@ const ProtectedRoute = ({ role, children }: ProtectedRouteProps) => {
 
   if (user.role === 'admin') {
     return children;
+  }
+
+  if (user.role === 'supplier' && (user.status === 'pending' || user.status === 'rejected')) {
+    return <SupplierApprovalStatus />;
   }
 
   if (role === 'buyer' && isBuyerLikeRole(user.role)) {

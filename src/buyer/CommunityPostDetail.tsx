@@ -200,7 +200,7 @@ const CommunityPostDetail = () => {
           <button
             onClick={() => {
               if (user?.role !== 'buyer' && user?.role !== 'supplier') {
-                setFeedback('Inicia sesion como comprador o proveedor para interactuar en Comunidad.');
+                setFeedback('Inicia sesion como comprador o proveedor para interactuar en Inteligencia colectiva.');
                 return;
               }
               if (!likeMutation.isPending) {

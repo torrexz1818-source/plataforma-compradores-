@@ -5,6 +5,7 @@ import { AuthenticatedGuard } from '../../common/auth/authenticated.guard';
 import { PostsModule } from '../posts/posts.module';
 import { UploadsModule } from '../uploads/uploads.module';
 import { UsersModule } from '../users/users.module';
+import { AgentsModule } from '../agents/agents.module';
 import { AdminController } from './admin.controller';
 
 @Module({
@@ -12,6 +13,7 @@ import { AdminController } from './admin.controller';
     UsersModule,
     PostsModule,
     UploadsModule,
+    AgentsModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET ?? 'dev-supplynexu-secret',
     }),

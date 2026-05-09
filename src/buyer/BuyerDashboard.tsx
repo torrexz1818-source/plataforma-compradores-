@@ -77,7 +77,7 @@ const BuyerDashboard = () => {
               onClick={() => navigate('/community')}
               className="h-11 rounded-xl bg-white text-primary font-medium shadow-sm hover:bg-white/95"
             >
-              Comunidad <ArrowRight className="w-4 h-4 ml-1" />
+              Inteligencia colectiva <ArrowRight className="w-4 h-4 ml-1" />
             </Button>
             <Button
               variant="outline"

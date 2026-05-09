@@ -1,19 +1,34 @@
-import { Outlet } from 'react-router-dom';
-import HomeAccessButton from '@/components/HomeAccessButton';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import MessageBell from '@/components/MessageBell';
 import NotificationBell from '@/components/NotificationBell';
+import UserMenu from '@/components/UserMenu';
 
-const NewsLayout = () => (
+const NewsLayout = () => {
+  const location = useLocation();
+  const shouldShowTopbar = location.pathname !== '/inicio' && location.pathname !== '/supplier/inicio';
+
+  return (
   <div className="min-h-screen w-full max-w-full bg-[var(--gradient-soft)]">
-    <div className="relative z-20 mx-auto mb-6 flex w-full max-w-7xl justify-center px-[clamp(12px,4vw,20px)] pt-3 sm:justify-end sm:px-6 sm:pt-6 2xl:max-w-[1440px]">
-      <div className="topbar-shell flex w-fit shrink-0 items-center gap-2 rounded-2xl px-3 py-3 sm:gap-3 sm:px-4">
+    {shouldShowTopbar && (
+    <div className="sticky top-0 z-20 mb-6 flex w-full bg-[var(--gradient-soft)]/95 px-[clamp(12px,4vw,20px)] py-3 backdrop-blur sm:px-6">
+      <div className="topbar-shell flex w-full min-w-0 items-center justify-between gap-2 rounded-none px-3 py-3 sm:gap-3 sm:px-4">
+        <Link
+          to="/inicio"
+          className="min-w-0 flex-1 truncate text-base font-bold text-primary sm:text-xl lg:text-2xl"
+        >
+          ¿Qué quieres hacer hoy en el ecosistema?
+        </Link>
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
         <MessageBell />
         <NotificationBell />
-        <HomeAccessButton />
+        <UserMenu />
+        </div>
       </div>
     </div>
+    )}
     <Outlet />
   </div>
-);
+  );
+};
 
 export default NewsLayout;

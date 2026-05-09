@@ -81,7 +81,7 @@ const Community = () => {
         <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <div className="mb-4 inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-white/85">
-              Comunidad de compradores
+              Inteligencia colectiva de compradores
             </div>
             <h1 className="mb-3 text-3xl font-bold tracking-tight text-primary-foreground lg:text-4xl">
               Ecosistema B2B

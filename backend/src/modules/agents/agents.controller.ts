@@ -76,6 +76,41 @@ export class AgentsController {
     });
   }
 
+  @Post('usage')
+  async recordUsage(
+    @Body() body: {
+      agentId?: string;
+      operationName?: string;
+      model?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+      totalTokens?: number;
+      costAmount?: number;
+      outputData?: Record<string, unknown>;
+    },
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    if (!body.agentId?.trim()) {
+      throw new BadRequestException('El agente es obligatorio');
+    }
+
+    return this.agentsService.recordExternalUsage({
+      agentId: body.agentId,
+      userId: user.sub,
+      operationName: body.operationName,
+      model: body.model,
+      inputTokens: body.inputTokens,
+      outputTokens: body.outputTokens,
+      totalTokens: body.totalTokens,
+      costAmount: body.costAmount,
+      outputData: body.outputData,
+    });
+  }
+
   @Post('activate')
   async activateAgent(
     @Body() body: { agentId?: string },

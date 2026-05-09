@@ -33,6 +33,7 @@ import {
   ExpertSummary,
   Agent,
   AgentExecution,
+  AdminAgentUsage,
   EmployabilityFeed,
   EmployabilityJob,
   EmployabilityTalentProfile,
@@ -510,6 +511,35 @@ export async function getMe() {
   return data.user;
 }
 
+export async function updateMyProfile(payload: {
+  fullName: string;
+  company?: string;
+  commercialName?: string;
+  position?: string;
+  phone?: string;
+  ruc?: string;
+  sector?: string;
+  location?: string;
+  description?: string;
+  employeeCount?: string;
+  digitalPresence?: {
+    linkedin?: string;
+    website?: string;
+    whatsapp?: string;
+    instagram?: string;
+  };
+  buyerProfile?: User['buyerProfile'];
+  supplierProfile?: User['supplierProfile'];
+  expertProfile?: User['expertProfile'];
+}) {
+  const data = await apiRequest<{ user: User }>('/me/profile', {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+  return data.user;
+}
+
 export async function getHomeFeed() {
   const data = await apiRequest<HomeFeed>('/posts/home', { auth: true });
 
@@ -756,7 +786,7 @@ export async function updateUserStatus(userId: string, status: UserStatus) {
 export async function getAdminMemberships() {
   return apiRequest<Array<{
     userId: string;
-    userRole: 'buyer' | 'supplier' | 'admin';
+    userRole: 'buyer' | 'supplier' | 'expert' | 'admin';
     plan: string;
     status: 'pending' | 'active' | 'expired' | 'suspended';
     adminApproved: boolean;
@@ -788,6 +818,10 @@ export async function getNotifications(role: 'buyer' | 'supplier') {
     `/notifications${buildQuery({ role })}`,
     { auth: true },
   );
+}
+
+export async function getAdminAgentUsage() {
+  return apiRequest<AdminAgentUsage[]>('/admin/agent-usage', { auth: true });
 }
 
 export async function getNewsPosts() {
@@ -1280,6 +1314,23 @@ export async function runAgent(payload: {
   inputData: Record<string, unknown>;
 }) {
   return apiRequest<{ execution: AgentExecution }>('/agents/run', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function recordAgentUsage(payload: {
+  agentId: string;
+  operationName?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  costAmount?: number;
+  outputData?: Record<string, unknown>;
+}) {
+  return apiRequest<{ success: true; id: string }>('/agents/usage', {
     method: 'POST',
     auth: true,
     body: JSON.stringify(payload),

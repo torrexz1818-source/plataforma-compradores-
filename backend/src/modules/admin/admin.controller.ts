@@ -25,6 +25,7 @@ import { UploadsService } from '../uploads/uploads.service';
 import { UserStatus } from '../users/domain/user-status.enum';
 import { MembershipStatus } from '../users/users.service';
 import { UsersService } from '../users/users.service';
+import { AgentsService } from '../agents/agents.service';
 
 type CreateManagedPostBody = {
   title: string;
@@ -93,6 +94,7 @@ export class AdminController {
     private readonly postsService: PostsService,
     private readonly usersService: UsersService,
     private readonly uploadsService: UploadsService,
+    private readonly agentsService: AgentsService,
   ) {}
 
   @Get('dashboard')
@@ -413,6 +415,11 @@ export class AdminController {
   @Get('memberships')
   listMemberships() {
     return this.usersService.listMemberships();
+  }
+
+  @Get('agent-usage')
+  listAgentUsage() {
+    return this.agentsService.listUsageForAdmin();
   }
 
   @Patch('memberships/:userId')

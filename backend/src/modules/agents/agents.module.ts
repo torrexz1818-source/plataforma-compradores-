@@ -16,5 +16,6 @@ import { AgentsService } from './agents.service';
   ],
   controllers: [AgentsController],
   providers: [AgentsService, AuthenticatedGuard],
+  exports: [AgentsService],
 })
 export class AgentsModule {}

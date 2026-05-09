@@ -44,6 +44,7 @@ import ExpertCalendarSetup from "./expert/ExpertCalendarSetup.tsx";
 import RegisterExpert from "./expert/RegisterExpert.tsx";
 import MainLayout from "./layouts/MainLayout.tsx";
 import NewsLayout from "./layouts/NewsLayout.tsx";
+import SupplierApprovalStatus from "@/components/SupplierApprovalStatus";
 
 const queryClient = new QueryClient();
 
@@ -107,6 +108,9 @@ const DashboardRedirect = () => {
   }
 
   if (user.role === 'supplier') {
+    if (user.status === 'pending' || user.status === 'rejected') {
+      return <SupplierApprovalStatus />;
+    }
     return <Navigate to="/supplier/inicio" replace />;
   }
 
@@ -138,6 +142,9 @@ const ProfileLayoutRedirect = () => {
   }
 
   if (user.role === 'supplier') {
+    if (user.status === 'pending' || user.status === 'rejected') {
+      return <SupplierApprovalStatus />;
+    }
     return <SupplierLayout />;
   }
 
@@ -168,6 +175,9 @@ const BuyerOnlySharedLayout = () => {
   }
 
   if (user.role === 'supplier') {
+    if (user.status === 'pending' || user.status === 'rejected') {
+      return <SupplierApprovalStatus />;
+    }
     return <Navigate to="/supplier/inicio" replace />;
   }
 
@@ -186,6 +196,9 @@ const NewsAccessLayout = () => {
   }
 
   if (user.role === 'supplier') {
+    if (user.status === 'pending' || user.status === 'rejected') {
+      return <SupplierApprovalStatus />;
+    }
     return <Navigate to="/supplier/inicio" replace />;
   }
 

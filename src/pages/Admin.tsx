@@ -28,6 +28,7 @@ import {
   adminDeletePost,
   adminUpdatePost,
   getAdminMemberships,
+  getAdminAgentUsage,
   getAdminDashboard,
   getPlatformStats,
   uploadFile,
@@ -59,6 +60,29 @@ const ARTICLE_TYPE_COLOR = '#b2eb4a';
 
 type ContentStatus = 'draft' | 'published' | 'archived';
 type AccessType = 'free' | 'professional' | 'premium';
+type MembershipPlan = 'free' | 'professional' | 'premium';
+
+const membershipPlans: Array<{
+  id: MembershipPlan;
+  label: string;
+  description: string;
+}> = [
+  {
+    id: 'free',
+    label: 'Plan gratuito',
+    description: '1 agente y 1 publicación por día. Información limitada.',
+  },
+  {
+    id: 'professional',
+    label: 'Plan profesional',
+    description: '3 automatizaciones por día, notificaciones sectoriales y reuniones grupales.',
+  },
+  {
+    id: 'premium',
+    label: 'Plan premium',
+    description: 'Automatizaciones, publicaciones y reuniones ilimitadas.',
+  },
+];
 
 const formatFileSize = (bytes: number) => {
   if (bytes >= 1024 * 1024 * 1024) {
@@ -201,6 +225,12 @@ const Admin = () => {
     },
   });
 
+  const agentUsageQuery = useQuery({
+    queryKey: ['admin-agent-usage'],
+    queryFn: getAdminAgentUsage,
+    enabled: user?.role === 'admin',
+  });
+
   const updatePostMutation = useMutation({
     mutationFn: ({ postId, payload }: { postId: string; payload: FormData }) =>
       adminUpdatePost(postId, payload),
@@ -244,6 +274,7 @@ const Admin = () => {
     mutationFn: adminDeleteComment,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-memberships'] });
     },
   });
 
@@ -260,14 +291,17 @@ const Admin = () => {
       userId,
       status,
       adminApproved,
+      plan,
     }: {
       userId: string;
       status: 'pending' | 'active' | 'expired' | 'suspended';
       adminApproved: boolean;
+      plan?: MembershipPlan;
     }) =>
-      updateMembershipByAdmin(userId, { status, adminApproved }),
+      updateMembershipByAdmin(userId, { status, adminApproved, plan }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-memberships'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-dashboard'] });
     },
   });
 
@@ -317,8 +351,12 @@ const Admin = () => {
     [data?.users],
   );
   const supplierUsers = useMemo(
-    () => (data?.users ?? []).filter((item) => item.role === 'supplier' && item.status === 'active'),
+    () => (data?.users ?? []).filter((item) => item.role === 'supplier'),
     [data?.users],
+  );
+  const pendingSupplierUsers = useMemo(
+    () => supplierUsers.filter((item) => item.status === 'pending'),
+    [supplierUsers],
   );
   const postsById = useMemo(
     () => new Map((data?.posts ?? []).map((post) => [post.id, post])),
@@ -523,6 +561,36 @@ const Admin = () => {
                   </p>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row">
+                  {managedUser.role === 'supplier' && managedUser.status === 'pending' ? (
+                    <>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        disabled={statusMutation.isPending}
+                        onClick={() =>
+                          void statusMutation.mutateAsync({
+                            userId: managedUser.id,
+                            status: 'active',
+                          })
+                        }
+                      >
+                        Aprobar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={statusMutation.isPending}
+                        onClick={() =>
+                          void statusMutation.mutateAsync({
+                            userId: managedUser.id,
+                            status: 'rejected',
+                          })
+                        }
+                      >
+                        Rechazar
+                      </Button>
+                    </>
+                  ) : null}
                   <Button
                     variant={managedUser.status === 'active' ? 'outline' : 'default'}
                     size="sm"
@@ -536,21 +604,40 @@ const Admin = () => {
                   >
                     {managedUser.status === 'active' ? 'Desactivar' : 'Activar'}
                   </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={membershipMutation.isPending}
-                    onClick={() =>
-                      void membershipMutation.mutateAsync({
-                        userId: managedUser.id,
-                        status: isAuthorized ? 'suspended' : 'active',
-                        adminApproved: !isAuthorized,
-                      })
-                    }
-                  >
-                    {isAuthorized ? 'Suspender membresia' : 'Autorizar membresia'}
-                  </Button>
                 </div>
+              </div>
+
+              <div className="mt-4 grid gap-2 md:grid-cols-3">
+                {membershipPlans.map((plan) => {
+                  const isCurrentPlan =
+                    membership?.plan === plan.id &&
+                    membership.status === 'active' &&
+                    membership.adminApproved;
+
+                  return (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      disabled={membershipMutation.isPending}
+                      onClick={() =>
+                        void membershipMutation.mutateAsync({
+                          userId: managedUser.id,
+                          plan: plan.id,
+                          status: 'active',
+                          adminApproved: true,
+                        })
+                      }
+                      className={`rounded-xl border p-3 text-left text-xs transition-colors ${
+                        isCurrentPlan
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-background text-muted-foreground hover:border-primary/40'
+                      }`}
+                    >
+                      <span className="block font-semibold text-foreground">{plan.label}</span>
+                      <span className="mt-1 block leading-5">{plan.description}</span>
+                    </button>
+                  );
+                })}
               </div>
 
               {isSelected && (
@@ -1595,7 +1682,7 @@ const Admin = () => {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
               <div>
                 <h2 className="text-lg font-medium text-foreground">
-                  {selectedCategory ? `Comentarios en ${selectedCategory.name}` : 'Comunidad'}
+                  {selectedCategory ? `Comentarios en ${selectedCategory.name}` : 'Inteligencia colectiva'}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   {selectedCategory
@@ -1639,6 +1726,110 @@ const Admin = () => {
               )}
             </div>
           </div>
+        </section>
+
+        <section className="bg-card rounded-lg border border-border p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-medium text-foreground">Verificación de proveedores</h2>
+              <p className="text-sm text-muted-foreground">
+                Solicitudes pendientes antes de habilitar acceso a la plataforma.
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              {pendingSupplierUsers.length} pendientes
+            </Badge>
+          </div>
+          {pendingSupplierUsers.length ? (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full min-w-[720px] text-left text-sm">
+                <thead className="bg-muted/60 text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Nombre</th>
+                    <th className="px-4 py-3 font-medium">Empresa</th>
+                    <th className="px-4 py-3 font-medium">Correo</th>
+                    <th className="px-4 py-3 font-medium">Sector</th>
+                    <th className="px-4 py-3 font-medium">Registro</th>
+                    <th className="px-4 py-3 font-medium">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingSupplierUsers.map((supplier) => (
+                    <tr key={supplier.id} className="border-t border-border">
+                      <td className="px-4 py-3 font-medium text-foreground">{supplier.fullName}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{supplier.company}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{supplier.email}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{supplier.sector ?? 'General'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{formatDateTime(supplier.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            disabled={statusMutation.isPending}
+                            onClick={() => void statusMutation.mutateAsync({ userId: supplier.id, status: 'active' })}
+                          >
+                            Aprobar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={statusMutation.isPending}
+                            onClick={() => void statusMutation.mutateAsync({ userId: supplier.id, status: 'rejected' })}
+                          >
+                            Rechazar
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">No hay proveedores pendientes de aprobación.</p>
+          )}
+        </section>
+
+        <section className="bg-card rounded-lg border border-border p-5">
+          <div className="mb-4">
+            <h2 className="text-lg font-medium text-foreground">Administración de agentes IA</h2>
+            <p className="text-sm text-muted-foreground">
+              Uso por usuario, tokens consumidos y costo estimado por operación.
+            </p>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[980px] text-left text-sm">
+              <thead className="bg-muted/60 text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Usuario</th>
+                  <th className="px-4 py-3 font-medium">Rol</th>
+                  <th className="px-4 py-3 font-medium">Agente</th>
+                  <th className="px-4 py-3 font-medium">Operación</th>
+                  <th className="px-4 py-3 font-medium">Fecha/hora</th>
+                  <th className="px-4 py-3 font-medium">Modelo</th>
+                  <th className="px-4 py-3 font-medium">Tokens</th>
+                  <th className="px-4 py-3 font-medium">Costo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(agentUsageQuery.data ?? []).map((usage) => (
+                  <tr key={usage.id} className="border-t border-border">
+                    <td className="px-4 py-3 font-medium text-foreground">{usage.userName}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{getRoleLabel(usage.userRole)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{usage.agentName}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{usage.operationName}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{formatDateTime(usage.createdAt)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{usage.model ?? 'No especificado'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{usage.totalTokens}</td>
+                    <td className="px-4 py-3 text-muted-foreground">US$ {usage.costAmount.toFixed(6)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {!agentUsageQuery.isLoading && !(agentUsageQuery.data ?? []).length ? (
+            <p className="mt-3 text-sm text-muted-foreground">Aún no hay operaciones registradas.</p>
+          ) : null}
         </section>
 
         <section className="grid lg:grid-cols-2 gap-6">

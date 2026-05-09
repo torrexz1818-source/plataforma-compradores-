@@ -26,7 +26,7 @@ const modules = [
     icon: Newspaper,
   },
   {
-    title: 'Comunidad',
+    title: 'Inteligencia colectiva',
     description: 'Conversaciones y criterios compartidos entre profesionales de compras.',
     icon: Users,
   },
@@ -329,7 +329,7 @@ const Landing = () => {
                 lo necesario para crecer profesionalmente, conectar con pares y automatizar su trabajo.
               </p>
               <p className="mt-7 max-w-2xl text-sm font-semibold leading-8 text-white/52">
-                Comunidad, educacion, directorio de proveedores e inteligencia artificial, todo en una red disenada
+                Inteligencia colectiva, educacion, directorio de proveedores e inteligencia artificial, todo en una red disenada
                 100% para el area de compras.
               </p>
             </div>

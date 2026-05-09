@@ -1,5 +1,5 @@
 export type UserRole = 'buyer' | 'expert' | 'admin' | 'supplier';
-export type UserStatus = 'active' | 'disabled';
+export type UserStatus = 'active' | 'disabled' | 'pending' | 'rejected';
 
 export interface User {
   id: string;
@@ -708,5 +708,22 @@ export interface AgentExecution {
   agentName: string;
   inputData: Record<string, unknown>;
   outputData: Record<string, unknown>;
+  totalTokens?: number;
+  costAmount?: number;
   executedAt: string;
+}
+
+export interface AdminAgentUsage {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  agentName: string;
+  operationName: string;
+  model?: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costAmount: number;
+  createdAt: string;
 }
