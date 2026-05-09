@@ -1466,10 +1466,24 @@ export class PostsService {
     const user = usersMap.get(userId);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      return this.mapDeletedUser(userId);
     }
 
     return this.mapUser(user);
+  }
+
+  private mapDeletedUser(userId: string): PublicUser {
+    return {
+      id: userId,
+      fullName: 'Usuario eliminado',
+      email: '',
+      company: 'Cuenta no disponible',
+      position: '',
+      role: 'deleted',
+      status: UserStatus.DISABLED,
+      points: 0,
+      createdAt: new Date(0).toISOString(),
+    };
   }
 
   private getRequiredCategoryFromMap(
