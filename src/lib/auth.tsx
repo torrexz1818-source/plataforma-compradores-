@@ -97,6 +97,17 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function isTransientAuthRefreshError(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return (
+    error.name === 'AbortError' ||
+    /aborted|failed to fetch|networkerror|load failed/i.test(error.message)
+  );
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [user, setUser] = useState<User | null>(null);
@@ -127,8 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(me);
         }
       })
-      .catch(() => {
-        if (isMounted) {
+      .catch((error) => {
+        if (isMounted && !isTransientAuthRefreshError(error)) {
           setStoredToken(null);
           setToken(null);
           setUser(null);

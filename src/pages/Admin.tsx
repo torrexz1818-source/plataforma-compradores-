@@ -92,6 +92,21 @@ const formatFileSize = (bytes: number) => {
   return `${Math.ceil(bytes / (1024 * 1024))} MB`;
 };
 
+function formatDateTime(value?: string) {
+  if (!value) return 'No registrado';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'No registrado';
+  }
+
+  return new Intl.DateTimeFormat('es-PE', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date);
+}
+
 const getVideoDuration = (file: File) =>
   new Promise<number>((resolve, reject) => {
     const video = document.createElement('video');
