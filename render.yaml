@@ -1,4 +1,15 @@
 services:
+  - type: static
+    name: buyernodus-frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_URL
+        value: https://api.buyernodus.com
+      - key: VITE_AI_ENGINE_URL
+        value: https://ai.buyernodus.com
+
   - type: web
     name: buyernodus-ai-engine
     runtime: python

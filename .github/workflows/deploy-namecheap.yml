@@ -1,4 +1,4 @@
-name: Deploy Frontend And Render Backend
+name: Validate Render Build
 
 on:
   push:
@@ -7,10 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
-    env:
-      RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
 
     steps:
       - name: Checkout
@@ -30,24 +28,3 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL || 'https://api.buyernodus.com' }}
-
-      - name: Deploy frontend to public_html
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.CPANEL_FTP_HOST }}
-          username: ${{ secrets.CPANEL_FTP_USERNAME }}
-          password: ${{ secrets.CPANEL_FTP_PASSWORD }}
-          protocol: ftp
-          port: ${{ secrets.CPANEL_FTP_PORT || 21 }}
-          local-dir: ./dist/
-          server-dir: ${{ vars.CPANEL_FRONTEND_DIR || '/public_html/' }}
-          state-name: .ftp-state-frontend.json
-
-      - name: Require Render deploy hook
-        if: ${{ env.RENDER_DEPLOY_HOOK_URL == '' }}
-        run: |
-          echo "::error::Missing GitHub Actions secret RENDER_DEPLOY_HOOK_URL. Add the Render deploy hook URL as a repository secret to deploy the backend."
-          exit 1
-
-      - name: Trigger Render backend deploy
-        run: curl -fsS -X POST "$RENDER_DEPLOY_HOOK_URL"
