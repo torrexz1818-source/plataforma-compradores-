@@ -1,3 +1,6 @@
+DirectoryIndex index.html
+Options -MultiViews
+
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
@@ -5,12 +8,16 @@
   RewriteCond %{REQUEST_METHOD} GET [NC]
   RewriteCond %{HTTP_HOST} ^(?:www\.)?(.+)$ [NC]
   RewriteRule ^api/uploads/(.*)$ https://api.%1/uploads/$1 [R=302,L,NE]
+
   RewriteCond %{REQUEST_METHOD} GET [NC]
   RewriteCond %{HTTP_HOST} ^(?:www\.)?(.+)$ [NC]
   RewriteRule ^uploads/(.*)$ https://api.%1/uploads/$1 [R=302,L,NE]
 
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . /index.html [L]
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  RewriteRule ^ index.html [L]
 </IfModule>
+
+ErrorDocument 404 /index.html
