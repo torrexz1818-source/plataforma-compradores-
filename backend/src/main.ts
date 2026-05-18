@@ -124,7 +124,7 @@ async function bootstrap() {
 }
 
 bootstrap().catch((error: unknown) => {
-  console.error('Fatal startup error while booting Supply Nexu backend.');
+  console.error('Fatal startup error while booting Buyer Nodus backend.');
 
   if (error instanceof Error) {
     console.error(`${error.name}: ${error.message}`);

@@ -12,11 +12,11 @@
 
 ```env
 MONGODB_URI=mongodb://127.0.0.1:27017
-MONGODB_DB_NAME=supplynexu
-JWT_SECRET=dev-supplynexu-secret
+MONGODB_DB_NAME=buyernodus
+JWT_SECRET=dev-buyernodus-secret
 HOST=0.0.0.0
 PORT=10000
-CORS_ORIGINS=https://supplynexu.com,https://www.supplynexu.com
+CORS_ORIGINS=https://buyernodus.com,https://www.buyernodus.com
 ```
 
 ### Recuperacion de contrasena por correo
@@ -42,8 +42,8 @@ Configuracion exacta:
 
 - Local frontend: `http://127.0.0.1:5173`
 - Local callback backend: `http://127.0.0.1:10000/experts/calendar/oauth/callback`
-- Produccion frontend: `https://supplynexu.com`
-- Produccion callback backend: `https://api.supplynexu.com/experts/calendar/oauth/callback`
+- Produccion frontend: `https://buyernodus.com`
+- Produccion callback backend: `https://api.buyernodus.com/experts/calendar/oauth/callback`
 
 Guia completa:
 
@@ -51,11 +51,9 @@ Guia completa:
 
 ## Usuario administrador inicial
 
-- Email: `admin@supplynexu.com`
-- Password: `Admin12345!`
-- Email: `adolfo.mesa@supplynexu.com`
+- Email: `adolfo.mesa@buyernodus.com`
 - Password: `Adolfo2026!`
-- Email: `anna.torres@supplynexu.com`
+- Email: `anna.torres@buyernodus.com`
 - Password: `Anna2026!`
 
 Los administradores globales de la plataforma pueden:
@@ -78,7 +76,7 @@ npm run build
 En produccion, el frontend queda listo para publicarse en `public_html` y consume:
 
 ```env
-VITE_API_URL=https://api.supplynexu.com
+VITE_API_URL=https://api.buyernodus.com
 ```
 
 ### Backend
@@ -118,7 +116,7 @@ npm run dev:frontend
 - Frontend: `http://localhost:5173`
 - Backend: `http://127.0.0.1:10000/health`
 
-Localmente el frontend usa `VITE_API_URL=/api` desde `.env.development`, y Vite hace proxy al backend en `127.0.0.1:10000`. Produccion usa `.env.production` con `https://api.supplynexu.com`.
+Localmente el frontend usa `VITE_API_URL=/api` desde `.env.development`, y Vite hace proxy al backend en `127.0.0.1:10000`. Produccion usa `.env.production` con `https://api.buyernodus.com`.
 
 Para cPanel/Namecheap Node.js:
 
@@ -148,12 +146,12 @@ Secrets recomendados en GitHub:
 
 Variables recomendadas en GitHub:
 
-- `VITE_API_URL=https://api.supplynexu.com`
+- `VITE_API_URL=https://api.buyernodus.com`
 - `CPANEL_FRONTEND_DIR=/public_html/`
 - `CPANEL_BACKEND_DIR=/backend/`
-- `CPANEL_PASSENGER_TMP_DIR=/api.supplynexu.com/tmp/`
+- `CPANEL_PASSENGER_TMP_DIR=/api.buyernodus.com/tmp/`
 - `CPANEL_BACKEND_ABS_PATH=/home/supptug/backend`
-- `CPANEL_PASSENGER_TMP_ABS_PATH=/home/supptug/api.supplynexu.com/tmp`
+- `CPANEL_PASSENGER_TMP_ABS_PATH=/home/supptug/api.buyernodus.com/tmp`
 
 ## Flujo Manual Minimo
 

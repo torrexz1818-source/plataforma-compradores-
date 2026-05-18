@@ -26,7 +26,7 @@ export class EmailService {
   private readonly from =
     process.env.SMTP_FROM?.trim() ||
     process.env.SMTP_USER?.trim() ||
-    'no-reply@supplynexu.com';
+    'no-reply@buyernodus.com';
   private readonly transporter: Transporter;
 
   constructor() {
@@ -100,7 +100,7 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: `"Soporte Supply Nexu" <${this.from}>`,
+        from: `"Soporte Buyer Nodus" <${this.from}>`,
         to: data.to,
         subject: 'Recuperacion de contrasena',
         text: textLines.join('\n'),
@@ -160,7 +160,7 @@ export class EmailService {
 
     try {
       await this.transporter.sendMail({
-        from: `"Supply Nexu" <${this.from}>`,
+        from: `"Buyer Nodus" <${this.from}>`,
         to: data.buyerEmail,
         cc: data.expertEmail,
         subject,

@@ -67,7 +67,7 @@ const BuyerDashboard = () => {
               BUYER NODUS
             </h1>
             <p className="max-w-xl text-sm leading-6 text-primary-foreground/85 sm:text-base sm:leading-7 lg:text-lg">
-              Es un ecosistema digital B2B especializada para compradores donde aprenden, comparten experiencias y automatizan sus procesos.
+              Es una plataforma digital B2B especializada para compradores, donde aprenden, comparten experiencias y automatizan sus procesos.
             </p>
           </div>
 

@@ -15,7 +15,7 @@ import { AdminController } from './admin.controller';
     UploadsModule,
     AgentsModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-supplynexu-secret',
+      secret: process.env.JWT_SECRET ?? 'dev-buyernodus-secret',
     }),
   ],
   controllers: [AdminController],

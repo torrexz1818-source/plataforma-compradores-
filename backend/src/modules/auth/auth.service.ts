@@ -766,7 +766,7 @@ export class AuthService {
       email,
       passwordHash,
       fullName: normalizedName || 'Usuario Demo',
-      company: 'Supply Nexu',
+      company: 'Buyer Nodus',
       position: 'Miembro de la plataforma',
       role: UserRole.BUYER,
     });
@@ -837,7 +837,7 @@ export class AuthService {
   }
 
   private hashValue(value: string): string {
-    const secret = process.env.JWT_SECRET ?? 'dev-supplynexu-secret';
+    const secret = process.env.JWT_SECRET ?? 'dev-buyernodus-secret';
     return crypto.createHmac('sha256', secret).update(value).digest('hex');
   }
 

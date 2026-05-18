@@ -1224,7 +1224,7 @@ export class ExpertsService {
     const encodedPayload = Buffer.from(JSON.stringify(payload)).toString(
       'base64url',
     );
-    const secret = process.env.JWT_SECRET ?? 'dev-supplynexu-secret';
+    const secret = process.env.JWT_SECRET ?? 'dev-buyernodus-secret';
     const signature = crypto
       .createHmac('sha256', secret)
       .update(encodedPayload)
@@ -1239,7 +1239,7 @@ export class ExpertsService {
       throw new BadRequestException('El estado de Google OAuth es invalido');
     }
 
-    const secret = process.env.JWT_SECRET ?? 'dev-supplynexu-secret';
+    const secret = process.env.JWT_SECRET ?? 'dev-buyernodus-secret';
     const expectedSignature = crypto
       .createHmac('sha256', secret)
       .update(encodedPayload)

@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 const modules = [
   {
     title: 'Novedades del sector',
-    description: 'Actualidad, tendencias y senales relevantes para compras corporativas.',
+    description: 'Actualidad, tendencias y señales relevantes para compras corporativas.',
     icon: Newspaper,
   },
   {
@@ -31,7 +31,7 @@ const modules = [
     icon: Users,
   },
   {
-    title: 'Educacion continua',
+    title: 'Educación continua',
     description: 'Recursos para fortalecer habilidades, procesos y decisiones B2B.',
     icon: BookOpen,
   },
@@ -52,14 +52,14 @@ const modules = [
   },
   {
     title: 'Nexu AI - Agentes & Automatizacion',
-    description: 'Inteligencia aplicada para acelerar analisis, aprendizaje y accion.',
+    description: 'Inteligencia aplicada para acelerar análisis, aprendizaje y acción.',
     icon: Bot,
     featured: true,
     badge: 'Nuevo',
   },
   {
     title: 'Directorio de proveedores',
-    description: 'Busca, compara y conecta con proveedores registrados en el ecosistema.',
+    description: 'Busca, compara y conecta con proveedores registrados en la plataforma.',
     icon: Building2,
   },
 ];
@@ -77,23 +77,23 @@ const audienceCards = [
     eyebrow: 'Para compradores',
     title: 'Compra con mejor contexto y una red profesional alrededor.',
     description:
-      'Accede a comunidad, contenido educativo, expertos, proveedores, IA y oportunidades para tomar decisiones mas inteligentes.',
+      'Accede a comunidad, contenido educativo, expertos, proveedores, IA y oportunidades para tomar decisiones más inteligentes.',
     cta: 'Entrar como comprador',
     to: '/register?role=buyer',
     icon: ShieldCheck,
   },
   {
     eyebrow: 'Para expertos',
-    title: 'Comparte conocimiento y genera impacto en el ecosistema.',
+    title: 'Comparte conocimiento y genera impacto en la plataforma.',
     description:
-      'Participa con sesiones, experiencias y criterios especializados para acompanar retos reales de compras.',
+      'Participa con sesiones, experiencias y criterios especializados para acompañar retos reales de compras.',
     cta: 'Ser Experto Nodus',
     to: '/become-expert',
     icon: Sparkles,
   },
   {
     eyebrow: 'Para proveedores',
-    title: 'Forma parte del ecosistema y conecta con compradores corporativos.',
+    title: 'Forma parte de la plataforma y conecta con compradores corporativos.',
     description:
       'Crea presencia en Buyer Nodus, gana visibilidad y presenta soluciones confiables ante una comunidad B2B activa.',
     cta: 'Registrarme como proveedor',
@@ -228,7 +228,7 @@ const Landing = () => {
           </button>
           <div className="flex gap-2">
             <Button variant="ghost" size="sm" onClick={() => navigate('/login')} className="text-white hover:text-white">
-              Iniciar sesion
+              Iniciar sesión
             </Button>
             <Button size="sm" onClick={() => navigate('/register')} className="bg-[#B2EB4A] text-[#0E109E] hover:bg-white">
               Registrarse
@@ -261,7 +261,7 @@ const Landing = () => {
 
           <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
             <div className="bn-hero-signal mb-9 text-[10px] font-bold uppercase tracking-[0.56em] text-[#B2EB4A] sm:text-xs">
-              Ecosistema B2B conectado
+              Plataforma B2B conectada
             </div>
 
             <h1 className="w-full text-[clamp(2.25rem,8vw,7rem)] font-medium leading-none tracking-normal text-white">
@@ -271,7 +271,7 @@ const Landing = () => {
             </h1>
 
             <p className="bn-hero-copy mt-14 max-w-3xl text-base leading-8 text-white/86 sm:text-lg">
-              El ecosistema donde compradores, expertos y proveedores se conectan para compartir conocimiento,
+              La plataforma donde compradores, expertos y proveedores se conectan para compartir conocimiento,
               descubrir oportunidades y tomar mejores decisiones con inteligencia aplicada.
             </p>
 
@@ -289,7 +289,7 @@ const Landing = () => {
                 onClick={() => navigate('/login')}
                 className="h-12 rounded-none border-white/18 bg-transparent px-9 text-xs font-bold uppercase tracking-[0.1em] text-white shadow-none hover:bg-white/10 hover:text-white"
               >
-                Iniciar sesion
+                Iniciar sesión
               </Button>
             </div>
 
@@ -303,14 +303,14 @@ const Landing = () => {
           <div className="mx-auto max-w-7xl">
             <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
               <div className="bn-reveal">
-                <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#F3313F]">Que es Buyer Nodus</p>
+                <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#F3313F]">Qué es Buyer Nodus</p>
                 <h2 className="mt-4 text-3xl font-bold leading-tight text-[#0E109E] sm:text-5xl">
-                  Un ecosistema para convertir conexiones en mejores decisiones B2B.
+                  Una plataforma para convertir conexiones en mejores decisiones B2B.
                 </h2>
               </div>
               <p className="bn-reveal text-base leading-8 text-[#0E109E]/70 sm:text-lg">
                 Buyer Nodus integra comunidad, aprendizaje, expertos, proveedores, oportunidades y Nodus IA en una
-                experiencia profesional para compradores y empresas que buscan crecer con informacion confiable.
+                experiencia profesional para compradores y empresas que buscan crecer con información confiable.
               </p>
             </div>
           </div>
@@ -320,21 +320,21 @@ const Landing = () => {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_18%,rgba(243,49,63,0.16),transparent_28%),radial-gradient(circle_at_86%_74%,rgba(178,235,74,0.16),transparent_30%)]" />
           <div className="relative mx-auto grid max-w-7xl gap-12 lg:grid-cols-[1fr_0.9fr] lg:items-start">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.36em] text-[#B2EB4A]">Que es Buyer Nodus?</p>
+              <p className="text-xs font-bold uppercase tracking-[0.36em] text-[#B2EB4A]">Qué es Buyer Nodus?</p>
               <h2 className="mt-7 text-4xl font-bold leading-tight text-white sm:text-6xl">
-                El ecosistema construido <span className="text-[#F3313F]">exclusivamente</span> para compradores
+                La plataforma construida <span className="text-[#F3313F]">exclusivamente</span> para compradores
               </h2>
               <p className="mt-8 max-w-2xl text-base leading-8 text-white/82">
-                Buyer Nodus es un ecosistema digital B2B especializado. Compradores corporativos encuentran aqui todo
+                Buyer Nodus es una plataforma digital B2B especializada. Compradores corporativos encuentran aquí todo
                 lo necesario para crecer profesionalmente, conectar con pares y automatizar su trabajo.
               </p>
               <p className="mt-7 max-w-2xl text-sm font-semibold leading-8 text-white/52">
-                Inteligencia colectiva, educacion, directorio de proveedores e inteligencia artificial, todo en una red disenada
-                100% para el area de compras.
+                Inteligencia colectiva, educación, directorio de proveedores e inteligencia artificial, todo en una red diseñada
+                100% para el área de compras.
               </p>
             </div>
             <div className="rounded-lg border border-white/16 bg-white/[0.04] p-8 shadow-[0_24px_70px_rgba(0,0,0,0.16)] backdrop-blur">
-              <p className="text-xs font-bold uppercase tracking-[0.36em] text-[#B2EB4A]">Disenada para</p>
+              <p className="text-xs font-bold uppercase tracking-[0.36em] text-[#B2EB4A]">Diseñada para</p>
               <div className="mt-8 divide-y divide-white/14">
                 {designedFor.map((item, index) => (
                   <div key={item} className="flex items-center gap-4 py-4 text-sm font-bold text-white">
@@ -352,12 +352,12 @@ const Landing = () => {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(90,49,213,0.08),transparent_24%),radial-gradient(circle_at_76%_78%,rgba(243,49,63,0.07),transparent_28%)]" />
           <div className="mx-auto max-w-7xl">
             <div className="relative mx-auto max-w-3xl text-center">
-              <p className="text-xs font-bold uppercase tracking-[0.34em] text-[#5A31D5]">Ecosistema</p>
+              <p className="text-xs font-bold uppercase tracking-[0.34em] text-[#5A31D5]">Plataforma</p>
               <h2 className="mt-3 text-3xl font-bold leading-tight text-[#0E109E] sm:text-5xl">
-                8 modulos para el comprador moderno
+                8 módulos para el comprador moderno
               </h2>
               <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-[#0E109E]/68">
-                Cada modulo fue disenado para las necesidades del area de compras corporativa.
+                Cada módulo fue diseñado para las necesidades del área de compras corporativa.
               </p>
             </div>
             <div className="relative mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -434,7 +434,7 @@ const Landing = () => {
           <div className="mx-auto max-w-3xl">
             <CheckCircle2 className="mx-auto mb-5 h-10 w-10 text-[#F3313F]" />
             <h2 className="text-3xl font-bold leading-tight text-[#0E109E] sm:text-5xl">
-              Empieza a conectar con el ecosistema Buyer Nodus.
+              Empieza a conectar con la plataforma Buyer Nodus.
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-[#0E109E]/68">
               Crea tu cuenta y encuentra comunidad, conocimiento, expertos, proveedores y oportunidades en un solo lugar.
@@ -444,7 +444,7 @@ const Landing = () => {
                 Crear cuenta gratis <ArrowRight className="h-4 w-4" />
               </Button>
               <Button size="lg" variant="outline" onClick={() => navigate('/login')}>
-                Iniciar sesion
+                Iniciar sesión
               </Button>
             </div>
           </div>

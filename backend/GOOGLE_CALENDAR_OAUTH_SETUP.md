@@ -10,9 +10,9 @@
 
 ### Produccion actual
 
-- Frontend: `https://supplynexu.com`
-- Backend: `https://api.supplynexu.com`
-- Callback OAuth: `https://api.supplynexu.com/experts/calendar/oauth/callback`
+- Frontend: `https://buyernodus.com`
+- Backend: `https://api.buyernodus.com`
+- Callback OAuth: `https://api.buyernodus.com/experts/calendar/oauth/callback`
 
 ## Configuracion en Google Cloud Console
 
@@ -25,11 +25,11 @@
 4. Elige `Web application`.
 5. Agrega estos `Authorized redirect URIs`:
    - `http://127.0.0.1:10000/experts/calendar/oauth/callback`
-   - `https://api.supplynexu.com/experts/calendar/oauth/callback`
+   - `https://api.buyernodus.com/experts/calendar/oauth/callback`
 6. Agrega estos `Authorized JavaScript origins`:
    - `http://127.0.0.1:5173`
-   - `https://supplynexu.com`
-   - `https://www.supplynexu.com`
+   - `https://buyernodus.com`
+   - `https://www.buyernodus.com`
 7. Copia el `Client ID` y el `Client Secret`.
 
 ## Variables de entorno backend
@@ -50,8 +50,8 @@ APP_TIMEZONE=America/Lima
 ```env
 GOOGLE_CLIENT_ID=tu-client-id-google
 GOOGLE_CLIENT_SECRET=tu-client-secret-google
-GOOGLE_OAUTH_REDIRECT_URI=https://api.supplynexu.com/experts/calendar/oauth/callback
-FRONTEND_URL=https://supplynexu.com
+GOOGLE_OAUTH_REDIRECT_URI=https://api.buyernodus.com/experts/calendar/oauth/callback
+FRONTEND_URL=https://buyernodus.com
 GOOGLE_CALENDAR_TIMEZONE=America/Lima
 APP_TIMEZONE=America/Lima
 ```

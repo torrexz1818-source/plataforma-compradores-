@@ -5,6 +5,9 @@ Options -MultiViews
   RewriteEngine On
   RewriteBase /
 
+  RewriteCond %{HTTP_HOST} ^(www\.)?supplynexu\.com$ [NC]
+  RewriteRule ^(.*)$ https://buyernodus.com/$1 [R=301,L]
+
   RewriteCond %{REQUEST_METHOD} GET [NC]
   RewriteCond %{HTTP_HOST} ^(?:www\.)?(.+)$ [NC]
   RewriteRule ^api/uploads/(.*)$ https://api.%1/uploads/$1 [R=302,L,NE]

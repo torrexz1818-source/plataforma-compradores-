@@ -11,7 +11,7 @@ import { UsersModule } from '../users/users.module';
     UsersModule,
     NotificationsModule,
     JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-supplynexu-secret',
+      secret: process.env.JWT_SECRET ?? 'dev-buyernodus-secret',
     }),
   ],
   controllers: [AuthController],

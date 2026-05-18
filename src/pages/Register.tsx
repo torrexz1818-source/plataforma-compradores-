@@ -90,7 +90,7 @@ const CATEGORIES = ['Tecnologia', 'Insumos', 'Marketing', 'Logistica', 'RRHH', '
 const VOLUMES = ['Menos de $5,000', '$5,000 - $20,000', '$20,000 - $100,000', '+$100,000'];
 const COVERAGES = ['Local (ciudad)', 'Nacional', 'Latinoamerica', 'Global'];
 const YEARS = ['Menos de 1 ano', '1-3 anos', '3-10 anos', '+10 anos'];
-const SUPPLIER_ONBOARDING_STORAGE_KEY = 'supplynexu_supplier_onboarding_session';
+const SUPPLIER_ONBOARDING_STORAGE_KEY = 'buyernodus_supplier_onboarding_session';
 const SUPPLIER_UPLOAD_ACCEPT = '.pdf,image/jpeg,image/png,image/webp,image/gif,image/svg+xml';
 const SUPPLIER_UPLOAD_MAX_BYTES = 50 * 1024 * 1024;
 

@@ -48,7 +48,7 @@ const API_BASE_URL = RAW_API_BASE_URL.endsWith('/')
   ? RAW_API_BASE_URL.slice(0, -1)
   : RAW_API_BASE_URL;
 
-const TOKEN_KEY = 'supplynexu_token';
+const TOKEN_KEY = 'buyernodus_token';
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
