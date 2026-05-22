@@ -4,9 +4,28 @@
 
 - Frontend: React + Vite
 - Backend: NestJS
+- AI Engine: FastAPI
 - Database: MongoDB
+- Produccion: Render
 
-## Variables recomendadas
+## Produccion
+
+Buyer Nodus se publica en Render mediante `render.yaml`.
+
+- Frontend: `https://buyernodus.com`
+- Backend API: `https://api.buyernodus.com`
+- AI Engine: `https://ai.buyernodus.com`
+- Dominio `www`: `www.buyernodus.com` apunta a `plataforma-compradores.onrender.com`
+
+El flujo normal de despliegue es:
+
+1. Hacer cambios en el repo.
+2. Ejecutar build local si aplica.
+3. Commit y push a `main`.
+4. Render ejecuta auto-deploy.
+5. Verificar directamente `https://buyernodus.com`.
+
+## Variables Recomendadas
 
 ### Backend
 
@@ -19,9 +38,16 @@ PORT=10000
 CORS_ORIGINS=https://buyernodus.com,https://www.buyernodus.com
 ```
 
-### Recuperacion de contrasena por correo
+### Frontend
 
-El flujo de "me olvide contrasena" usa SMTP desde el backend. En produccion configura estas variables en Render o cPanel:
+```env
+VITE_API_URL=https://api.buyernodus.com
+VITE_AI_ENGINE_URL=https://ai.buyernodus.com
+```
+
+### Recuperacion De Contrasena
+
+El flujo de "me olvide contrasena" usa SMTP desde el backend. En produccion configura estas variables en Render:
 
 ```env
 SMTP_HOST=smtp.gmail.com
@@ -32,11 +58,11 @@ SMTP_PASS=tu-app-password-de-google
 SMTP_FROM="Buyer Nodus <tu-correo@gmail.com>"
 ```
 
-Si usas Gmail, `SMTP_PASS` debe ser una App Password de Google, no la contrasena normal de la cuenta. Despues del deploy revisa `https://api.buyernodus.com/health`: debe mostrar `email.configured: true`, `hasUser: true` y `hasPassword: true`.
+Si usas Gmail, `SMTP_PASS` debe ser una App Password de Google. Despues del deploy revisa `https://api.buyernodus.com/health`: debe mostrar `email.configured: true`, `hasUser: true` y `hasPassword: true`.
 
-### Google Calendar OAuth
+## Google Calendar OAuth
 
-El flujo ya esta implementado para que compradores y expertos conecten su Google Calendar directamente desdel ecosistema.
+El flujo ya esta implementado para que compradores y expertos conecten su Google Calendar directamente desde el ecosistema.
 
 Configuracion exacta:
 
@@ -49,7 +75,7 @@ Guia completa:
 
 - [backend/GOOGLE_CALENDAR_OAUTH_SETUP.md](backend/GOOGLE_CALENDAR_OAUTH_SETUP.md)
 
-## Usuario administrador inicial
+## Usuario Administrador Inicial
 
 - Email: `adolfo.mesa@buyernodus.com`
 - Password: `Adolfo2026!`
@@ -64,34 +90,9 @@ Los administradores globales del ecosistema pueden:
 - Activar y desactivar usuarios
 - Consultar el panel general de administracion
 
-## Arranque
-
-### Frontend
-
-```bash
-npm install
-npm run build
-```
-
-En produccion, el frontend queda listo para publicarse en `public_html` y consume:
-
-```env
-VITE_API_URL=https://api.buyernodus.com
-```
-
-### Backend
-
-```bash
-cd backend
-npm install
-npm run build
-```
-
 ## Desarrollo Local
 
-Para trabajar localmente sin afectar el deploy de cPanel:
-
-1. Instala dependencias una sola vez:
+Instala dependencias:
 
 ```bash
 npm install
@@ -99,71 +100,41 @@ cd backend
 npm install
 ```
 
-2. Inicia el backend local:
+Inicia el backend:
 
 ```bash
 npm run dev:backend
 ```
 
-3. En otra terminal, inicia el frontend local:
+En otra terminal, inicia el frontend:
 
 ```bash
 npm run dev:frontend
 ```
 
-4. Abre:
+Abre:
 
 - Frontend: `http://localhost:5173`
 - Backend: `http://127.0.0.1:10000/health`
 
 Localmente el frontend usa `VITE_API_URL=/api` desde `.env.development`, y Vite hace proxy al backend en `127.0.0.1:10000`. Produccion usa `.env.production` con `https://api.buyernodus.com`.
 
-Para cPanel/Namecheap Node.js:
+## Build
 
-1. Usa `backend` como `App Root`.
-2. Usa `app.js` como `Startup File`.
-3. Configura variables de entorno del backend en el panel Node.js.
-4. Si actualizas archivos manualmente, reinicia la app o toca `tmp/restart.txt`.
+Frontend:
 
-## Despliegue Automatico
+```bash
+npm run build
+```
 
-Se agrego el workflow [deploy-namecheap.yml](C:\Users\M S I\Downloads\supplysavvy-connect-main\.github\workflows\deploy-namecheap.yml) para desplegar desde GitHub Actions:
+Backend:
 
-- frontend a `public_html`
-- backend a la carpeta del app Node.js en cPanel
-- reinicio de Passenger via `tmp/restart.txt`
+```bash
+npm run build:backend
+```
 
-Secrets recomendados en GitHub:
+Todo:
 
-- `CPANEL_FTP_HOST`
-- `CPANEL_FTP_USERNAME`
-- `CPANEL_FTP_PASSWORD`
-- `CPANEL_FTP_PORT`
-- `CPANEL_SSH_HOST` opcional
-- `CPANEL_SSH_USERNAME` opcional
-- `CPANEL_SSH_PASSWORD` opcional
-- `CPANEL_SSH_PORT` opcional
-
-Variables recomendadas en GitHub:
-
-- `VITE_API_URL=https://api.buyernodus.com`
-- `CPANEL_FRONTEND_DIR=/public_html/`
-- `CPANEL_BACKEND_DIR=/backend/`
-- `CPANEL_PASSENGER_TMP_DIR=/api.buyernodus.com/tmp/`
-- `CPANEL_BACKEND_ABS_PATH=/home/supptug/backend`
-- `CPANEL_PASSENGER_TMP_ABS_PATH=/home/supptug/api.buyernodus.com/tmp`
-
-## Flujo Manual Minimo
-
-Si aun no subes a GitHub, para probar cambios solo haces esto en local:
-
-1. `npm run dev:backend`
-2. `npm run dev:frontend`
-
-Si ya subiste la configuracion a GitHub, para desplegar ya no subes carpetas a mano:
-
-1. `git add .`
-2. `git commit -m "tu cambio"`
-3. `git push origin main`
-
-GitHub Actions construye y sube frontend y backend automaticamente a Namecheap/cPanel.
+```bash
+npm run build:all
+```
