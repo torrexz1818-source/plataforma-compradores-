@@ -736,7 +736,7 @@ const Register = () => {
           <h1 className="text-2xl font-bold text-gradient mb-1">BUYER NODUS</h1>
           <h1 className="text-xl font-medium text-foreground tracking-tight">Crear cuenta</h1>
           <p className="text-[13px] text-muted-foreground mt-1">
-            Unete a la plataforma de compradores y proveedores
+            Unete al ecosistema de compradores y proveedores
           </p>
         </div>
 

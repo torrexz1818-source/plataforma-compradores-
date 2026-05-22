@@ -431,7 +431,7 @@ const NexuExperts = () => {
                       Mis reuniones
                     </div>
                     <p className="mt-1 text-sm text-primary">
-                      {orderedMeetings.length} reuniones guardadas en la plataforma
+                      {orderedMeetings.length} reuniones guardadas en el ecosistema
                     </p>
                   </div>
                   <ChevronDown
@@ -911,7 +911,7 @@ const NexuExperts = () => {
                           Fecha, hora y descripcion del tema a tratar. Confirmacion automatica con Meet.
                         </p>
                         <div className="mt-3 rounded-2xl border border-secondary/15 bg-secondary/10 px-4 py-3 text-sm text-primary">
-                          Las reuniones son grupales de hasta 3 personas por horario. Si deseas una sesion 1 a 1, esta disponible con membresia en la plataforma.
+                          Las reuniones son grupales de hasta 3 personas por horario. Si deseas una sesion 1 a 1, esta disponible con membresia en el ecosistema.
                         </div>
                       </div>
 

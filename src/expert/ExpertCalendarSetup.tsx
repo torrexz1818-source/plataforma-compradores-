@@ -87,7 +87,7 @@ const ExpertCalendarSetup = () => {
     if (calendarStatus === 'connected') {
       toast({
         title: 'Google Calendar conectado',
-        description: 'La cuenta ya quedo enlazada con la plataforma.',
+        description: 'La cuenta ya quedo enlazada con el ecosistema.',
       });
     }
 
@@ -204,7 +204,7 @@ const ExpertCalendarSetup = () => {
                   Conecta tu cuenta con Google en un clic
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  La plataforma abrira Google para que autorices el acceso de forma segura.
+                  El ecosistema abrira Google para que autorices el acceso de forma segura.
                   {isBuyer
                     ? ' Puedes seguir sin conectarlo, pero la cita no se copiara automaticamente a tu Google Calendar.'
                     : ' Si eres experto, esta conexion tambien permite validar tu disponibilidad real y crear las reuniones desde tu calendario.'}

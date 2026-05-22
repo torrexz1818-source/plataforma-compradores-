@@ -213,7 +213,7 @@ const RegisterExpert = () => {
           <h1 className="mb-1 text-2xl font-bold text-gradient">BUYER NODUS</h1>
             <h2 className="text-xl font-medium text-foreground">Conviertete en Experto Nodus</h2>
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Comparte tu experiencia, genera nuevas oportunidades y forma parte de la red de especialistas de la plataforma.
+            Comparte tu experiencia, genera nuevas oportunidades y forma parte de la red de especialistas del ecosistema.
           </p>
         </div>
 

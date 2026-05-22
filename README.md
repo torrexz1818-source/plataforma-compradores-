@@ -36,7 +36,7 @@ Si usas Gmail, `SMTP_PASS` debe ser una App Password de Google, no la contrasena
 
 ### Google Calendar OAuth
 
-El flujo ya esta implementado para que compradores y expertos conecten su Google Calendar directamente desde la plataforma.
+El flujo ya esta implementado para que compradores y expertos conecten su Google Calendar directamente desdel ecosistema.
 
 Configuracion exacta:
 
@@ -56,7 +56,7 @@ Guia completa:
 - Email: `anna.torres@buyernodus.com`
 - Password: `Anna2026!`
 
-Los administradores globales de la plataforma pueden:
+Los administradores globales del ecosistema pueden:
 
 - Crear y eliminar videos educativos
 - Crear y eliminar publicaciones

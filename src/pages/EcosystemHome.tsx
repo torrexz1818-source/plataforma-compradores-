@@ -27,7 +27,7 @@ const baseModuleCards = [
   },
   {
     title: 'Novedades',
-    description: 'Revisa noticias, anuncios y publicaciones recientes de la plataforma.',
+    description: 'Revisa noticias, anuncios y publicaciones recientes del ecosistema.',
     to: '/novedades',
     icon: Newspaper,
   },
@@ -70,13 +70,13 @@ const baseModuleCards = [
   },
   {
     title: 'Directorio de proveedores',
-    description: 'Busca, filtra y revisa proveedores registrados en la plataforma.',
+    description: 'Busca, filtra y revisa proveedores registrados en el ecosistema.',
     to: '/buyer/directory',
     icon: Building2,
   },
   {
     title: 'Mensajería',
-    description: 'Gestiona tus conversaciones y contactos dentro de la plataforma.',
+    description: 'Gestiona tus conversaciones y contactos dentro del ecosistema.',
     to: '/mensajes',
     icon: MessagesSquare,
   },
@@ -109,7 +109,7 @@ const EcosystemHome = () => {
             ¿Qué quieres hacer hoy en el ecosistema?
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/82 sm:text-base">
-            Selecciona una opción para comenzar a gestionar tus actividades dentro de la plataforma.
+            Selecciona una opción para comenzar a gestionar tus actividades dentro del ecosistema.
           </p>
         </div>
       </section>

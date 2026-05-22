@@ -1,6 +1,6 @@
 # Google Calendar OAuth Setup
 
-## URLs de esta plataforma
+## URLs de esta ecosistema
 
 ### Desarrollo local
 
@@ -56,14 +56,14 @@ GOOGLE_CALENDAR_TIMEZONE=America/Lima
 APP_TIMEZONE=America/Lima
 ```
 
-## Flujo final en la plataforma
+## Flujo final en el ecosistema
 
 1. El comprador o experto entra a `Conectar Google Calendar`.
 2. La app pide una URL OAuth al backend.
 3. El usuario autoriza en Google.
 4. Google redirige al backend en `/experts/calendar/oauth/callback`.
 5. El backend intercambia el `code`, guarda el `refresh token` y marca la cuenta como conectada.
-6. El usuario vuelve automaticamente a la plataforma ya conectado.
+6. El usuario vuelve automaticamente al ecosistema ya conectado.
 
 ## Nota importante
 

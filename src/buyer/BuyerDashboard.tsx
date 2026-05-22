@@ -67,7 +67,7 @@ const BuyerDashboard = () => {
               BUYER NODUS
             </h1>
             <p className="max-w-xl text-sm leading-6 text-primary-foreground/85 sm:text-base sm:leading-7 lg:text-lg">
-              Es una plataforma digital B2B especializada para compradores, donde aprenden, comparten experiencias y automatizan sus procesos.
+              Es un ecosistema digital B2B especializado para compradores, donde aprenden, comparten experiencias y automatizan sus procesos.
             </p>
           </div>
 
@@ -97,7 +97,7 @@ const BuyerDashboard = () => {
         <div className="space-y-6 mb-8">
           <section>
             <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">Resumen general de la plataforma</p>
+            <p className="text-muted-foreground mt-1">Resumen general del ecosistema</p>
           </section>
 
           <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -110,7 +110,7 @@ const BuyerDashboard = () => {
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground">Total usuarios</p>
                   <p className="mt-1 text-3xl font-bold leading-none text-foreground">{platformStats.totalUsers}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">Usuarios registrados en la plataforma</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Usuarios registrados en el ecosistema</p>
                 </div>
               </CardContent>
             </Card>

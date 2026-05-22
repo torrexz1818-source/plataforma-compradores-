@@ -327,7 +327,7 @@ const Admin = () => {
             {
               label: 'Total usuarios',
               value: platformStatsQuery.data?.totalUsers ?? data.overview.totalUsers,
-              description: 'Usuarios registrados en la plataforma',
+              description: 'Usuarios registrados en el ecosistema',
               icon: Users,
               iconClassName: 'bg-primary/10 text-primary',
               dividerClassName: 'bg-primary',
@@ -439,7 +439,7 @@ const Admin = () => {
         <div className="mx-auto w-full max-w-3xl px-3 py-8 sm:px-6 sm:py-10">
           <h1 className="text-2xl font-bold text-foreground mb-2">Panel de administracion</h1>
           <p className="text-muted-foreground">
-            Solo el administrador superior de la plataforma puede acceder a esta seccion.
+            Solo el administrador superior del ecosistema puede acceder a esta seccion.
           </p>
         </div>
       </MainLayout>
@@ -955,7 +955,7 @@ const Admin = () => {
       <div className="mx-auto w-full max-w-7xl min-w-0 px-3 py-5 space-y-8 overflow-x-hidden sm:px-6 sm:py-8 2xl:max-w-[1440px]">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Panel administrativo</h1>
-          <p className="mt-1 text-muted-foreground">Resumen general de la plataforma</p>
+          <p className="mt-1 text-muted-foreground">Resumen general del ecosistema</p>
         </motion.div>
 
         <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -1748,7 +1748,7 @@ const Admin = () => {
             <div>
               <h2 className="text-lg font-medium text-foreground">Verificación de proveedores</h2>
               <p className="text-sm text-muted-foreground">
-                Solicitudes pendientes antes de habilitar acceso a la plataforma.
+                Solicitudes pendientes antes de habilitar acceso al ecosistema.
               </p>
             </div>
             <Badge variant="outline" className="text-xs">

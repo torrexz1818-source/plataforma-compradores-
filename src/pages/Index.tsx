@@ -37,7 +37,7 @@ const Index = () => {
         >
           <h1 className="text-3xl font-bold text-primary-foreground mb-2">BUYER NODUS</h1>
           <p className="text-primary-foreground/80 text-base max-w-xl mb-6">
-            La plataforma donde compradores y proveedores B2B aprenden, comparten experiencias y generan oportunidades.
+            El ecosistema donde compradores y proveedores B2B aprenden, comparten experiencias y generan oportunidades.
           </p>
           <div className="flex gap-3">
             <Button variant="secondary" onClick={() => navigate('/community')} className="font-medium">

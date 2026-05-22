@@ -767,7 +767,7 @@ export class AuthService {
       passwordHash,
       fullName: normalizedName || 'Usuario Demo',
       company: 'Buyer Nodus',
-      position: 'Miembro de la plataforma',
+      position: 'Miembro del ecosistema',
       role: UserRole.BUYER,
     });
   }

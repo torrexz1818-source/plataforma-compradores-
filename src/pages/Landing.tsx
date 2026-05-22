@@ -59,7 +59,7 @@ const modules = [
   },
   {
     title: 'Directorio de proveedores',
-    description: 'Busca, compara y conecta con proveedores registrados en la plataforma.',
+    description: 'Busca, compara y conecta con proveedores registrados en el ecosistema.',
     icon: Building2,
   },
 ];
@@ -84,7 +84,7 @@ const audienceCards = [
   },
   {
     eyebrow: 'Para expertos',
-    title: 'Comparte conocimiento y genera impacto en la plataforma.',
+    title: 'Comparte conocimiento y genera impacto en el ecosistema.',
     description:
       'Participa con sesiones, experiencias y criterios especializados para acompañar retos reales de compras.',
     cta: 'Ser Experto Nodus',
@@ -93,7 +93,7 @@ const audienceCards = [
   },
   {
     eyebrow: 'Para proveedores',
-    title: 'Forma parte de la plataforma y conecta con compradores corporativos.',
+    title: 'Forma parte del ecosistema y conecta con compradores corporativos.',
     description:
       'Crea presencia en Buyer Nodus, gana visibilidad y presenta soluciones confiables ante una comunidad B2B activa.',
     cta: 'Registrarme como proveedor',
@@ -261,7 +261,7 @@ const Landing = () => {
 
           <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
             <div className="bn-hero-signal mb-9 text-[10px] font-bold uppercase tracking-[0.56em] text-[#B2EB4A] sm:text-xs">
-              Plataforma B2B conectada
+              Ecosistema B2B conectado
             </div>
 
             <h1 className="w-full text-[clamp(2.25rem,8vw,7rem)] font-medium leading-none tracking-normal text-white">
@@ -271,7 +271,7 @@ const Landing = () => {
             </h1>
 
             <p className="bn-hero-copy mt-14 max-w-3xl text-base leading-8 text-white/86 sm:text-lg">
-              La plataforma donde compradores, expertos y proveedores se conectan para compartir conocimiento,
+              El ecosistema donde compradores, expertos y proveedores se conectan para compartir conocimiento,
               descubrir oportunidades y tomar mejores decisiones con inteligencia aplicada.
             </p>
 
@@ -305,7 +305,7 @@ const Landing = () => {
               <div className="bn-reveal">
                 <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#F3313F]">Qué es Buyer Nodus</p>
                 <h2 className="mt-4 text-3xl font-bold leading-tight text-[#0E109E] sm:text-5xl">
-                  Una plataforma para convertir conexiones en mejores decisiones B2B.
+                  Un ecosistema para convertir conexiones en mejores decisiones B2B.
                 </h2>
               </div>
               <p className="bn-reveal text-base leading-8 text-[#0E109E]/70 sm:text-lg">
@@ -322,10 +322,10 @@ const Landing = () => {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.36em] text-[#B2EB4A]">Qué es Buyer Nodus?</p>
               <h2 className="mt-7 text-4xl font-bold leading-tight text-white sm:text-6xl">
-                La plataforma construida <span className="text-[#F3313F]">exclusivamente</span> para compradores
+                El ecosistema construido <span className="text-[#F3313F]">exclusivamente</span> para compradores
               </h2>
               <p className="mt-8 max-w-2xl text-base leading-8 text-white/82">
-                Buyer Nodus es una plataforma digital B2B especializada. Compradores corporativos encuentran aquí todo
+                Buyer Nodus es un ecosistema digital B2B especializado. Compradores corporativos encuentran aquí todo
                 lo necesario para crecer profesionalmente, conectar con pares y automatizar su trabajo.
               </p>
               <p className="mt-7 max-w-2xl text-sm font-semibold leading-8 text-white/52">
@@ -352,7 +352,7 @@ const Landing = () => {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(90,49,213,0.08),transparent_24%),radial-gradient(circle_at_76%_78%,rgba(243,49,63,0.07),transparent_28%)]" />
           <div className="mx-auto max-w-7xl">
             <div className="relative mx-auto max-w-3xl text-center">
-              <p className="text-xs font-bold uppercase tracking-[0.34em] text-[#5A31D5]">Plataforma</p>
+              <p className="text-xs font-bold uppercase tracking-[0.34em] text-[#5A31D5]">Ecosistema</p>
               <h2 className="mt-3 text-3xl font-bold leading-tight text-[#0E109E] sm:text-5xl">
                 8 módulos para el comprador moderno
               </h2>
@@ -434,7 +434,7 @@ const Landing = () => {
           <div className="mx-auto max-w-3xl">
             <CheckCircle2 className="mx-auto mb-5 h-10 w-10 text-[#F3313F]" />
             <h2 className="text-3xl font-bold leading-tight text-[#0E109E] sm:text-5xl">
-              Empieza a conectar con la plataforma Buyer Nodus.
+              Empieza a conectar con el ecosistema Buyer Nodus.
             </h2>
             <p className="mx-auto mt-5 max-w-2xl text-base leading-8 text-[#0E109E]/68">
               Crea tu cuenta y encuentra comunidad, conocimiento, expertos, proveedores y oportunidades en un solo lugar.

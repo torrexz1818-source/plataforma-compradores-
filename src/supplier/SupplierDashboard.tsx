@@ -43,7 +43,7 @@ const SupplierDashboard = () => {
     <div className="min-w-0 space-y-6 overflow-x-hidden">
       <section>
         <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Dashboard</h1>
-        <p className="text-muted-foreground mt-1">Resumen general de la plataforma</p>
+        <p className="text-muted-foreground mt-1">Resumen general del ecosistema</p>
       </section>
 
       {isLoading && <p className="text-sm text-muted-foreground">Cargando estadisticas...</p>}
@@ -61,7 +61,7 @@ const SupplierDashboard = () => {
                 <div className="min-w-0">
                   <p className="text-xs font-medium text-muted-foreground">Total usuarios</p>
                   <p className="mt-1 text-3xl font-bold leading-none text-foreground">{data.totalUsers}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">Usuarios registrados en la plataforma</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Usuarios registrados en el ecosistema</p>
                 </div>
               </CardContent>
             </Card>

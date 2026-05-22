@@ -115,7 +115,7 @@ function getAiEngineBaseUrl() {
 
 function getFriendlyErrorMessage(message: string) {
   if (message.toLowerCase().includes('failed to fetch')) {
-    return 'No se pudo conectar con el AI Engine. Verifica que la plataforma esté levantada en http://localhost:5173/ y que el motor interno esté activo.';
+    return 'No se pudo conectar con el AI Engine. Verifica que el ecosistema esté levantado en http://localhost:5173/ y que el motor interno esté activo.';
   }
 
   return message || 'No se pudo analizar las propuestas. Intenta nuevamente.';
