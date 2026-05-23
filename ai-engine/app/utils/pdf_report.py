@@ -115,11 +115,18 @@ def _paragraph(value: Any, style: ParagraphStyle) -> Paragraph:
     return Paragraph(_clean_text(value), style)
 
 
+def _markup_paragraph(value: Any, style: ParagraphStyle) -> Paragraph:
+    return Paragraph(str(value), style)
+
+
 def _build_table(data: list[list[Any]], styles: dict[str, ParagraphStyle], col_widths: list[float] | None = None) -> Table:
     wrapped = []
     for row_index, row in enumerate(data):
         style = styles["TableHeader"] if row_index == 0 else styles["TableCell"]
-        wrapped.append([_paragraph(cell, style) for cell in row])
+        if row_index == 0:
+            wrapped.append([_paragraph(cell, style) for cell in row])
+        else:
+            wrapped.append([_markup_paragraph(_flatten_value(cell), style) for cell in row])
 
     table = Table(wrapped, repeatRows=1, colWidths=col_widths)
     table.setStyle(
@@ -139,6 +146,56 @@ def _build_table(data: list[list[Any]], styles: dict[str, ParagraphStyle], col_w
         )
     )
     return table
+
+
+def _is_dashboard_table_list(value: Any) -> bool:
+    return isinstance(value, list) and any(
+        isinstance(item, dict) and isinstance(item.get("columns"), list) and isinstance(item.get("rows"), list)
+        for item in value
+    )
+
+
+def _dashboard_table_widths(column_count: int, available_width: float) -> list[float] | None:
+    if column_count <= 0:
+        return None
+    if column_count == 1:
+        return [available_width]
+    if column_count == 2:
+        return [available_width * 0.52, available_width * 0.48]
+    if column_count == 3:
+        return [available_width * 0.34, available_width * 0.33, available_width * 0.33]
+    return [available_width / column_count for _ in range(column_count)]
+
+
+def _append_dashboard_tables(story: list[Any], items: list[Any], styles: dict[str, ParagraphStyle], available_width: float) -> None:
+    for item in items:
+        if not isinstance(item, dict):
+            story.append(_markup_paragraph(_flatten_value(item), styles["Body"]))
+            story.append(Spacer(1, 0.18 * cm))
+            continue
+
+        title = item.get("title") or item.get("name") or "Tabla"
+        description = item.get("description")
+        columns = [str(column) for column in item.get("columns") or []]
+        rows = item.get("rows") or []
+
+        story.append(Paragraph(_clean_text(title), styles["SectionSmall"]))
+        if description:
+            story.append(Paragraph(_clean_text(description), styles["Body"]))
+
+        if columns and isinstance(rows, list):
+            table_data: list[list[Any]] = [columns]
+            for row in rows:
+                if isinstance(row, dict):
+                    table_data.append([row.get(column, "No especificado") for column in columns])
+                elif isinstance(row, list):
+                    table_data.append(row)
+                else:
+                    table_data.append([row])
+            story.append(_build_table(table_data, styles, _dashboard_table_widths(len(columns), available_width)))
+        else:
+            story.append(_markup_paragraph(_flatten_value(rows or item), styles["Body"]))
+        story.append(Spacer(1, 0.24 * cm))
 
 
 def _build_table_from_list(items: list[Any], styles: dict[str, ParagraphStyle]) -> Table | None:
@@ -278,6 +335,7 @@ def build_agent_pdf(
         "Title": ParagraphStyle("Title", parent=base["Title"], fontName="Helvetica-Bold", fontSize=18, leading=22, textColor=colors.HexColor("#0f172a")),
         "Meta": ParagraphStyle("Meta", parent=base["BodyText"], fontSize=8.5, leading=12, textColor=colors.HexColor("#64748b")),
         "Section": ParagraphStyle("Section", parent=base["Heading2"], fontName="Helvetica-Bold", fontSize=11.5, leading=15, textColor=primary, spaceBefore=9),
+        "SectionSmall": ParagraphStyle("SectionSmall", parent=base["Heading3"], fontName="Helvetica-Bold", fontSize=9.4, leading=12.5, textColor=colors.HexColor("#0f172a"), spaceBefore=6),
         "Body": ParagraphStyle("Body", parent=base["BodyText"], fontSize=9.2, leading=13.5, textColor=colors.HexColor("#111827")),
         "Card": ParagraphStyle("Card", parent=base["BodyText"], fontSize=9, leading=13, textColor=colors.HexColor("#334155"), alignment=TA_LEFT),
         "TableHeader": ParagraphStyle("TableHeader", parent=base["BodyText"], fontName="Helvetica-Bold", fontSize=7.2, leading=9, textColor=primary),
@@ -331,14 +389,16 @@ def build_agent_pdf(
             continue
         title_label = _label(key)
         story.append(Paragraph(_clean_text(title_label), styles["Section"]))
-        if isinstance(value, list):
+        if title_label == "Tablas" and _is_dashboard_table_list(value):
+            _append_dashboard_tables(story, value, styles, doc.width)
+        elif isinstance(value, list):
             table = _build_table_from_list(value, styles)
             if table is not None:
                 story.append(table)
             else:
-                story.append(Paragraph(_flatten_value(value), styles["Body"]))
+                story.append(_markup_paragraph(_flatten_value(value), styles["Body"]))
         else:
-            story.append(Paragraph(_flatten_value(value), styles["Body"]))
+            story.append(_markup_paragraph(_flatten_value(value), styles["Body"]))
         story.append(Spacer(1, 0.22 * cm))
 
     story.append(Spacer(1, 0.2 * cm))
