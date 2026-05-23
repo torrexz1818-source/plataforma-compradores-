@@ -19,6 +19,7 @@ import {
   NewsComment,
   NewsPost,
   MonthlyReport,
+  MonetizationOverview,
   ModuleActivationSetting,
   Post,
   PostCategory,
@@ -46,6 +47,8 @@ import {
   User,
   UserPdfBrandingSettings,
   UserStatus,
+  CheckoutItemType,
+  CheckoutSession,
 } from '@/types';
 
 const DEFAULT_PRODUCTION_API_URL = 'https://api.buyernodus.com';
@@ -1454,6 +1457,45 @@ export async function getMyAgentPdfOptions(agentKey: string) {
 export async function getMyModuleActivations() {
   return apiRequest<{ role: string; modules: ModuleActivationSetting[] }>('/agents/module-activations/mine', {
     auth: true,
+  });
+}
+
+export async function getMyMonetization() {
+  return apiRequest<MonetizationOverview>('/me/monetization', { auth: true });
+}
+
+export async function createCheckout(payload: { itemType: CheckoutItemType; itemKey: string }) {
+  return apiRequest<{ checkout: CheckoutSession }>('/checkout', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function confirmCheckout(checkoutId: string) {
+  return apiRequest<{ checkout: CheckoutSession; overview: MonetizationOverview }>(`/checkout/${checkoutId}/confirm`, {
+    method: 'POST',
+    auth: true,
+  });
+}
+
+export async function consumeAiCredit() {
+  return apiRequest<{
+    allowed: boolean;
+    reason?: string;
+    remainingCredits: number;
+    overview: MonetizationOverview;
+  }>('/me/ai-credits/consume', {
+    method: 'POST',
+    auth: true,
+  });
+}
+
+export async function updateCompanyLogo(companyLogoUrl: string) {
+  return apiRequest<MonetizationOverview>('/me/company-logo', {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ companyLogoUrl }),
   });
 }
 

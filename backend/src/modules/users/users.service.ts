@@ -10,6 +10,15 @@ import { User } from './domain/user.model';
 import { UserRole } from './domain/user-role.enum';
 import { UserStatus } from './domain/user-status.enum';
 import { UsersRepository } from './persistence/users.repository';
+import {
+  additionalServices,
+  aiCreditPacks,
+  buyerMembershipPlans,
+  getMembershipPlan,
+  supplierMembershipPlans,
+  type CheckoutItemType,
+  type MembershipAudience,
+} from '../../../../shared/monetization';
 
 type CreateUserData = Pick<
   User,
@@ -67,10 +76,29 @@ export type MembershipRecord = {
   plan: string;
   status: MembershipStatus;
   adminApproved: boolean;
+  aiCreditsBalance?: number;
+  aiCreditsMonthlyIncluded?: number;
+  aiCreditsUsedThisPeriod?: number;
+  aiCreditsPeriod?: string;
+  companyLogoUrl?: string;
   approvedAt?: Date;
   approvedBy?: string;
   expiresAt?: Date;
   createdAt: Date;
+  updatedAt?: Date;
+};
+
+type CheckoutSessionRecord = {
+  id: string;
+  userId: string;
+  itemType: CheckoutItemType;
+  itemKey: string;
+  amount: number;
+  currency: 'PEN';
+  status: 'pending' | 'paid' | 'cancelled';
+  createdAt: Date;
+  updatedAt: Date;
+  paidAt?: Date;
 };
 
 type ProfileViewNotificationRecord = {
@@ -159,9 +187,14 @@ export class UsersService {
       userId: user.id,
       userRole: user.role,
       plan: 'free',
-      status: 'pending',
-      adminApproved: false,
+      status: user.role === UserRole.BUYER ? 'active' : 'pending',
+      adminApproved: user.role === UserRole.BUYER,
+      aiCreditsBalance: user.role === UserRole.BUYER ? 1 : 0,
+      aiCreditsMonthlyIncluded: user.role === UserRole.BUYER ? 1 : 0,
+      aiCreditsUsedThisPeriod: 0,
+      aiCreditsPeriod: this.currentCreditPeriod(),
       createdAt: new Date(),
+      updatedAt: new Date(),
     });
   }
 
@@ -219,6 +252,11 @@ export class UsersService {
       plan: data.plan ?? existing?.plan ?? 'free',
       status: nextStatus,
       adminApproved: nextApproved,
+      aiCreditsBalance: existing?.aiCreditsBalance ?? this.getIncludedAiCredits(user.role, data.plan ?? existing?.plan ?? 'free'),
+      aiCreditsMonthlyIncluded: this.getIncludedAiCredits(user.role, data.plan ?? existing?.plan ?? 'free'),
+      aiCreditsUsedThisPeriod: existing?.aiCreditsUsedThisPeriod ?? 0,
+      aiCreditsPeriod: existing?.aiCreditsPeriod ?? this.currentCreditPeriod(),
+      companyLogoUrl: existing?.companyLogoUrl,
       approvedAt:
         nextApproved
           ? (existing?.approvedAt ?? now)
@@ -231,6 +269,7 @@ export class UsersService {
         ? new Date(data.expiresAt)
         : existing?.expiresAt,
       createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
     };
 
     await this.membershipsCollection().updateOne(
@@ -240,6 +279,117 @@ export class UsersService {
     );
 
     return next;
+  }
+
+  async getMonetizationOverview(userId: string) {
+    const user = await this.requireActiveUser(userId);
+    const membership = await this.ensureMembershipForUser(user.id);
+    const audience = this.getMembershipAudience(user.role);
+    const plan = getMembershipPlan(audience, membership.plan);
+    const normalized = await this.normalizeCreditPeriod(membership);
+
+    return {
+      membership: this.serializeMembership(normalized),
+      currentPlan: plan,
+      buyerPlans: buyerMembershipPlans,
+      supplierPlans: supplierMembershipPlans,
+      creditPacks: aiCreditPacks,
+      additionalServices,
+      entitlements: {
+        aiCreditsRemaining: normalized.aiCreditsBalance ?? 0,
+        aiCreditsMonthlyIncluded: normalized.aiCreditsMonthlyIncluded ?? 0,
+        aiCreditsUsedThisPeriod: normalized.aiCreditsUsedThisPeriod ?? 0,
+        agentBranding: plan.agentBranding,
+        companyLogoUrl: normalized.companyLogoUrl,
+      },
+    };
+  }
+
+  async createCheckoutSession(userId: string, itemType: CheckoutItemType, itemKey: string) {
+    await this.requireActiveUser(userId);
+    const amount = this.resolveCheckoutAmount(itemType, itemKey);
+    const now = new Date();
+    const session: CheckoutSessionRecord = {
+      id: crypto.randomUUID(),
+      userId,
+      itemType,
+      itemKey,
+      amount,
+      currency: 'PEN',
+      status: 'pending',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.checkoutSessionsCollection().insertOne(session);
+    return { checkout: this.serializeCheckout(session) };
+  }
+
+  async confirmCheckoutSession(userId: string, checkoutId: string) {
+    const session = await this.checkoutSessionsCollection().findOne({ id: checkoutId, userId });
+    if (!session) throw new NotFoundException('Checkout no encontrado');
+    if (session.status === 'paid') return { checkout: this.serializeCheckout(session), overview: await this.getMonetizationOverview(userId) };
+
+    const now = new Date();
+    await this.checkoutSessionsCollection().updateOne(
+      { id: checkoutId },
+      { $set: { status: 'paid', paidAt: now, updatedAt: now } },
+    );
+
+    if (session.itemType === 'membership') {
+      await this.applyMembershipPurchase(userId, session.itemKey);
+    }
+    if (session.itemType === 'credits') {
+      await this.applyCreditPurchase(userId, session.itemKey);
+    }
+
+    const paidSession = await this.checkoutSessionsCollection().findOne({ id: checkoutId });
+    return {
+      checkout: this.serializeCheckout(paidSession ?? { ...session, status: 'paid', paidAt: now, updatedAt: now }),
+      overview: await this.getMonetizationOverview(userId),
+    };
+  }
+
+  async consumeAiCredit(userId: string) {
+    const membership = await this.normalizeCreditPeriod(await this.ensureMembershipForUser(userId));
+    const available = membership.aiCreditsBalance ?? 0;
+    if (available < 1) {
+      return {
+        allowed: false,
+        reason: 'NO_AI_CREDITS',
+        remainingCredits: available,
+        overview: await this.getMonetizationOverview(userId),
+      };
+    }
+
+    await this.membershipsCollection().updateOne(
+      { userId },
+      {
+        $inc: { aiCreditsBalance: -1, aiCreditsUsedThisPeriod: 1 },
+        $set: { updatedAt: new Date() },
+      },
+    );
+
+    const updated = await this.ensureMembershipForUser(userId);
+    return {
+      allowed: true,
+      remainingCredits: updated.aiCreditsBalance ?? 0,
+      overview: await this.getMonetizationOverview(userId),
+    };
+  }
+
+  async updateCompanyLogo(userId: string, companyLogoUrl: string) {
+    const membership = await this.ensureMembershipForUser(userId);
+    const audience = this.getMembershipAudience(membership.userRole);
+    const plan = getMembershipPlan(audience, membership.plan);
+    if (plan.agentBranding !== 'custom_brand') {
+      throw new ForbiddenException('El logo de empresa esta disponible para el plan Premium.');
+    }
+
+    await this.membershipsCollection().updateOne(
+      { userId },
+      { $set: { companyLogoUrl: companyLogoUrl.trim(), updatedAt: new Date() } },
+    );
+    return this.getMonetizationOverview(userId);
   }
 
   maskField(value: string, type: 'name' | 'email' | 'phone' | 'ruc') {
@@ -1168,6 +1318,132 @@ export class UsersService {
 
   private membershipsCollection() {
     return this.databaseService.collection<MembershipRecord>('memberships');
+  }
+
+  private checkoutSessionsCollection() {
+    return this.databaseService.collection<CheckoutSessionRecord>('checkoutSessions');
+  }
+
+  private async ensureMembershipForUser(userId: string): Promise<MembershipRecord> {
+    const user = await this.requireActiveUser(userId);
+    const existing = await this.getMembershipByUserId(userId);
+    if (existing) return existing;
+
+    await this.ensureMembershipRecord(user);
+    const created = await this.getMembershipByUserId(userId);
+    if (!created) throw new NotFoundException('Membresia no encontrada');
+    return created;
+  }
+
+  private currentCreditPeriod() {
+    return new Date().toISOString().slice(0, 7);
+  }
+
+  private getMembershipAudience(role: UserRole): MembershipAudience {
+    return role === UserRole.SUPPLIER ? 'supplier' : 'buyer';
+  }
+
+  private getIncludedAiCredits(role: UserRole, planKey: string) {
+    const audience = this.getMembershipAudience(role);
+    return getMembershipPlan(audience, planKey).aiCreditsMonthly ?? 0;
+  }
+
+  private async normalizeCreditPeriod(membership: MembershipRecord) {
+    const period = this.currentCreditPeriod();
+    if (membership.aiCreditsPeriod === period) return membership;
+
+    const included = this.getIncludedAiCredits(membership.userRole, membership.plan);
+    const nextBalance = (membership.aiCreditsBalance ?? 0) + included;
+    await this.membershipsCollection().updateOne(
+      { userId: membership.userId },
+      {
+        $set: {
+          aiCreditsBalance: nextBalance,
+          aiCreditsMonthlyIncluded: included,
+          aiCreditsUsedThisPeriod: 0,
+          aiCreditsPeriod: period,
+          updatedAt: new Date(),
+        },
+      },
+    );
+
+    return {
+      ...membership,
+      aiCreditsBalance: nextBalance,
+      aiCreditsMonthlyIncluded: included,
+      aiCreditsUsedThisPeriod: 0,
+      aiCreditsPeriod: period,
+    };
+  }
+
+  private resolveCheckoutAmount(itemType: CheckoutItemType, itemKey: string) {
+    if (itemType === 'membership') {
+      const plan = [...buyerMembershipPlans, ...supplierMembershipPlans].find((item) => item.key === itemKey);
+      if (!plan) throw new NotFoundException('Plan no encontrado');
+      return plan.priceAmount;
+    }
+    if (itemType === 'credits') {
+      const pack = aiCreditPacks.find((item) => item.key === itemKey);
+      if (!pack) throw new NotFoundException('Pack de creditos no encontrado');
+      return pack.priceAmount;
+    }
+    const service = additionalServices.find((item) => item.key === itemKey);
+    if (!service) throw new NotFoundException('Servicio no encontrado');
+    return service.priceAmount;
+  }
+
+  private async applyMembershipPurchase(userId: string, planKey: string) {
+    const user = await this.requireActiveUser(userId);
+    const included = this.getIncludedAiCredits(user.role, planKey);
+    const existing = await this.ensureMembershipForUser(userId);
+    const now = new Date();
+    await this.membershipsCollection().updateOne(
+      { userId },
+      {
+        $set: {
+          plan: planKey,
+          status: 'active',
+          adminApproved: true,
+          approvedAt: existing.approvedAt ?? now,
+          aiCreditsMonthlyIncluded: included,
+          aiCreditsPeriod: this.currentCreditPeriod(),
+          updatedAt: now,
+        },
+        $inc: { aiCreditsBalance: included },
+      },
+    );
+  }
+
+  private async applyCreditPurchase(userId: string, packKey: string) {
+    const pack = aiCreditPacks.find((item) => item.key === packKey);
+    if (!pack) throw new NotFoundException('Pack de creditos no encontrado');
+    await this.ensureMembershipForUser(userId);
+    await this.membershipsCollection().updateOne(
+      { userId },
+      {
+        $inc: { aiCreditsBalance: pack.credits },
+        $set: { updatedAt: new Date() },
+      },
+    );
+  }
+
+  private serializeMembership(membership: MembershipRecord) {
+    return {
+      ...membership,
+      approvedAt: membership.approvedAt?.toISOString(),
+      expiresAt: membership.expiresAt?.toISOString(),
+      createdAt: membership.createdAt.toISOString(),
+      updatedAt: membership.updatedAt?.toISOString(),
+    };
+  }
+
+  private serializeCheckout(session: CheckoutSessionRecord) {
+    return {
+      ...session,
+      createdAt: session.createdAt.toISOString(),
+      updatedAt: session.updatedAt.toISOString(),
+      paidAt: session.paidAt?.toISOString(),
+    };
   }
 
   private profileViewsCollection() {

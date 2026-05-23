@@ -109,6 +109,50 @@ export class UsersController {
     return this.usersService.getSupplierSectors();
   }
 
+  @Get('me/monetization')
+  async getMyMonetization(@CurrentUser() user: { sub: string } | undefined) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    return this.usersService.getMonetizationOverview(user.sub);
+  }
+
+  @Post('checkout')
+  async createCheckout(
+    @Body() body: { itemType?: 'membership' | 'credits' | 'service'; itemKey?: string },
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) throw new ForbiddenException('Authentication required');
+    if (!body.itemType || !body.itemKey?.trim()) throw new BadRequestException('Checkout incompleto');
+    return this.usersService.createCheckoutSession(user.sub, body.itemType, body.itemKey);
+  }
+
+  @Post('checkout/:id/confirm')
+  async confirmCheckout(
+    @Param('id') id: string,
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) throw new ForbiddenException('Authentication required');
+    return this.usersService.confirmCheckoutSession(user.sub, id);
+  }
+
+  @Post('me/ai-credits/consume')
+  async consumeAiCredit(@CurrentUser() user: { sub: string } | undefined) {
+    if (!user?.sub) throw new ForbiddenException('Authentication required');
+    return this.usersService.consumeAiCredit(user.sub);
+  }
+
+  @Patch('me/company-logo')
+  async updateCompanyLogo(
+    @Body() body: { companyLogoUrl?: string },
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) throw new ForbiddenException('Authentication required');
+    if (!body.companyLogoUrl?.trim()) throw new BadRequestException('La URL del logo es obligatoria');
+    return this.usersService.updateCompanyLogo(user.sub, body.companyLogoUrl);
+  }
+
   @Get('buyers')
   async getBuyersBySector(
     @Query('sector') sector: string | undefined,

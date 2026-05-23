@@ -451,16 +451,20 @@ export class AgentsService {
   async getPdfOptionsForUser(userId: string, agentKey: string) {
     const agent = await this.findAgent(agentKey);
     if (!agent) throw new NotFoundException('Agente no encontrado');
-    const [user, userSettings, agentSettings] = await Promise.all([
+    const [user, membership, userSettings, agentSettings] = await Promise.all([
       this.usersService.requireActiveUser(userId),
+      this.usersService.getMembershipByUserId(userId),
       this.getOrCreateUserPdfBrandingSettings(userId),
       this.getOrCreateAgentPdfSettings(agent.agentKey),
     ]);
+    const plan = membership?.plan ?? 'free';
+    const planAllowsWhiteLabel = plan === 'professional' || plan === 'premium';
+    const planAllowsCustomBrand = plan === 'premium';
     const premiumActive = userSettings.premiumPdfStatus === 'active';
     const modes = {
       standardBranded: userSettings.standardPdfEnabled && agentSettings.standardPdfEnabled,
-      whiteLabel: premiumActive && userSettings.whiteLabelPdfEnabled && agentSettings.whiteLabelAvailable,
-      customBrand: premiumActive && userSettings.customBrandPdfEnabled && agentSettings.customBrandAvailable,
+      whiteLabel: planAllowsWhiteLabel || (premiumActive && userSettings.whiteLabelPdfEnabled && agentSettings.whiteLabelAvailable),
+      customBrand: planAllowsCustomBrand || (premiumActive && userSettings.customBrandPdfEnabled && agentSettings.customBrandAvailable),
     };
 
     return {
@@ -468,7 +472,7 @@ export class AgentsService {
       modes,
       branding: {
         companyName: userSettings.customBrandName || user.commercialName || user.company,
-        logoUrl: userSettings.customLogoUrl || user.avatarUrl,
+        logoUrl: membership?.companyLogoUrl || userSettings.customLogoUrl || user.avatarUrl,
         primaryColor: userSettings.customPrimaryColor || agent.accentColor,
         footerText: userSettings.customFooterText,
       },

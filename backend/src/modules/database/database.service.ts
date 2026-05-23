@@ -240,10 +240,29 @@ type MembershipDocument = {
   plan: string;
   status: 'pending' | 'active' | 'expired' | 'suspended';
   adminApproved: boolean;
+  aiCreditsBalance?: number;
+  aiCreditsMonthlyIncluded?: number;
+  aiCreditsUsedThisPeriod?: number;
+  aiCreditsPeriod?: string;
+  companyLogoUrl?: string;
   approvedAt?: Date;
   approvedBy?: string;
   expiresAt?: Date;
   createdAt: Date;
+  updatedAt?: Date;
+};
+
+type CheckoutSessionDocument = {
+  id: string;
+  userId: string;
+  itemType: 'membership' | 'credits' | 'service';
+  itemKey: string;
+  amount: number;
+  currency: 'PEN';
+  status: 'pending' | 'paid' | 'cancelled';
+  createdAt: Date;
+  updatedAt: Date;
+  paidAt?: Date;
 };
 
 type SupplierOnboardingSessionDocument = {
@@ -633,6 +652,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         'profileViewNotifications',
       );
     const memberships = this.collection<MembershipDocument>('memberships');
+    const checkoutSessions =
+      this.collection<CheckoutSessionDocument>('checkoutSessions');
     const supplierOnboardingSessions =
       this.collection<SupplierOnboardingSessionDocument>(
         'supplierOnboardingSessions',
@@ -737,6 +758,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       }),
       memberships.createIndex({ userId: 1 }, { unique: true }),
       memberships.createIndex({ status: 1, adminApproved: 1 }),
+      checkoutSessions.createIndex({ id: 1 }, { unique: true }),
+      checkoutSessions.createIndex({ userId: 1, createdAt: -1 }),
+      checkoutSessions.createIndex({ status: 1, createdAt: -1 }),
       supplierOnboardingSessions.createIndex({ id: 1 }, { unique: true }),
       supplierOnboardingSessions.createIndex({ status: 1, updatedAt: -1 }),
       supplierOnboardingSessions.createIndex(

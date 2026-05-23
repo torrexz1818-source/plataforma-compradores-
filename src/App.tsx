@@ -40,6 +40,7 @@ import Employability from "./pages/Employability.tsx";
 import EmployabilitySkills from "./pages/EmployabilitySkills.tsx";
 import NexuExperts from "./expert/NexuExperts.tsx";
 import NexuIA from "./pages/NexuIA.tsx";
+import Memberships from "./pages/Memberships.tsx";
 import ExpertCalendarSetup from "./expert/ExpertCalendarSetup.tsx";
 import RegisterExpert from "./expert/RegisterExpert.tsx";
 import MainLayout from "./layouts/MainLayout.tsx";
@@ -420,6 +421,14 @@ const App = () => (
             >
               <Route index element={<Messages />} />
             </Route>
+            <Route
+              path="/membresias"
+              element={
+                <RequireAuth>
+                  <Memberships />
+                </RequireAuth>
+              }
+            />
             <Route
               path="/directorio-proveedores"
               element={

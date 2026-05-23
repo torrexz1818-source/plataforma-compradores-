@@ -850,3 +850,49 @@ export interface ModuleActivationSetting {
   createdAt: string;
   updatedAt: string;
 }
+
+export type CheckoutItemType = 'membership' | 'credits' | 'service';
+
+export interface MonetizationMembership {
+  userId: string;
+  userRole: UserRole;
+  plan: string;
+  status: 'pending' | 'active' | 'expired' | 'suspended';
+  adminApproved: boolean;
+  aiCreditsBalance?: number;
+  aiCreditsMonthlyIncluded?: number;
+  aiCreditsUsedThisPeriod?: number;
+  aiCreditsPeriod?: string;
+  companyLogoUrl?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface CheckoutSession {
+  id: string;
+  userId: string;
+  itemType: CheckoutItemType;
+  itemKey: string;
+  amount: number;
+  currency: 'PEN';
+  status: 'pending' | 'paid' | 'cancelled';
+  createdAt: string;
+  updatedAt: string;
+  paidAt?: string;
+}
+
+export interface MonetizationOverview {
+  membership: MonetizationMembership;
+  currentPlan: unknown;
+  buyerPlans: unknown[];
+  supplierPlans: unknown[];
+  creditPacks: unknown[];
+  additionalServices: unknown[];
+  entitlements: {
+    aiCreditsRemaining: number;
+    aiCreditsMonthlyIncluded: number;
+    aiCreditsUsedThisPeriod: number;
+    agentBranding: 'standard' | 'white_label' | 'custom_brand';
+    companyLogoUrl?: string;
+  };
+}

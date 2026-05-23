@@ -28,9 +28,11 @@ import {
   getAgents,
   getMyAgentExecutions,
   getMyAgentPdfOptions,
+  getMyMonetization,
   recordAgentUsage,
   runAgent,
   submitAgentFeedback,
+  consumeAiCredit,
   validateAgentPdfMode,
 } from '@/lib/api';
 import { nodusIaAgents } from '../../shared/nodusIaAgents';
@@ -53,15 +55,8 @@ import {
   type TermsFormField,
 } from '@/features/terms-of-reference/termsOfReferenceApi';
 import { useDownloadTcoPdf, useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
-import type { TcoAlternativeInput } from '@/features/tco-analysis/tcoAnalysisApi';
 import { downloadAgentResultPdf } from '@/lib/agentPdf';
-
-const aiPlanLimits: Record<string, number> = {
-  free: 1,
-  basic: 1,
-  professional: 3,
-  premium: Number.POSITIVE_INFINITY,
-};
+import MonetizationPanel from '@/components/MonetizationPanel';
 
 const iconMap = {
   Bot,
@@ -88,11 +83,6 @@ const tcoAnalysisTypes = [
 const tcoEvaluationHorizons = ['Por compra', 'Mensual', 'Anual', '3 años', '5 años', 'Vida útil', 'Personalizado'];
 const tcoComparisonUnits = ['Por unidad', 'Por lote', 'Por usuario', 'Por km', 'Por hora', 'Por contrato', 'Por proyecto', 'Por año', 'Por mes'];
 const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
-
-const emptyTcoAlternative = (index: number): TcoAlternativeInput => ({
-  supplier_name: `Proveedor ${index + 1}`,
-  currency: 'PEN',
-});
 
 function getAgentIcon(icon: string) {
   return iconMap[icon as keyof typeof iconMap] ?? Bot;
@@ -155,14 +145,12 @@ const NexuIA = () => {
     currency: 'PEN',
     purchaseVolume: '',
     objective: '',
+    generalContext: '',
     additionalInstructions: '',
   });
-  const [tcoAlternatives, setTcoAlternatives] = useState<TcoAlternativeInput[]>([
-    emptyTcoAlternative(0),
-    emptyTcoAlternative(1),
-  ]);
   const [tcoFiles, setTcoFiles] = useState<File[]>([]);
   const [limitNotice, setLimitNotice] = useState('');
+  const [showUpgradePanel, setShowUpgradePanel] = useState(false);
 
   const agentsQuery = useQuery({
     queryKey: ['agents'],
@@ -192,6 +180,10 @@ const NexuIA = () => {
   const executionsQuery = useQuery({
     queryKey: ['agents', 'executions', 'mine'],
     queryFn: getMyAgentExecutions,
+  });
+  const monetizationQuery = useQuery({
+    queryKey: ['monetization', 'mine'],
+    queryFn: getMyMonetization,
   });
 
   useEffect(() => {
@@ -236,9 +228,9 @@ const NexuIA = () => {
       currency: 'PEN',
       purchaseVolume: '',
       objective: '',
+      generalContext: '',
       additionalInstructions: '',
     });
-    setTcoAlternatives([emptyTcoAlternative(0), emptyTcoAlternative(1)]);
     setTcoFiles([]);
     setFeedbackComment('');
     setFeedbackCorrection('');
@@ -408,34 +400,18 @@ const NexuIA = () => {
     },
   ];
 
-  const getUsageKey = () => {
-    const today = new Date().toISOString().slice(0, 10);
-    return `nodus-ia-usage:${user?.id ?? 'guest'}:${today}`;
-  };
-
-  const canRunNodusIa = () => {
-    const plan = user?.membership?.plan ?? 'free';
-    const limit = aiPlanLimits[plan] ?? aiPlanLimits.free;
-
-    if (!Number.isFinite(limit)) {
-      setLimitNotice('');
-      return true;
-    }
-
-    const used = Number(localStorage.getItem(getUsageKey()) ?? '0');
-    if (used >= limit) {
-      setLimitNotice('Has alcanzado el límite de tu plan. Cambia de plan para seguir usando Nodus IA.');
+  const ensureNodusIaCredit = async () => {
+    const result = await consumeAiCredit();
+    if (!result.allowed) {
+      setLimitNotice('Has alcanzado tu límite de créditos IA. Mejora tu plan o compra créditos adicionales para continuar.');
+      setShowUpgradePanel(true);
       return false;
     }
 
     setLimitNotice('');
+    setShowUpgradePanel(false);
+    await queryClient.invalidateQueries({ queryKey: ['monetization', 'mine'] });
     return true;
-  };
-
-  const registerNodusIaUsage = () => {
-    const key = getUsageKey();
-    const used = Number(localStorage.getItem(key) ?? '0');
-    localStorage.setItem(key, String(used + 1));
   };
 
   const logAgentUsage = (agentId: string, operationName: string, result: Record<string, unknown>, pdfGenerated = false) => {
@@ -465,12 +441,12 @@ const NexuIA = () => {
       .catch(() => undefined);
   };
 
-  const handleRunAgent = () => {
+  const handleRunAgent = async () => {
     if (!selectedAgent) {
       return;
     }
 
-    if (!canRunNodusIa()) {
+    if (!(await ensureNodusIaCredit())) {
       return;
     }
 
@@ -493,9 +469,6 @@ const NexuIA = () => {
         agentId: selectedAgent.id,
         inputData,
       },
-      {
-        onSuccess: () => registerNodusIaUsage(),
-      },
     );
   };
 
@@ -504,12 +477,12 @@ const NexuIA = () => {
     setUploadedComparisonFiles(files);
   };
 
-  const handleProposalComparison = () => {
+  const handleProposalComparison = async () => {
     if (!selectedAgent) {
       return;
     }
 
-    if (!canRunNodusIa()) {
+    if (!(await ensureNodusIaCredit())) {
       return;
     }
 
@@ -540,7 +513,6 @@ const NexuIA = () => {
       },
       {
         onSuccess: (result) => {
-          registerNodusIaUsage();
           logAgentUsage(selectedAgent.id, 'Comparativo de propuestas de proveedores', result as unknown as Record<string, unknown>);
           toast({
             title: 'Análisis completado',
@@ -657,7 +629,7 @@ const NexuIA = () => {
     );
   };
 
-  const handleGenerateTerms = () => {
+  const handleGenerateTerms = async () => {
     const requiredFields = ['title', 'requirement_type', 'objective', 'scope', 'deliverables', 'justification'];
     const hasMissingRequired = requiredFields.some((field) => !termsFields[field]?.trim());
 
@@ -679,7 +651,7 @@ const NexuIA = () => {
       return;
     }
 
-    if (!canRunNodusIa()) {
+    if (!(await ensureNodusIaCredit())) {
       return;
     }
 
@@ -697,7 +669,6 @@ const NexuIA = () => {
       },
       {
         onSuccess: (result) => {
-          registerNodusIaUsage();
           if (selectedAgent) {
             logAgentUsage(selectedAgent.id, 'Elaboración de términos de referencia', result as unknown as Record<string, unknown>);
           }
@@ -748,26 +719,6 @@ const NexuIA = () => {
     setTcoGeneral((current) => ({ ...current, [field]: value }));
   };
 
-  const updateTcoAlternative = (index: number, field: keyof TcoAlternativeInput, value: string) => {
-    setTcoAlternatives((current) =>
-      current.map((alternative, currentIndex) =>
-        currentIndex === index ? { ...alternative, [field]: value } : alternative,
-      ),
-    );
-  };
-
-  const addTcoAlternative = () => {
-    setTcoAlternatives((current) =>
-      current.length >= 5 ? current : [...current, emptyTcoAlternative(current.length)],
-    );
-  };
-
-  const removeTcoAlternative = (index: number) => {
-    setTcoAlternatives((current) =>
-      current.length <= 2 ? current : current.filter((_, currentIndex) => currentIndex !== index),
-    );
-  };
-
   const handleTcoFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     const validationMessage = validateTermsFiles(files);
@@ -792,12 +743,12 @@ const NexuIA = () => {
     setTcoFiles(files);
   };
 
-  const handleAnalyzeTco = () => {
+  const handleAnalyzeTco = async () => {
     if (!selectedAgent) {
       return;
     }
 
-    if (!canRunNodusIa()) {
+    if (!(await ensureNodusIaCredit())) {
       return;
     }
 
@@ -819,11 +770,10 @@ const NexuIA = () => {
       return;
     }
 
-    const namedAlternatives = tcoAlternatives.filter((alternative) => alternative.supplier_name?.trim());
-    if (namedAlternatives.length < 2) {
+    if (!tcoFiles.length) {
       toast({
-        title: 'Debes ingresar al menos dos alternativas.',
-        description: 'Agrega nombre del proveedor o alternativa para comparar TCO.',
+        title: 'Sube al menos una cotización/propuesta.',
+        description: 'El agente necesita documentos para detectar proveedores, costos y condiciones.',
         variant: 'destructive',
       });
       return;
@@ -839,13 +789,12 @@ const NexuIA = () => {
         currency: tcoGeneral.currency,
         purchaseVolume: tcoGeneral.purchaseVolume,
         objective: tcoGeneral.objective,
-        alternatives: namedAlternatives,
+        generalContext: tcoGeneral.generalContext,
         additionalInstructions: tcoGeneral.additionalInstructions,
         files: tcoFiles,
       },
       {
         onSuccess: (result) => {
-          registerNodusIaUsage();
           logAgentUsage(
             selectedAgent.id,
             'Análisis de Costo Total / TCO',
@@ -1633,91 +1582,17 @@ const NexuIA = () => {
                               </div>
                             </div>
 
-                            <div className="space-y-3 rounded-2xl border border-primary/15 bg-white p-4">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <p className="text-sm font-medium text-foreground">Paso 2 - Alternativas / proveedores</p>
-                                <Button type="button" variant="outline" className="rounded-full" onClick={addTcoAlternative} disabled={tcoAlternatives.length >= 5}>
-                                  Agregar alternativa
-                                </Button>
-                              </div>
-                              {tcoAlternatives.map((alternative, index) => (
-                                <div key={index} className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <p className="text-sm font-medium text-foreground">Alternativa {index + 1}</p>
-                                    <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => removeTcoAlternative(index)} disabled={tcoAlternatives.length <= 2}>
-                                      Quitar
-                                    </Button>
-                                  </div>
-                                  <div className="grid gap-3 md:grid-cols-2">
-                                    {[
-                                      ['supplier_name', 'Nombre del proveedor *', 'Proveedor A'],
-                                      ['origin_country', 'País de origen', 'China, Perú, México...'],
-                                      ['destination_country', 'País de destino', 'Perú'],
-                                      ['brand_model', 'Marca/modelo', 'Modelo X'],
-                                      ['quantity', 'Cantidad', '1'],
-                                      ['currency', 'Moneda', 'PEN'],
-                                      ['base_price', 'Precio base', '10000'],
-                                      ['incoterm', 'Incoterm', 'FOB, CIF, EXW...'],
-                                      ['lead_time', 'Lead time / plazo de entrega', '15 días'],
-                                      ['payment_terms', 'Forma de pago', '50% adelanto / 50% entrega'],
-                                      ['warranty', 'Garantía', '12 meses'],
-                                      ['international_freight', 'Flete internacional', ''],
-                                      ['international_insurance', 'Seguro internacional', ''],
-                                      ['customs_taxes', 'Aduanas / impuestos', ''],
-                                      ['tariffs', 'Aranceles', ''],
-                                      ['internal_transport_cost', 'Transporte interno', ''],
-                                      ['installation_cost', 'Instalación / implementación', ''],
-                                      ['training_cost', 'Capacitación', ''],
-                                      ['annual_maintenance_cost', 'Mantenimiento preventivo anual', ''],
-                                      ['corrective_maintenance_cost', 'Mantenimiento correctivo', ''],
-                                      ['annual_operation_cost', 'Operación anual', ''],
-                                      ['annual_energy_cost', 'Energía / combustible anual', ''],
-                                      ['spare_parts_cost', 'Repuestos', ''],
-                                      ['support_cost', 'Soporte', ''],
-                                      ['administrative_cost', 'Costos administrativos', ''],
-                                      ['financial_cost', 'Costos financieros', ''],
-                                      ['exit_cost', 'Costos de salida o reemplazo', ''],
-                                      ['residual_value', 'Valor residual o recuperable', ''],
-                                      ['other_costs', 'Otros costos', ''],
-                                    ].map(([field, label, placeholder]) => (
-                                      <div key={field} className="space-y-1.5">
-                                        <label className="text-sm font-medium text-foreground/80">{label}</label>
-                                        <Input
-                                          value={String(alternative[field as keyof TcoAlternativeInput] ?? '')}
-                                          onChange={(event) => updateTcoAlternative(index, field as keyof TcoAlternativeInput, event.target.value)}
-                                          placeholder={placeholder}
-                                          className="rounded-xl border-primary/15 bg-white"
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div className="grid gap-3 md:grid-cols-2">
-                                    {[
-                                      ['known_risks', 'Riesgos conocidos'],
-                                      ['observations', 'Observaciones'],
-                                    ].map(([field, label]) => (
-                                      <div key={field} className="space-y-1.5">
-                                        <label className="text-sm font-medium text-foreground/80">{label}</label>
-                                        <Textarea
-                                          value={String(alternative[field as keyof TcoAlternativeInput] ?? '')}
-                                          onChange={(event) => updateTcoAlternative(index, field as keyof TcoAlternativeInput, event.target.value)}
-                                          placeholder="Retrasos, calidad, proveedor único, riesgo cambiario, penalidades, riesgo documental..."
-                                          className="min-h-[76px] rounded-2xl border-primary/15 bg-white"
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
                             <div className="space-y-2 rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                              <p className="text-sm font-medium text-foreground">Paso 3 - Documentos de apoyo</p>
+                              <p className="text-sm font-medium text-foreground">Paso 2 - Documentos para analizar</p>
+                              <p className="text-xs leading-5 text-muted-foreground/70">
+                                Sube cotizaciones, propuestas, fichas técnicas, PDFs, imágenes, Excel, CSV, contratos o cualquier documento donde aparezcan proveedores, precios, condiciones, garantías, plazos, costos y datos técnicos.
+                              </p>
                               <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-white px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
                                 <Upload className="h-5 w-5 text-muted-foreground" />
                                 <div>
-                                  <p className="text-sm font-medium text-foreground">Subir cotizaciones, propuestas, fichas, contratos o Excel</p>
+                                  <p className="text-sm font-medium text-foreground">Subir documentos para análisis automático</p>
                                   <p className="mt-1 text-xs text-muted-foreground/70">PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. Máximo 8 archivos.</p>
+                                  <p className="mt-1 text-xs text-muted-foreground/70">El agente extraerá automáticamente las alternativas/proveedores desde los documentos cargados.</p>
                                 </div>
                                 <input type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.jpg,.jpeg,.png" onChange={handleTcoFilesChange} className="hidden" />
                               </label>
@@ -1741,11 +1616,21 @@ const NexuIA = () => {
                             </div>
 
                             <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
+                              <label className="text-sm font-medium text-foreground/80">Paso 3 - Información general o contexto adicional</label>
+                              <Textarea
+                                value={tcoGeneral.generalContext}
+                                onChange={(event) => updateTcoGeneral('generalContext', event.target.value)}
+                                placeholder="Agrega aquí cualquier dato general que no aparezca en los documentos: tipo de cambio, supuestos, restricciones, costos internos, condiciones comerciales, volumen esperado, horizonte, riesgos conocidos o criterios importantes para tu empresa."
+                                className="min-h-[96px] rounded-2xl border-primary/15"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
                               <label className="text-sm font-medium text-foreground/80">Paso 4 - Instrucciones adicionales</label>
                               <Textarea
                                 value={tcoGeneral.additionalInstructions}
                                 onChange={(event) => updateTcoGeneral('additionalInstructions', event.target.value)}
-                                placeholder="Agrega supuestos, restricciones, costos a considerar, criterios internos, tipo de cambio, condiciones comerciales, información de importación, riesgos conocidos o cualquier detalle que la IA deba tomar en cuenta."
+                                placeholder="Indica si quieres que el análisis priorice menor TCO, menor riesgo, garantía, disponibilidad local, lead time, soporte técnico, importación vs compra local, o cualquier condición especial."
                                 className="min-h-[100px] rounded-2xl border-primary/15"
                               />
                             </div>
@@ -1818,10 +1703,20 @@ const NexuIA = () => {
                         type="button"
                         variant="outline"
                         className="mt-3 rounded-full"
-                        onClick={() => navigate('/perfil')}
+                        onClick={() => setShowUpgradePanel((current) => !current)}
                       >
-                        Cambiar de plan
+                        Ver opciones de upgrade
                       </Button>
+                    </div>
+                  ) : null}
+
+                  {showUpgradePanel ? (
+                    <div className="rounded-[24px] border border-primary/15 bg-white p-4">
+                      <MonetizationPanel
+                        mode="upgrade"
+                        focus={(monetizationQuery.data?.membership.plan ?? user?.membership?.plan) === 'free' ? 'plans' : 'credits'}
+                        reason={limitNotice || 'Elige un plan o compra créditos para continuar.'}
+                      />
                     </div>
                   ) : null}
 
@@ -1863,7 +1758,7 @@ const NexuIA = () => {
                         disabled={tcoAnalysisMutation.isPending}
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
-                        {tcoAnalysisMutation.isPending ? 'Analizando costo total…' : 'Analizar costo total'}
+                        {tcoAnalysisMutation.isPending ? 'Analizando documentos y calculando TCO…' : 'Analizar costo total'}
                       </Button>
                     ) : (
                       <>
@@ -1882,7 +1777,7 @@ const NexuIA = () => {
 
                   {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || tcoAnalysisMutation.isPending || runMutation.isPending) ? (
                     <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
-                      {tcoAnalysisMutation.isPending ? 'Analizando costo total…' : 'Nodus IA está trabajando en tu solicitud…'}
+                      {tcoAnalysisMutation.isPending ? 'Analizando documentos y calculando TCO…' : 'Nodus IA está trabajando en tu solicitud…'}
                     </div>
                   ) : null}
 
@@ -2049,6 +1944,47 @@ const NexuIA = () => {
                           <p className="mt-2 text-sm leading-6 text-muted-foreground">Riesgo principal: {tcoResult.executive_summary.main_risk}</p>
                         </div>
                       </div>
+
+                      {tcoResult.detected_alternatives?.length ? (
+                        <div>
+                          <p className="text-sm font-medium text-foreground">Alternativas detectadas</p>
+                          {tcoResult.extracted_data_quality ? (
+                            <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
+                              Documentos procesados: {tcoResult.extracted_data_quality.documents_processed}. Confianza: {tcoResult.extracted_data_quality.confidence_level}.
+                            </p>
+                          ) : null}
+                          <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
+                            <table className="w-full min-w-[760px] text-left text-sm">
+                              <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                <tr>
+                                  <th className="px-4 py-3 font-medium">Proveedor</th>
+                                  <th className="px-4 py-3 font-medium">Archivo fuente</th>
+                                  <th className="px-4 py-3 font-medium">Datos detectados</th>
+                                  <th className="px-4 py-3 font-medium">Datos faltantes</th>
+                                  <th className="px-4 py-3 font-medium">Confianza</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {tcoResult.detected_alternatives.map((item, index) => (
+                                  <tr key={`${item.supplier_name}-${index}`} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 font-medium text-foreground">{item.supplier_name}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.source_file}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.data_detected.join(', ') || 'No especificado'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.data_missing.join(', ') || 'No especificado'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.confidence_level ?? 'medium'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                          {tcoResult.extracted_data_quality?.warnings?.length ? (
+                            <div className="mt-3 rounded-2xl border border-primary/15 bg-white p-4">
+                              <p className="text-sm font-medium text-foreground">Advertencias de extracción</p>
+                              <div className="mt-2">{renderValueList(tcoResult.extracted_data_quality.warnings)}</div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
 
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
                         <p className="text-sm font-medium text-foreground">B. Datos usados</p>
