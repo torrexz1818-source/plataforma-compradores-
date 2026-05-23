@@ -196,6 +196,7 @@ const Admin = () => {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedAgentKey, setSelectedAgentKey] = useState<string | null>(null);
+  const [agentAuthorizerOpen, setAgentAuthorizerOpen] = useState(false);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const [isPublishingContent, setIsPublishingContent] = useState(false);
   const [publishError, setPublishError] = useState('');
@@ -499,12 +500,20 @@ const Admin = () => {
     [agentFeedbackQuery.data, selectedAgent],
   );
   const handleOpenAgentAuthorizer = () => {
-    window.setTimeout(() => {
-      document.getElementById('admin-ai-agents')?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    }, 80);
+    setAgentAuthorizerOpen((current) => {
+      const next = !current;
+
+      if (!current) {
+        window.setTimeout(() => {
+          document.getElementById('admin-ai-agents')?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start',
+          });
+        }, 80);
+      }
+
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -2278,15 +2287,15 @@ const Admin = () => {
                   className="mt-auto w-fit justify-start"
                   onClick={handleOpenAgentAuthorizer}
                 >
-                  Autorizar
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  {agentAuthorizerOpen ? 'Ocultar autorizador' : 'Autorizar'}
+                  <ArrowRight className={`ml-2 h-4 w-4 transition-transform ${agentAuthorizerOpen ? 'rotate-90' : ''}`} />
                 </Button>
               </CardContent>
             </Card>
           </section>
         )}
 
-        {isAgentsAdminView && <section id="admin-ai-agents" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
+        {isAgentsAdminView && agentAuthorizerOpen && <section id="admin-ai-agents" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
           <div className="mb-4">
             <h2 className="text-lg font-medium text-foreground">Autorizador de agentes IA</h2>
             <p className="text-sm text-muted-foreground">
