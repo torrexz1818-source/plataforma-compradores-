@@ -1,5 +1,6 @@
-import { UserRole } from '../users/domain/user-role.enum';
+﻿import { UserRole } from '../users/domain/user-role.enum';
 import { UserStatus } from '../users/domain/user-status.enum';
+import { nodusIaAgents } from '../../../../shared/nodusIaAgents';
 
 export type SeedUser = {
   id: string;
@@ -122,6 +123,7 @@ export type SeedLessonProgress = {
 
 export type SeedAgent = {
   id: string;
+  agentKey?: string;
   slug: string;
   name: string;
   description: string;
@@ -134,6 +136,9 @@ export type SeedAgent = {
   inputs: string[];
   outputs: string[];
   isActive: boolean;
+  status?: 'active' | 'coming_soon' | 'disabled' | 'hidden';
+  visibleToBuyer?: boolean;
+  sortOrder?: number;
   accentColor: string;
   icon: string;
   createdAt: string;
@@ -472,232 +477,7 @@ export const seedUsers: SeedUser[] = [
   },
 ];
 
-export const seedAgents: SeedAgent[] = [
-  {
-    id: 'agent-quote-comparator',
-    slug: 'comparador-cotizaciones',
-    name: 'Comparador de Cotizaciones',
-    description:
-      'Analiza multiples propuestas y destaca la mejor opcion por costo, plazo y condiciones.',
-    longDescription:
-      'Centraliza cotizaciones de distintos proveedores, compara variables criticas y entrega un resumen listo para decision con recomendaciones claras para el comprador.',
-    category: 'Analisis',
-    automationType: 'Evaluacion',
-    useCase:
-      'Comparar cotizaciones de proveedores en procesos RFQ o compras recurrentes.',
-    functionalities: [
-      'Consolida ofertas en un solo tablero',
-      'Ordena proveedores por precio, lead time y cumplimiento',
-      'Resume diferencias clave y alertas comerciales',
-    ],
-    benefits: [
-      'Acelera decisiones de compra',
-      'Reduce sesgos al evaluar propuestas',
-      'Mejora trazabilidad para auditoria interna',
-    ],
-    inputs: [
-      'Cotizaciones de proveedores',
-      'Criterios de evaluacion',
-      'Pesos de decision',
-    ],
-    outputs: [
-      'Ranking recomendado',
-      'Resumen comparativo',
-      'Alertas por desviaciones',
-    ],
-    isActive: true,
-    accentColor: '#0f766e',
-    icon: 'Scale',
-    createdAt: '2026-04-01T00:00:00.000Z',
-    updatedAt: '2026-04-01T00:00:00.000Z',
-  },
-  {
-    id: 'agent-order-generator',
-    slug: 'generador-ordenes-compra',
-    name: 'Generador de Ordenes de Compra',
-    description:
-      'Crea ordenes automaticamente a partir de requerimientos internos y reglas del area.',
-    longDescription:
-      'Transforma requisiciones, niveles minimos y acuerdos vigentes en borradores de orden de compra listos para revisar, reduciendo tiempo operativo y errores manuales.',
-    category: 'Automatizacion',
-    automationType: 'Ejecucion',
-    useCase:
-      'Generar ordenes de compra estandarizadas para reposicion o compras programadas.',
-    functionalities: [
-      'Construye borradores de orden con datos estructurados',
-      'Sugiere proveedor y cantidades segun reglas base',
-      'Detecta datos faltantes antes de emitir la orden',
-    ],
-    benefits: [
-      'Disminuye trabajo repetitivo del equipo',
-      'Reduce errores de digitacion',
-      'Estandariza el proceso de emision',
-    ],
-    inputs: ['Solicitud interna', 'Proveedor sugerido', 'Items y cantidades'],
-    outputs: [
-      'Orden de compra sugerida',
-      'Resumen de validaciones',
-      'Campos pendientes',
-    ],
-    isActive: true,
-    accentColor: '#1d4ed8',
-    icon: 'FileCheck',
-    createdAt: '2026-04-02T00:00:00.000Z',
-    updatedAt: '2026-04-02T00:00:00.000Z',
-  },
-  {
-    id: 'agent-supplier-scout',
-    slug: 'analista-proveedores',
-    name: 'Analista de Proveedores',
-    description:
-      'Evalua desempeño, riesgo y capacidad para recomendar los mejores proveedores.',
-    longDescription:
-      'Cruza informacion comercial, operativa y de cumplimiento para identificar proveedores mas confiables, detectar gaps y priorizar alternativas segun la estrategia de abastecimiento.',
-    category: 'Sourcing',
-    automationType: 'Recomendacion',
-    useCase:
-      'Homologar proveedores, renovar contratos o buscar mejores alternativas.',
-    functionalities: [
-      'Calcula score de proveedores',
-      'Identifica fortalezas, riesgos y brechas',
-      'Recomienda finalistas con argumentos concretos',
-    ],
-    benefits: [
-      'Mejora calidad de sourcing',
-      'Reduce riesgo de seleccion',
-      'Facilita sustentacion ante stakeholders',
-    ],
-    inputs: [
-      'Base de proveedores',
-      'KPIs de desempeño',
-      'Criterios de negocio',
-    ],
-    outputs: [
-      'Ranking de proveedores',
-      'Matriz de riesgo',
-      'Recomendacion final',
-    ],
-    isActive: true,
-    accentColor: '#7c3aed',
-    icon: 'ShieldCheck',
-    createdAt: '2026-04-03T00:00:00.000Z',
-    updatedAt: '2026-04-03T00:00:00.000Z',
-  },
-  {
-    id: 'agent-demand-forecast',
-    slug: 'predictor-demanda',
-    name: 'Predictor de Demanda',
-    description:
-      'Proyecta demanda futura para anticipar compras y evitar quiebres o sobrestock.',
-    longDescription:
-      'Usa historicos, estacionalidad y supuestos comerciales para generar una proyeccion accionable que ayude a planificar abastecimiento y compras con mayor anticipacion.',
-    category: 'Logistica',
-    automationType: 'Prediccion',
-    useCase:
-      'Planificar compras por temporada, promociones o ciclos de reposicion.',
-    functionalities: [
-      'Proyecta consumo esperado por periodo',
-      'Resalta picos, caidas y variaciones',
-      'Sugiere volumen de compra objetivo',
-    ],
-    benefits: [
-      'Reduce quiebres de stock',
-      'Evita compras sobredimensionadas',
-      'Mejora coordinacion con supply planning',
-    ],
-    inputs: [
-      'Historico de demanda',
-      'Calendario comercial',
-      'Supuestos de crecimiento',
-    ],
-    outputs: [
-      'Pronostico por periodo',
-      'Escenarios de demanda',
-      'Recomendacion de abastecimiento',
-    ],
-    isActive: true,
-    accentColor: '#ea580c',
-    icon: 'TrendingUp',
-    createdAt: '2026-04-04T00:00:00.000Z',
-    updatedAt: '2026-04-04T00:00:00.000Z',
-  },
-  {
-    id: 'agent-risk-watch',
-    slug: 'detector-riesgos-compras',
-    name: 'Detector de Riesgos en Compras',
-    description:
-      'Identifica alertas de abastecimiento, dependencia y cumplimiento antes de que escalen.',
-    longDescription:
-      'Monitorea variables criticas del proceso de compras para levantar alertas tempranas relacionadas con dependencia de proveedor, incumplimiento, precios y continuidad operativa.',
-    category: 'Riesgo',
-    automationType: 'Monitoreo',
-    useCase:
-      'Gestion preventiva del riesgo en categorias sensibles o proveedores criticos.',
-    functionalities: [
-      'Detecta alertas tempranas por proveedor o categoria',
-      'Clasifica riesgos por impacto y urgencia',
-      'Sugiere acciones inmediatas de mitigacion',
-    ],
-    benefits: [
-      'Da visibilidad temprana a posibles incidentes',
-      'Ayuda a priorizar mitigaciones',
-      'Fortalece continuidad operativa',
-    ],
-    inputs: [
-      'Indicadores de cumplimiento',
-      'Dependencia de proveedor',
-      'Alertas operativas',
-    ],
-    outputs: [
-      'Mapa de riesgos',
-      'Alertas priorizadas',
-      'Plan de accion sugerido',
-    ],
-    isActive: true,
-    accentColor: '#dc2626',
-    icon: 'TriangleAlert',
-    createdAt: '2026-04-05T00:00:00.000Z',
-    updatedAt: '2026-04-05T00:00:00.000Z',
-  },
-  {
-    id: 'agent-negotiation-brief',
-    slug: 'copiloto-negociacion',
-    name: 'Copiloto de Negociacion',
-    description:
-      'Prepara argumentos, objeciones y estrategia para negociaciones con proveedores.',
-    longDescription:
-      'Resume contexto del proveedor, identifica palancas de negociacion y propone una hoja de ruta para reuniones comerciales o renovaciones contractuales.',
-    category: 'Negociacion',
-    automationType: 'Asistencia',
-    useCase:
-      'Preparar negociaciones de precio, servicio, SLA o renovacion contractual.',
-    functionalities: [
-      'Resume historial y contexto del proveedor',
-      'Propone argumentos y concesiones posibles',
-      'Genera brief ejecutivo para la reunion',
-    ],
-    benefits: [
-      'Llega mejor preparado a negociar',
-      'Aumenta claridad en concesiones y objetivos',
-      'Mejora consistencia del equipo comprador',
-    ],
-    inputs: [
-      'Historial del proveedor',
-      'Objetivos de la negociacion',
-      'Condiciones actuales',
-    ],
-    outputs: [
-      'Brief de negociacion',
-      'Guion sugerido',
-      'Palancas recomendadas',
-    ],
-    isActive: true,
-    accentColor: '#be185d',
-    icon: 'MessagesSquare',
-    createdAt: '2026-04-06T00:00:00.000Z',
-    updatedAt: '2026-04-06T00:00:00.000Z',
-  },
-];
+export const seedAgents: SeedAgent[] = nodusIaAgents;
 
 export const seedCategories: SeedCategory[] = [
   { id: 'cat-1', name: 'Tips', slug: 'tips' },
@@ -1127,3 +907,4 @@ export const seedEmployabilityTalentProfiles: SeedEmployabilityTalentProfile[] =
       updatedAt: '2026-04-12T08:00:00.000Z',
     },
   ];
+

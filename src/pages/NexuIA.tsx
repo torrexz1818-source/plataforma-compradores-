@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
+﻿import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -31,6 +31,7 @@ import {
   runAgent,
   submitAgentFeedback,
 } from '@/lib/api';
+import { nodusIaAgents } from '../../shared/nodusIaAgents';
 import { useAuth } from '@/lib/auth';
 import type { Agent } from '@/types';
 import { Badge } from '@/components/ui/badge';
@@ -79,376 +80,6 @@ function formatDateTime(value: string) {
     timeStyle: 'short',
   }).format(new Date(value));
 }
-
-const curatedAgents: Agent[] = [
-  {
-    id: 'agent-quote-comparator',
-    slug: 'comparativos-propuestas-proveedores',
-    name: 'Comparativos de propuestas de proveedores',
-    description:
-      'Sube propuestas de proveedores y recibe una tabla comparativa con condiciones, riesgos, ranking y recomendación final.',
-    longDescription:
-      'Centraliza propuestas comerciales, analiza diferencias clave y genera un comparativo orientado a decision para procesos RFQ, licitaciones privadas y compras recurrentes.',
-    category: 'Compras',
-    automationType: 'Evaluacion',
-    useCase:
-      'Comparar propuestas en procesos de compra y sustentar la recomendacion de adjudicacion.',
-    functionalities: [
-      'Consolida propuestas y anexos',
-      'Ordena diferencias por precio, plazo y condiciones',
-      'Genera comparativo ejecutivo listo para compartir',
-    ],
-    benefits: [
-      'Acelera decisiones de compra',
-      'Reduce sesgos al evaluar propuestas',
-      'Mejora trazabilidad para auditoria interna',
-    ],
-    inputs: ['Archivos de propuestas'],
-    outputs: ['Tabla comparativa', 'Ranking recomendado', 'Resumen ejecutivo', 'Recomendación final'],
-    isActive: true,
-    accentColor: '#0f766e',
-    icon: 'Scale',
-    createdAt: '2026-04-01T00:00:00.000Z',
-    updatedAt: '2026-04-01T00:00:00.000Z',
-  },
-  {
-    id: 'agent-terms-reference',
-    slug: 'elaboracion-terminos-referencia',
-    name: 'Elaboracion de terminos de referencia',
-    description:
-      'Redacta terminos de referencia claros y bien estructurados para procesos de compra y contratacion.',
-    longDescription:
-      'Ayuda a construir TdR a partir del objetivo, alcance y entregables de la necesidad, entregando una base consistente para solicitar propuestas y alinear expectativas.',
-    category: 'Compras',
-    automationType: 'Generacion',
-    useCase:
-      'Preparar bases documentales para servicios, consultorias, licitaciones y compras tecnicas.',
-    functionalities: [
-      'Estructura objetivo, alcance y entregables',
-      'Propone secciones minimas requeridas',
-      'Genera borrador listo para revision',
-    ],
-    benefits: [
-      'Reduce tiempo de redaccion',
-      'Mejora consistencia documental',
-      'Facilita coordinacion con usuarios internos',
-    ],
-    inputs: ['Objetivo de la contratacion', 'Alcance', 'Entregables esperados'],
-    outputs: ['Borrador de TdR', 'Criterios sugeridos', 'Estructura documental'],
-    isActive: true,
-    accentColor: '#1d4ed8',
-    icon: 'FileCheck',
-    createdAt: '2026-04-02T00:00:00.000Z',
-    updatedAt: '2026-04-02T00:00:00.000Z',
-  },
-  {
-    id: 'agent-contract-management',
-    slug: 'administracion-contratos',
-    name: 'Administracion de contratos',
-    description:
-      'Organiza obligaciones, alertas y vencimientos clave para una gestion contractual mas ordenada.',
-    longDescription:
-      'Resume hitos contractuales, identifica renovaciones proximas y ayuda a controlar compromisos operativos o comerciales a lo largo del ciclo de vida del contrato.',
-    category: 'Contratos',
-    automationType: 'Gestion',
-    useCase:
-      'Monitorear contratos de suministro, servicios y convenios marco desde compras.',
-    functionalities: [
-      'Resume clausulas y fechas criticas',
-      'Detecta hitos y renovaciones proximas',
-      'Genera alertas y checklist de seguimiento',
-    ],
-    benefits: [
-      'Reduce riesgo por vencimientos',
-      'Mejora orden documental',
-      'Facilita seguimiento contractual',
-    ],
-    inputs: ['Contrato o anexos', 'Fechas relevantes', 'Obligaciones contractuales'],
-    outputs: ['Resumen contractual', 'Alertas de gestion', 'Checklist de seguimiento'],
-    isActive: true,
-    accentColor: '#7c3aed',
-    icon: 'FileCheck',
-    createdAt: '2026-04-03T00:00:00.000Z',
-    updatedAt: '2026-04-03T00:00:00.000Z',
-  },
-  {
-    id: 'agent-kraljic-matrix',
-    slug: 'segmentacion-proveedores-matriz-kraljic',
-    name: 'Segmentacion de proveedores y matriz de Kraljic',
-    description:
-      'Clasifica proveedores y categorias para apoyar decisiones estrategicas del abastecimiento.',
-    longDescription:
-      'Segmenta proveedores segun impacto economico y nivel de criticidad, proponiendo una lectura tipo Kraljic que ayude a priorizar estrategias de gestion y relacion.',
-    category: 'Sourcing',
-    automationType: 'Analitica',
-    useCase:
-      'Definir estrategias por cuadrante y ordenar cartera de proveedores.',
-    functionalities: [
-      'Segmenta proveedores por criticidad',
-      'Sugiere cuadrantes Kraljic',
-      'Propone acciones por segmento',
-    ],
-    benefits: [
-      'Aporta foco estrategico',
-      'Mejora priorizacion del equipo',
-      'Facilita conversaciones ejecutivas',
-    ],
-    inputs: ['Base de proveedores o categorias', 'Volumen de compra', 'Criticidad del suministro'],
-    outputs: ['Matriz Kraljic', 'Segmentacion recomendada', 'Acciones por cuadrante'],
-    isActive: true,
-    accentColor: '#ea580c',
-    icon: 'ShieldCheck',
-    createdAt: '2026-04-04T00:00:00.000Z',
-    updatedAt: '2026-04-04T00:00:00.000Z',
-  },
-  {
-    id: 'agent-supplier-performance',
-    slug: 'medicion-desempeno-proveedores',
-    name: 'Medicion del desempeno de proveedores',
-    description:
-      'Evalua el comportamiento del proveedor con base en indicadores, incidencias y compromisos de servicio.',
-    longDescription:
-      'Consolida indicadores de cumplimiento, tiempos, calidad y servicio para generar una evaluacion clara y accionable del desempeno del proveedor.',
-    category: 'Proveedores',
-    automationType: 'Monitoreo',
-    useCase:
-      'Seguimiento mensual, trimestral o por proyecto del desempeno de proveedores.',
-    functionalities: [
-      'Consolida KPIs de desempeno',
-      'Resume fortalezas y brechas',
-      'Sugiere acciones de mejora',
-    ],
-    benefits: [
-      'Mejora visibilidad del servicio',
-      'Estandariza evaluaciones',
-      'Facilita planes de mejora',
-    ],
-    inputs: ['KPIs del proveedor', 'Incidencias relevantes', 'Periodo de evaluacion'],
-    outputs: ['Scorecard del proveedor', 'Resumen de desempeno', 'Plan de mejora sugerido'],
-    isActive: true,
-    accentColor: '#dc2626',
-    icon: 'TrendingUp',
-    createdAt: '2026-04-05T00:00:00.000Z',
-    updatedAt: '2026-04-05T00:00:00.000Z',
-  },
-  {
-    id: 'agent-reporting-taylor-made',
-    slug: 'reporteria-taylor-made',
-    name: 'Reporteria Taylor Made',
-    description:
-      'Genera reportes personalizados para distintas necesidades ejecutivas, tacticas u operativas.',
-    longDescription:
-      'Transforma informacion de compras en reportes hechos a medida para comites, liderazgo, usuarios internos o seguimiento especializado de gestion.',
-    category: 'Reporteria',
-    automationType: 'Generacion',
-    useCase:
-      'Preparar reportes adaptados al publico, objetivo y necesidad de negocio.',
-    functionalities: [
-      'Estructura reportes segun audiencia',
-      'Resume datos clave y hallazgos',
-      'Sugiere narrativa ejecutiva y conclusiones',
-    ],
-    benefits: [
-      'Ahorra tiempo de armado manual',
-      'Mejora claridad del mensaje',
-      'Permite reportes mas accionables',
-    ],
-    inputs: ['Datos base del reporte', 'Audiencia objetivo', 'Objetivo del reporte'],
-    outputs: ['Reporte personalizado', 'Resumen ejecutivo', 'Recomendaciones accionables'],
-    isActive: true,
-    accentColor: '#be185d',
-    icon: 'BrainCircuit',
-    createdAt: '2026-04-06T00:00:00.000Z',
-    updatedAt: '2026-04-06T00:00:00.000Z',
-  },
-];
-
-const nodusIaAgents: Agent[] = [
-  {
-    id: 'terms_of_reference',
-    agentKey: 'terms_of_reference',
-    slug: 'elaboracion-terminos-referencia',
-    name: 'Elaboracion de terminos de referencia',
-    description: 'Redacta terminos de referencia claros y bien estructurados para procesos de compra y contratacion.',
-    longDescription: 'Ayuda a construir TdR a partir del objetivo, alcance y entregables de la necesidad.',
-    category: 'Compras',
-    automationType: 'Generacion',
-    useCase: 'Preparar bases documentales para servicios, consultorias, licitaciones y compras tecnicas.',
-    functionalities: ['Estructura objetivo, alcance y entregables', 'Propone secciones minimas requeridas', 'Genera borrador listo para revision'],
-    benefits: ['Reduce tiempo de redaccion', 'Mejora consistencia documental', 'Facilita coordinacion con usuarios internos'],
-    inputs: ['Objetivo de la contratacion', 'Alcance', 'Entregables esperados', 'Documentos de apoyo'],
-    outputs: ['Borrador de TdR', 'Criterios sugeridos', 'Estructura documental', 'PDF descargable'],
-    status: 'active',
-    visibleToBuyer: true,
-    sortOrder: 1,
-    isActive: true,
-    accentColor: '#2563eb',
-    icon: 'FileCheck',
-    createdAt: '2026-04-01T00:00:00.000Z',
-    updatedAt: '2026-04-01T00:00:00.000Z',
-  },
-  {
-    id: 'proposal_comparison',
-    agentKey: 'proposal_comparison',
-    slug: 'comparativos-propuestas-proveedores',
-    name: 'Comparativos de propuestas de proveedores',
-    description: 'Sube propuestas de proveedores y recibe una tabla comparativa con condiciones, riesgos, ranking y recomendacion final.',
-    longDescription: 'Centraliza propuestas comerciales, analiza diferencias clave y genera un comparativo orientado a decision.',
-    category: 'Compras',
-    automationType: 'Evaluacion',
-    useCase: 'Comparar propuestas en procesos de compra y sustentar la recomendacion de adjudicacion.',
-    functionalities: ['Consolida propuestas y anexos', 'Ordena diferencias por precio, plazo y condiciones', 'Genera comparativo ejecutivo listo para compartir'],
-    benefits: ['Acelera decisiones de compra', 'Reduce sesgos al evaluar propuestas', 'Mejora trazabilidad para auditoria interna'],
-    inputs: ['Archivos de propuestas', 'Servicio o categoria', 'Objetivo del analisis'],
-    outputs: ['Tabla comparativa', 'Ranking recomendado', 'Resumen ejecutivo', 'Recomendacion final', 'PDF descargable'],
-    status: 'active',
-    visibleToBuyer: true,
-    sortOrder: 2,
-    isActive: true,
-    accentColor: '#0f766e',
-    icon: 'Scale',
-    createdAt: '2026-04-02T00:00:00.000Z',
-    updatedAt: '2026-04-02T00:00:00.000Z',
-  },
-  {
-    id: 'tco_analysis',
-    agentKey: 'tco_analysis',
-    slug: 'analisis-costo-total-tco',
-    name: 'Analisis de Costo Total / TCO',
-    description: 'Calcula el costo total real de una compra considerando precio inicial, instalacion, transporte, mantenimiento, operacion, garantia, soporte, repuestos, riesgos y costos ocultos.',
-    longDescription: 'Compara alternativas por proveedor con una mirada de costo total para evitar decisiones basadas solo en precio inicial.',
-    category: 'Finanzas',
-    automationType: 'Analitica',
-    useCase: 'Evaluar compras con impacto de largo plazo y sustentar una recomendacion TCO.',
-    functionalities: ['Calcula costo inicial vs costo total proyectado', 'Detecta costos ocultos y supuestos criticos', 'Compara alternativas por proveedor', 'Genera recomendacion basada en TCO'],
-    benefits: ['Evita elegir solo por precio inicial', 'Mejora decisiones de compra a largo plazo', 'Ayuda a justificar la recomendacion ante gerencia'],
-    inputs: ['Alternativas por proveedor', 'Costos iniciales', 'Costos operativos', 'Horizonte de evaluacion'],
-    outputs: ['Tabla TCO por proveedor', 'Costo total proyectado', 'Riesgos financieros', 'Recomendacion final', 'PDF descargable'],
-    status: 'coming_soon',
-    visibleToBuyer: true,
-    sortOrder: 3,
-    isActive: false,
-    accentColor: '#0369a1',
-    icon: 'TrendingUp',
-    createdAt: '2026-04-03T00:00:00.000Z',
-    updatedAt: '2026-04-03T00:00:00.000Z',
-  },
-  {
-    id: 'purchase_order',
-    agentKey: 'purchase_order',
-    slug: 'elaboracion-orden-compra',
-    name: 'Elaboracion de Orden de Compra',
-    description: 'Genera una orden de compra formal a partir del proveedor seleccionado, condiciones comerciales, items, cantidades, precios, impuestos, entrega y observaciones.',
-    longDescription: 'Estructura una orden lista para revision administrativa, con totales y condiciones comerciales ordenadas.',
-    category: 'Compras',
-    automationType: 'Generacion',
-    useCase: 'Formalizar una compra aprobada con una orden estructurada y descargable.',
-    functionalities: ['Estructura datos de proveedor y comprador', 'Genera tabla de items', 'Calcula subtotal, impuestos y total', 'Ordena condiciones comerciales'],
-    benefits: ['Reduce errores administrativos', 'Estandariza ordenes de compra', 'Acelera la formalizacion de la compra'],
-    inputs: ['Proveedor seleccionado', 'Items', 'Cantidades', 'Precios', 'Impuestos', 'Entrega'],
-    outputs: ['Orden de compra estructurada', 'Tabla de items', 'Totales', 'Condiciones de pago y entrega', 'PDF descargable'],
-    status: 'coming_soon',
-    visibleToBuyer: true,
-    sortOrder: 4,
-    isActive: false,
-    accentColor: '#0f766e',
-    icon: 'FileCheck',
-    createdAt: '2026-04-04T00:00:00.000Z',
-    updatedAt: '2026-04-04T00:00:00.000Z',
-  },
-  {
-    id: 'dashboard_creator',
-    agentKey: 'dashboard_creator',
-    slug: 'creador-dashboard',
-    name: 'Creador de Dashboard',
-    description: 'Crea un dashboard visual a partir de datos de compras, gastos, proveedores o indicadores cargados por el comprador, identificando KPIs, graficos, tablas e insights relevantes.',
-    longDescription: 'Convierte datos subidos por el comprador en una estructura de dashboard con KPIs, tablas, graficos simples, insights y recomendaciones.',
-    category: 'Reporteria',
-    automationType: 'Analitica',
-    useCase: 'Crear una vista ejecutiva inicial a partir de datos de compras o proveedores.',
-    functionalities: ['Lee archivos de datos', 'Propone KPIs', 'Genera estructura de dashboard', 'Crea tablas y graficos visuales en la plataforma', 'Detecta insights relevantes'],
-    benefits: ['Convierte datos en visualizaciones utiles', 'Ayuda a presentar resultados a gerencia', 'Reduce trabajo manual en Excel o Power BI inicial'],
-    inputs: ['Archivo de datos', 'Objetivo del dashboard', 'Audiencia', 'Periodo'],
-    outputs: ['Dashboard visual generado', 'KPIs principales', 'Graficos', 'Tablas', 'Insights', 'Recomendaciones', 'PDF descargable'],
-    status: 'coming_soon',
-    visibleToBuyer: true,
-    sortOrder: 5,
-    isActive: false,
-    accentColor: '#7c3aed',
-    icon: 'BrainCircuit',
-    createdAt: '2026-04-05T00:00:00.000Z',
-    updatedAt: '2026-04-05T00:00:00.000Z',
-  },
-  {
-    id: 'spend_analysis',
-    agentKey: 'spend_analysis',
-    slug: 'analisis-gastos',
-    name: 'Analisis de Gastos',
-    description: 'Analiza gastos por proveedor, categoria, centro de costo, periodo o area para detectar concentracion, variaciones, oportunidades de ahorro y riesgos.',
-    longDescription: 'Agrupa datos de gasto y prioriza oportunidades de ahorro, proveedores criticos y variaciones relevantes.',
-    category: 'Finanzas',
-    automationType: 'Analitica',
-    useCase: 'Explorar gasto por proveedor, categoria o periodo para priorizar negociaciones.',
-    functionalities: ['Lee Excel/CSV de gastos', 'Agrupa por proveedor, categoria y periodo', 'Detecta top gastos', 'Detecta variaciones', 'Sugiere oportunidades de ahorro'],
-    benefits: ['Mejora control del gasto', 'Identifica proveedores criticos', 'Ayuda a priorizar negociaciones'],
-    inputs: ['Archivo Excel/CSV de gastos', 'Periodo', 'Categoria', 'Centro de costo'],
-    outputs: ['Resumen de gastos', 'Top proveedores', 'Top categorias', 'Variaciones', 'Alertas', 'Recomendaciones', 'PDF descargable'],
-    status: 'coming_soon',
-    visibleToBuyer: true,
-    sortOrder: 6,
-    isActive: false,
-    accentColor: '#be185d',
-    icon: 'TrendingUp',
-    createdAt: '2026-04-06T00:00:00.000Z',
-    updatedAt: '2026-04-06T00:00:00.000Z',
-  },
-  {
-    id: 'contract_risk_analysis',
-    agentKey: 'contract_risk_analysis',
-    slug: 'analisis-contratos-riesgos',
-    name: 'Analisis de Contratos y Deteccion de Riesgos',
-    description: 'Analiza contratos de proveedores para detectar clausulas criticas, riesgos, obligaciones, penalidades, vencimientos, renovaciones y puntos de negociacion.',
-    longDescription: 'Resume obligaciones contractuales y prioriza alertas para que compras pueda revisar riesgos antes de firmar o renovar.',
-    category: 'Contratos',
-    automationType: 'Riesgo',
-    useCase: 'Revisar contratos de proveedores y levantar puntos criticos de negociacion.',
-    functionalities: ['Lee contratos PDF/DOCX', 'Resume obligaciones', 'Detecta riesgos', 'Identifica clausulas criticas', 'Detecta penalidades y vencimientos'],
-    benefits: ['Reduce riesgo contractual', 'Mejora revision previa a firma', 'Ayuda a compradores no legales a detectar alertas'],
-    inputs: ['Contrato o anexos', 'Contexto de compra', 'Puntos de preocupacion'],
-    outputs: ['Resumen contractual', 'Matriz de riesgos', 'Clausulas criticas', 'Obligaciones', 'Recomendaciones', 'PDF descargable'],
-    status: 'coming_soon',
-    visibleToBuyer: true,
-    sortOrder: 7,
-    isActive: false,
-    accentColor: '#dc2626',
-    icon: 'TriangleAlert',
-    createdAt: '2026-04-07T00:00:00.000Z',
-    updatedAt: '2026-04-07T00:00:00.000Z',
-  },
-  {
-    id: 'supplier_evaluation_ranking',
-    agentKey: 'supplier_evaluation_ranking',
-    slug: 'evaluacion-ranking-proveedores',
-    name: 'Evaluacion y Ranking de Proveedores',
-    description: 'Evalua proveedores segun criterios tecnicos, comerciales, cumplimiento, experiencia, documentacion, desempeno y riesgo para generar ranking y recomendacion.',
-    longDescription: 'Estandariza la evaluacion de proveedores con criterios, pesos, score, riesgos y documentacion faltante.',
-    category: 'Proveedores',
-    automationType: 'Evaluacion',
-    useCase: 'Seleccionar proveedores con un ranking sustentado y comparable.',
-    functionalities: ['Evalua informacion de proveedores', 'Genera criterios y pesos', 'Califica proveedores', 'Detecta documentacion faltante', 'Genera ranking'],
-    benefits: ['Mejora seleccion de proveedores', 'Reduce decisiones subjetivas', 'Estandariza evaluacion'],
-    inputs: ['Informacion de proveedores', 'Criterios de evaluacion', 'Pesos', 'Documentacion'],
-    outputs: ['Score por proveedor', 'Ranking', 'Fortalezas', 'Riesgos', 'Documentacion faltante', 'Recomendacion', 'PDF descargable'],
-    status: 'coming_soon',
-    visibleToBuyer: true,
-    sortOrder: 8,
-    isActive: false,
-    accentColor: '#64748b',
-    icon: 'ShieldCheck',
-    createdAt: '2026-04-08T00:00:00.000Z',
-    updatedAt: '2026-04-08T00:00:00.000Z',
-  },
-];
 
 const NexuIA = () => {
   const navigate = useNavigate();
@@ -688,7 +319,7 @@ const NexuIA = () => {
 
     const used = Number(localStorage.getItem(getUsageKey()) ?? '0');
     if (used >= limit) {
-      setLimitNotice('Has alcanzado el límite de tu plan. Cambia de plan para seguir usando Nodus IA.');
+      setLimitNotice('Has alcanzado el lÃ­mite de tu plan. Cambia de plan para seguir usando Nodus IA.');
       return false;
     }
 
@@ -774,8 +405,8 @@ const NexuIA = () => {
 
     if (!comparisonService.trim()) {
       toast({
-        title: 'Falta el servicio o categoría',
-        description: 'Indica qué servicio, producto o categoría deseas comparar.',
+        title: 'Falta el servicio o categorÃ­a',
+        description: 'Indica quÃ© servicio, producto o categorÃ­a deseas comparar.',
         variant: 'destructive',
       });
       return;
@@ -784,7 +415,7 @@ const NexuIA = () => {
     if (uploadedComparisonFiles.length < 2) {
       toast({
         title: 'Faltan propuestas',
-        description: 'Sube al menos 2 propuestas de proveedores para iniciar el análisis.',
+        description: 'Sube al menos 2 propuestas de proveedores para iniciar el anÃ¡lisis.',
         variant: 'destructive',
       });
       return;
@@ -802,8 +433,8 @@ const NexuIA = () => {
           registerNodusIaUsage();
           logAgentUsage(selectedAgent.id, 'Comparativo de propuestas de proveedores', result as unknown as Record<string, unknown>);
           toast({
-            title: 'Análisis completado',
-            description: 'El comparativo ya está listo para revisar.',
+            title: 'AnÃ¡lisis completado',
+            description: 'El comparativo ya estÃ¡ listo para revisar.',
           });
         },
         onError: (error) => {
@@ -812,7 +443,7 @@ const NexuIA = () => {
             description:
               error instanceof Error
                 ? error.message
-                : 'No se pudo conectar con el AI Engine o completar el análisis.',
+                : 'No se pudo conectar con el AI Engine o completar el anÃ¡lisis.',
             variant: 'destructive',
           });
         },
@@ -827,8 +458,8 @@ const NexuIA = () => {
   const handleCreateTermsForm = () => {
     if (!termsInitialDescription.trim()) {
       toast({
-        title: 'Describe primero qué necesitas realizar.',
-        description: 'Agrega una descripción inicial para crear el formulario inteligente.',
+        title: 'Describe primero quÃ© necesitas realizar.',
+        description: 'Agrega una descripciÃ³n inicial para crear el formulario inteligente.',
         variant: 'destructive',
       });
       return;
@@ -850,7 +481,7 @@ const NexuIA = () => {
         setTermsSafetyRequirements(schema.recommended_safety_requirements);
         toast({
           title: 'Formulario inteligente creado',
-          description: 'Revisa la categoría sugerida y completa los campos del requerimiento.',
+          description: 'Revisa la categorÃ­a sugerida y completa los campos del requerimiento.',
         });
       },
       onError: (error) => {
@@ -890,8 +521,8 @@ const NexuIA = () => {
 
     if (!termsInitialDescription.trim()) {
       toast({
-        title: 'Describe primero qué necesitas realizar.',
-        description: 'Ese texto inicial ayuda a la IA a contextualizar el término de referencia.',
+        title: 'Describe primero quÃ© necesitas realizar.',
+        description: 'Ese texto inicial ayuda a la IA a contextualizar el tÃ©rmino de referencia.',
         variant: 'destructive',
       });
       return;
@@ -899,8 +530,8 @@ const NexuIA = () => {
 
     if (hasMissingRequired) {
       toast({
-        title: 'Completa los campos obligatorios antes de generar el término de referencia.',
-        description: 'Revisa nombre, tipo, objetivo, alcance, entregables y justificación.',
+        title: 'Completa los campos obligatorios antes de generar el tÃ©rmino de referencia.',
+        description: 'Revisa nombre, tipo, objetivo, alcance, entregables y justificaciÃ³n.',
         variant: 'destructive',
       });
       return;
@@ -926,16 +557,16 @@ const NexuIA = () => {
         onSuccess: (result) => {
           registerNodusIaUsage();
           if (selectedAgent) {
-            logAgentUsage(selectedAgent.id, 'Elaboración de términos de referencia', result as unknown as Record<string, unknown>);
+            logAgentUsage(selectedAgent.id, 'ElaboraciÃ³n de tÃ©rminos de referencia', result as unknown as Record<string, unknown>);
           }
           toast({
-            title: 'Término de referencia generado',
-            description: 'El documento ya está listo para revisar y descargar.',
+            title: 'TÃ©rmino de referencia generado',
+            description: 'El documento ya estÃ¡ listo para revisar y descargar.',
           });
         },
         onError: (error) => {
           toast({
-            title: 'No se pudo generar el término de referencia. Intenta nuevamente.',
+            title: 'No se pudo generar el tÃ©rmino de referencia. Intenta nuevamente.',
             description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
             variant: 'destructive',
           });
@@ -1017,15 +648,15 @@ const NexuIA = () => {
         <div key={field.name} className="space-y-2">
           <label className="text-sm font-medium text-foreground/80">{field.label}</label>
           <p className="text-xs leading-5 text-muted-foreground/70">
-            Puedes subir planos con medidas, fichas técnicas, fotos, croquis, documentos previos,
-            Excel con cantidades, manuales técnicos o imágenes del estado actual.
+            Puedes subir planos con medidas, fichas tÃ©cnicas, fotos, croquis, documentos previos,
+            Excel con cantidades, manuales tÃ©cnicos o imÃ¡genes del estado actual.
           </p>
           <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-primary/5 px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
             <Upload className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="text-sm font-medium text-foreground">Subir documentos de apoyo</p>
               <p className="mt-1 text-xs text-muted-foreground/70">
-                PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. Máximo 8 archivos.
+                PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. MÃ¡ximo 8 archivos.
               </p>
             </div>
             <input
@@ -1098,7 +729,7 @@ const NexuIA = () => {
             className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground"
             required={field.required}
           >
-            <option value="">Selecciona una opción</option>
+            <option value="">Selecciona una opciÃ³n</option>
             {field.options.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
@@ -1132,7 +763,7 @@ const NexuIA = () => {
 
     return (
       <div className="rounded-[24px] border border-primary/15 bg-white p-4">
-        <p className="text-sm font-medium text-foreground">¿Cómo fue tu experiencia con este agente?</p>
+        <p className="text-sm font-medium text-foreground">Â¿CÃ³mo fue tu experiencia con este agente?</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {[1, 2, 3, 4, 5].map((star) => (
             <button
@@ -1146,13 +777,13 @@ const NexuIA = () => {
               }`}
               aria-label={`${star} estrellas`}
             >
-              ★
+              â˜…
             </button>
           ))}
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {[
-            ['me_sirvio', 'Me sirvió'],
+            ['me_sirvio', 'Me sirviÃ³'],
             ['tuvo_errores', 'Tuvo errores'],
             ['sugerencia', 'Quiero sugerir una mejora'],
           ].map(([value, label]) => (
@@ -1171,13 +802,13 @@ const NexuIA = () => {
         <Textarea
           value={feedbackComment}
           onChange={(event) => setFeedbackComment(event.target.value)}
-          placeholder="Cuéntanos qué funcionó, qué falló o qué mejorarías."
+          placeholder="CuÃ©ntanos quÃ© funcionÃ³, quÃ© fallÃ³ o quÃ© mejorarÃ­as."
           className="mt-3 min-h-[88px] rounded-2xl border-primary/15"
         />
         <Textarea
           value={feedbackCorrection}
           onChange={(event) => setFeedbackCorrection(event.target.value)}
-          placeholder="Si deseas, escribe cómo debería corregirse."
+          placeholder="Si deseas, escribe cÃ³mo deberÃ­a corregirse."
           className="mt-3 min-h-[72px] rounded-2xl border-primary/15"
         />
         <Button
@@ -1421,12 +1052,12 @@ const NexuIA = () => {
                           <>
                             <div className="space-y-1.5">
                               <label className="text-sm font-medium text-foreground/80">
-                                Describe qué necesitas realizar
+                                Describe quÃ© necesitas realizar
                               </label>
                               <Textarea
                                 value={termsInitialDescription}
                                 onChange={(event) => setTermsInitialDescription(event.target.value)}
-                                placeholder="Ejemplo: Necesito mantenimiento de luminarias en planta, reparación de paredes con humedad, implementación de estacionamiento, inspección de equipos de aire acondicionado, compra de laptops..."
+                                placeholder="Ejemplo: Necesito mantenimiento de luminarias en planta, reparaciÃ³n de paredes con humedad, implementaciÃ³n de estacionamiento, inspecciÃ³n de equipos de aire acondicionado, compra de laptops..."
                                 className="min-h-[112px] rounded-2xl border-primary/15"
                                 required
                               />
@@ -1446,7 +1077,7 @@ const NexuIA = () => {
                                 <div className="grid gap-3 md:grid-cols-3">
                                   <div className="rounded-xl bg-white p-3">
                                     <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
-                                      Categoría sugerida
+                                      CategorÃ­a sugerida
                                     </p>
                                     <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.detected_category}</p>
                                   </div>
@@ -1490,15 +1121,15 @@ const NexuIA = () => {
                           <>
                             <div className="space-y-1.5">
                               <label className="text-sm font-medium text-foreground/80">
-                                Servicio, producto o categoría a comparar
+                                Servicio, producto o categorÃ­a a comparar
                               </label>
                               <p className="text-xs text-muted-foreground/70">
-                                Aquí indica para qué son las propuestas que vas a comparar.
+                                AquÃ­ indica para quÃ© son las propuestas que vas a comparar.
                               </p>
                               <Textarea
                                 value={comparisonService}
                                 onChange={(event) => setComparisonService(event.target.value)}
-                                placeholder="Ejemplo: Servicio de limpieza integral de oficinas 300 m², pintado de paredes, compra de laptops, mantenimiento preventivo, proveedor logístico…"
+                                placeholder="Ejemplo: Servicio de limpieza integral de oficinas 300 mÂ², pintado de paredes, compra de laptops, mantenimiento preventivo, proveedor logÃ­sticoâ€¦"
                                 className="min-h-[92px] rounded-2xl border-primary/15"
                                 required
                               />
@@ -1511,7 +1142,7 @@ const NexuIA = () => {
                               <Textarea
                                 value={comparisonObjective}
                                 onChange={(event) => setComparisonObjective(event.target.value)}
-                                placeholder="Ejemplo: Seleccionar el proveedor más conveniente considerando precio, alcance, garantía, condiciones comerciales y riesgo operativo."
+                                placeholder="Ejemplo: Seleccionar el proveedor mÃ¡s conveniente considerando precio, alcance, garantÃ­a, condiciones comerciales y riesgo operativo."
                                 className="min-h-[92px] rounded-2xl border-primary/15"
                               />
                             </div>
@@ -1524,7 +1155,7 @@ const NexuIA = () => {
                                 <Upload className="h-5 w-5 text-muted-foreground" />
                                 <div>
                                   <p className="text-sm font-medium text-foreground">
-                                    Subir PDF, DOCX, Excel, CSV o imágenes
+                                    Subir PDF, DOCX, Excel, CSV o imÃ¡genes
                                   </p>
                                   <p className="mt-1 text-xs text-muted-foreground/70">
                                     Carga 2 a 5 propuestas. Los archivos se procesan temporalmente.
@@ -1656,8 +1287,8 @@ const NexuIA = () => {
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         {termsGenerateMutation.isPending
-                          ? 'Nodus IA está trabajando en tu solicitud…'
-                          : 'Generar término de referencia'}
+                          ? 'Nodus IA estÃ¡ trabajando en tu solicitudâ€¦'
+                          : 'Generar tÃ©rmino de referencia'}
                       </Button>
                     ) : isQuoteComparator ? (
                       <Button
@@ -1668,7 +1299,7 @@ const NexuIA = () => {
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         {proposalComparisonMutation.isPending
-                          ? 'Nodus IA está trabajando en tu solicitud…'
+                          ? 'Nodus IA estÃ¡ trabajando en tu solicitudâ€¦'
                           : 'Analizar propuestas'}
                       </Button>
                     ) : (
@@ -1680,7 +1311,7 @@ const NexuIA = () => {
                           disabled={runMutation.isPending}
                         >
                           <PlayCircle className="mr-2 h-4 w-4" />
-                          {runMutation.isPending ? 'Nodus IA está trabajando en tu solicitud…' : 'Ejecutar agente'}
+                          {runMutation.isPending ? 'Nodus IA estÃ¡ trabajando en tu solicitudâ€¦' : 'Ejecutar agente'}
                         </Button>
                       </>
                     )}
@@ -1688,7 +1319,7 @@ const NexuIA = () => {
 
                   {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || runMutation.isPending) ? (
                     <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
-                      Nodus IA está trabajando en tu solicitud…
+                      Nodus IA estÃ¡ trabajando en tu solicitudâ€¦
                     </div>
                   ) : null}
 
@@ -1747,7 +1378,7 @@ const NexuIA = () => {
                             <p>{termsResult.generated_document.scope}</p>
                           </div>
                           {[
-                            ['Características técnicas', termsResult.generated_document.technical_characteristics],
+                            ['CaracterÃ­sticas tÃ©cnicas', termsResult.generated_document.technical_characteristics],
                             ['Actividades requeridas', termsResult.generated_document.required_activities],
                             ['Producto final / entregables', termsResult.generated_document.final_deliverables],
                             ['Requisitos de seguridad', termsResult.generated_document.safety_requirements],
@@ -1768,7 +1399,7 @@ const NexuIA = () => {
 
                       <div className="grid gap-4 md:grid-cols-3">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Información faltante</p>
+                          <p className="text-sm font-medium text-foreground">InformaciÃ³n faltante</p>
                           <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                             {termsResult.missing_information.map((item) => (
                               <li key={item}>- {item}</li>
@@ -1784,9 +1415,9 @@ const NexuIA = () => {
                           </ul>
                         </div>
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Validación de calidad</p>
+                          <p className="text-sm font-medium text-foreground">ValidaciÃ³n de calidad</p>
                           <p className="mt-2 text-sm text-muted-foreground">
-                            {termsResult.quality_check.is_complete ? 'Documento completo según la validación básica.' : 'Requiere completar secciones antes de enviarlo.'}
+                            {termsResult.quality_check.is_complete ? 'Documento completo segÃºn la validaciÃ³n bÃ¡sica.' : 'Requiere completar secciones antes de enviarlo.'}
                           </p>
                           {termsResult.quality_check.warnings.length ? (
                             <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -1800,7 +1431,7 @@ const NexuIA = () => {
 
                       {termsResult.supporting_documents_summary.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Documentos de apoyo leídos</p>
+                          <p className="text-sm font-medium text-foreground">Documentos de apoyo leÃ­dos</p>
                           <div className="mt-3 space-y-2">
                             {termsResult.supporting_documents_summary.map((doc) => (
                               <div key={doc.file_name} className="rounded-xl bg-primary/5 p-3 text-sm text-muted-foreground">
@@ -1877,19 +1508,19 @@ const NexuIA = () => {
                       {proposalComparisonResult.evaluation_matrix?.criteria.length ? (
                         <div>
                           <div>
-                            <p className="text-sm font-medium text-foreground">Matriz de evaluación comparativa</p>
+                            <p className="text-sm font-medium text-foreground">Matriz de evaluaciÃ³n comparativa</p>
                             <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
                               {proposalComparisonResult.auto_generated_criteria_note}
                             </p>
                             <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
-                              Escala de valoración: 1 = Muy deficiente | 2 = Deficiente | 3 = Aceptable | 4 = Bueno | 5 = Excelente. Puntaje ponderado = Valoración × Peso.
+                              Escala de valoraciÃ³n: 1 = Muy deficiente | 2 = Deficiente | 3 = Aceptable | 4 = Bueno | 5 = Excelente. Puntaje ponderado = ValoraciÃ³n Ã— Peso.
                             </p>
                           </div>
                           <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
                             <table className="w-full min-w-[760px] text-left text-sm">
                               <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
                                 <tr>
-                                  <th className="px-4 py-3 font-medium">N°</th>
+                                  <th className="px-4 py-3 font-medium">NÂ°</th>
                                   <th className="px-4 py-3 font-medium">Criterio</th>
                                   <th className="px-4 py-3 font-medium">Peso %</th>
                                   {proposalComparisonResult.suppliers.map((supplier) => (
@@ -1948,16 +1579,16 @@ const NexuIA = () => {
 
                       {proposalComparisonResult.criteria_guide?.length ? (
                         <div>
-                          <p className="text-sm font-medium text-foreground">Guía de criterios</p>
+                          <p className="text-sm font-medium text-foreground">GuÃ­a de criterios</p>
                           <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
                             <table className="w-full min-w-[760px] text-left text-sm">
                               <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
                                 <tr>
-                                  <th className="px-4 py-3 font-medium">N°</th>
+                                  <th className="px-4 py-3 font-medium">NÂ°</th>
                                   <th className="px-4 py-3 font-medium">Criterio</th>
                                   <th className="px-4 py-3 font-medium">Peso %</th>
-                                  <th className="px-4 py-3 font-medium">Escala de valoración 1 a 5</th>
-                                  <th className="px-4 py-3 font-medium">Fuente de verificación</th>
+                                  <th className="px-4 py-3 font-medium">Escala de valoraciÃ³n 1 a 5</th>
+                                  <th className="px-4 py-3 font-medium">Fuente de verificaciÃ³n</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -2040,7 +1671,7 @@ const NexuIA = () => {
                           </ul>
                         </div>
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Información faltante</p>
+                          <p className="text-sm font-medium text-foreground">InformaciÃ³n faltante</p>
                           <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                             {proposalComparisonResult.missing_information.map((item) => (
                               <li key={item}>- {item}</li>
@@ -2058,7 +1689,7 @@ const NexuIA = () => {
                       </div>
 
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                        <p className="text-sm font-medium text-foreground">Recomendación final</p>
+                        <p className="text-sm font-medium text-foreground">RecomendaciÃ³n final</p>
                         <p className="mt-2 text-sm leading-6 text-muted-foreground">
                           {proposalComparisonResult.final_recommendation}
                         </p>
@@ -2086,3 +1717,4 @@ const NexuIA = () => {
 };
 
 export default NexuIA;
+
