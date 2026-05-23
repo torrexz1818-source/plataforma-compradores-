@@ -441,6 +441,12 @@ const NexuIA = () => {
   ];
 
   const ensureNodusIaCredit = async () => {
+    if (user?.role === 'admin') {
+      setLimitNotice('');
+      setShowUpgradePanel(false);
+      return true;
+    }
+
     const result = await consumeAiCredit();
     if (!result.allowed) {
       setLimitNotice('Has alcanzado tu límite de créditos IA. Mejora tu plan o compra créditos adicionales para continuar.');
@@ -674,8 +680,12 @@ const NexuIA = () => {
   };
 
   const handleDashboardFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    const validationMessage = validateTermsFiles(files);
+    const selectedFiles = Array.from(event.target.files ?? []);
+    const mergedFiles = [...dashboardFiles, ...selectedFiles].filter(
+      (file, index, allFiles) =>
+        index === allFiles.findIndex((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified),
+    );
+    const validationMessage = validateTermsFiles(mergedFiles);
     if (validationMessage) {
       toast({
         title: validationMessage,
@@ -685,7 +695,7 @@ const NexuIA = () => {
       event.target.value = '';
       return;
     }
-    if (files.length > 8) {
+    if (mergedFiles.length > 8) {
       toast({
         title: 'Puedes subir como máximo 8 archivos.',
         description: 'Reduce la cantidad de archivos de datos para este dashboard.',
@@ -694,7 +704,17 @@ const NexuIA = () => {
       event.target.value = '';
       return;
     }
-    setDashboardFiles(files);
+    setDashboardFiles(mergedFiles);
+    event.target.value = '';
+  };
+
+  const removeDashboardFile = (targetFile: File) => {
+    setDashboardFiles((current) =>
+      current.filter(
+        (file) =>
+          !(file.name === targetFile.name && file.size === targetFile.size && file.lastModified === targetFile.lastModified),
+      ),
+    );
   };
 
   const handleCreateDashboard = async () => {
@@ -1758,12 +1778,23 @@ const NexuIA = () => {
                                     const isSpreadsheet = file.name.endsWith('.xls') || file.name.endsWith('.xlsx') || file.name.endsWith('.csv');
                                     const FileIcon = isSpreadsheet ? FileSpreadsheet : FileText;
                                     return (
-                                      <div key={`${file.name}-${file.size}`} className="flex items-center justify-between gap-3 rounded-xl bg-primary/5 px-3 py-2">
+                                      <div key={`${file.name}-${file.size}-${file.lastModified}`} className="flex items-center justify-between gap-3 rounded-xl bg-primary/5 px-3 py-2">
                                         <div className="flex min-w-0 items-center gap-2">
                                           <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
                                           <span className="truncate text-sm text-foreground/80">{file.name}</span>
                                         </div>
-                                        <span className="shrink-0 text-xs text-muted-foreground/70">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                          <span className="text-xs text-muted-foreground/70">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                            onClick={() => removeDashboardFile(file)}
+                                          >
+                                            Quitar
+                                          </Button>
+                                        </div>
                                       </div>
                                     );
                                   })}
@@ -2226,6 +2257,26 @@ const NexuIA = () => {
                           </div>
                         ))}
                       </div>
+
+                      {(dashboardResult.source_files?.length || dashboardResult.document_summaries?.length) ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Archivos analizados</p>
+                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                            {(dashboardResult.document_summaries?.length ? dashboardResult.document_summaries : dashboardResult.source_files).map((file) => (
+                              <div key={`${file.file_name}-${file.detected_type}`} className="rounded-xl bg-primary/5 p-3">
+                                <p className="text-sm font-medium text-foreground">{file.file_name}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">Tipo detectado: {file.detected_type}</p>
+                                {'relevant_findings' in file && file.relevant_findings.length ? (
+                                  <p className="mt-1 text-xs text-muted-foreground/80">Datos detectados: {file.relevant_findings.join(', ')}</p>
+                                ) : null}
+                                {'limitations' in file && file.limitations.length ? (
+                                  <p className="mt-1 text-xs text-muted-foreground/70">Limitaciones: {file.limitations.slice(0, 2).join('; ')}</p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
 
                       {dashboardResult.charts.length ? (
                         <div className="grid gap-4 lg:grid-cols-2">

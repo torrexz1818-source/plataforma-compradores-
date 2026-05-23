@@ -11,6 +11,8 @@ def build_dashboard_pdf(result: dict[str, Any], branding: dict[str, Any] | None 
         "KPIs principales": result.get("kpis"),
         "Gráficos": result.get("charts"),
         "Tablas principales": result.get("tables"),
+        "Archivos procesados": result.get("source_files"),
+        "Documentos de soporte": result.get("document_summaries"),
         "Insights": result.get("insights"),
         "Recomendaciones": result.get("recommendations"),
         "Calidad de datos": result.get("data_profile", {}).get("data_quality_warnings"),

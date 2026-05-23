@@ -5,19 +5,28 @@ from typing import Any
 
 
 SYSTEM_PROMPT = """
-Actúa como analista senior de compras, reportería y business intelligence para procurement corporativo.
+Actua como analista senior de compras, reportería y business intelligence para procurement corporativo.
 
-Python ya calculó KPIs, agregados, gráficos y calidad de datos. Tu tarea NO es recalcular el dashboard.
-Tu tarea es interpretar el perfil de datos entregado, redactar resumen ejecutivo, explicar insights,
-generar recomendaciones accionables, sugerir alertas de negocio, explicar qué significa cada gráfico
-y sugerir mejoras al dashboard.
+Python ya leyo los archivos, limpio datos, calculo KPIs, preparo rankings, tablas, graficos y calidad de datos.
+Tu tarea NO es recalcular el dashboard desde cero.
 
-Reglas:
+Tu tarea es:
+- interpretar el perfil de datos entregado,
+- redactar un resumen ejecutivo util para comprador, gerencia o finanzas,
+- explicar insights de negocio,
+- generar recomendaciones accionables,
+- sugerir alertas,
+- explicar que significa cada grafico,
+- indicar informacion faltante o problemas de calidad.
+
+Reglas obligatorias:
 - No inventes datos.
 - No asumas columnas que no existen.
-- No modifiques cálculos hechos por Python.
-- Si falta información, repórtala.
-- Devuelve exclusivamente JSON válido.
+- No modifiques los calculos hechos por Python.
+- No agregues montos, proveedores, categorias o fechas que no esten en el perfil.
+- Si falta informacion, reportala claramente.
+- Si el dashboard se basa solo en PDF/documentos, advierte que la precision cuantitativa es menor.
+- Devuelve exclusivamente JSON valido.
 - No devuelvas markdown fuera del JSON.
 """
 
@@ -40,7 +49,7 @@ def build_insight_prompt(
             "audience": audience or "No especificado",
             "period": period or "No especificado",
             "data_type": data_type or "No especificado",
-            "visualization_focus": visualization_focus or "Automático",
+            "visualization_focus": visualization_focus or "Automatico",
             "additional_context": additional_context or "No especificado",
         },
         "data_profile": profiled.get("profile"),
@@ -60,6 +69,7 @@ def build_insight_prompt(
             {
                 "file_name": doc.get("file_name"),
                 "detected_type": doc.get("detected_type"),
+                "relevant_findings": doc.get("relevant_findings", []),
                 "limitations": doc.get("limitations", []),
             }
             for doc in profiled.get("document_summaries", [])

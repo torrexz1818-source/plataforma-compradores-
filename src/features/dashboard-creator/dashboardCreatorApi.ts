@@ -41,6 +41,14 @@ export type DashboardResult = {
   insights: Array<{ title: string; description: string; impact: 'low' | 'medium' | 'high'; recommended_action: string }>;
   recommendations: string[];
   missing_information: string[];
+  document_summaries: Array<{
+    file_name: string;
+    detected_type: string;
+    text_preview?: string | null;
+    relevant_findings: string[];
+    limitations: string[];
+  }>;
+  source_files: Array<{ file_name: string; detected_type: string }>;
   suggested_filters: string[];
   layout_suggestion: Array<Record<string, unknown>>;
   pdf_available: boolean;

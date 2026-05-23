@@ -45,6 +45,8 @@ def build_dashboard_result(
         "insights": insights,
         "recommendations": recommendations,
         "missing_information": missing_information,
+        "document_summaries": profiled.get("document_summaries", []),
+        "source_files": profiled.get("source_files", []),
         "suggested_filters": profiled.get("suggested_filters", []),
         "layout_suggestion": layout,
         "pdf_available": True,

@@ -71,6 +71,14 @@ class DashboardInsight(BaseModel):
     recommended_action: str
 
 
+class DashboardDocumentSummary(BaseModel):
+    file_name: str
+    detected_type: str
+    text_preview: str | None = None
+    relevant_findings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
 class LayoutSuggestion(BaseModel):
     section: str
     component_type: Literal["kpi", "chart", "table", "insight", "alert"]
@@ -93,6 +101,8 @@ class DashboardResult(BaseModel):
     insights: list[DashboardInsight] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
     missing_information: list[str] = Field(default_factory=list)
+    document_summaries: list[DashboardDocumentSummary] = Field(default_factory=list)
+    source_files: list[dict[str, Any]] = Field(default_factory=list)
     suggested_filters: list[str] = Field(default_factory=list)
     layout_suggestion: list[LayoutSuggestion] = Field(default_factory=list)
     pdf_available: bool = True
