@@ -44,6 +44,7 @@ services:
     rootDir: backend
     buildCommand: npm install && npm run build
     startCommand: npm run start:prod
+    autoDeploy: true
     envVars:
       - key: FRONTEND_URL
         value: https://buyernodus.com
