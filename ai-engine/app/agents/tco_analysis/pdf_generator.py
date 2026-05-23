@@ -23,5 +23,5 @@ def build_tco_pdf(result: dict[str, Any], branding: dict[str, Any] | None = None
         "Supuestos y límites": result.get("assumptions_and_limits"),
         "Disclaimer": result.get("disclaimer"),
     }
-    return build_agent_pdf("analisis-tco.pdf", "Analisis de Costo Total / TCO", ordered, branding)
-
+    title = str(result.get("analysis_title") or "Análisis de Costo Total / TCO")
+    return build_agent_pdf(title, "Análisis de Costo Total / TCO", ordered, branding)

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Literal
 
 from reportlab.lib import colors
@@ -13,6 +14,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 PdfMode = Literal["standard_branded", "white_label", "custom_brand"]
+TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "assets" / "pdf" / "buyer_nodus_report_template.pdf"
 
 
 @dataclass
@@ -120,6 +122,84 @@ def _draw_footer(canvas, doc, branding: PdfBranding) -> None:
     canvas.restoreState()
 
 
+def _split_cover_title(value: str, max_chars: int = 34) -> list[str]:
+    words = value.replace("\n", " ").split()
+    lines: list[str] = []
+    current = ""
+
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if len(candidate) <= max_chars:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+        current = word
+
+    if current:
+        lines.append(current)
+
+    return lines or ["Reporte Nodus IA"]
+
+
+def _build_template_overlay(title: str, agent_name: str, branding: PdfBranding) -> bytes:
+    from reportlab.pdfgen import canvas
+
+    buffer = BytesIO()
+    page_width, page_height = A4
+    cover = canvas.Canvas(buffer, pagesize=A4)
+    primary = colors.HexColor(branding.primary_color or "#09008B")
+
+    # The uploaded template contains the placeholder "TITULO DEL TRABAJO" in this zone.
+    cover.setFillColor(colors.white)
+    cover.rect(52, page_height - 122, page_width - 104, 84, fill=1, stroke=0)
+
+    cover.setFillColor(primary)
+    cover.setFont("Helvetica-Bold", 23)
+    text = cover.beginText()
+    text.setTextOrigin(72, page_height - 66)
+    text.setLeading(27)
+    for line in _split_cover_title(title)[:2]:
+        text.textLine(line)
+    cover.drawText(text)
+
+    cover.setFillColor(colors.HexColor("#4b5563"))
+    cover.setFont("Helvetica", 10)
+    cover.drawString(72, page_height - 130, agent_name)
+    cover.drawString(72, page_height - 146, datetime.utcnow().strftime("Generado el %Y-%m-%d %H:%M UTC"))
+    if branding.user_name or branding.company_name:
+        cover.drawString(72, page_height - 162, f"Preparado para: {branding.user_name or branding.company_name}")
+
+    cover.save()
+    return buffer.getvalue()
+
+
+def _prepend_template_cover(content_pdf: bytes, title: str, agent_name: str, branding: PdfBranding) -> bytes:
+    if branding.mode != "standard_branded" or not TEMPLATE_PATH.exists():
+        return content_pdf
+
+    try:
+        from pypdf import PdfReader, PdfWriter
+
+        template_reader = PdfReader(str(TEMPLATE_PATH))
+        overlay_reader = PdfReader(BytesIO(_build_template_overlay(title, agent_name, branding)))
+        content_reader = PdfReader(BytesIO(content_pdf))
+
+        writer = PdfWriter()
+        cover_page = template_reader.pages[0]
+        cover_page.merge_page(overlay_reader.pages[0])
+        writer.add_page(cover_page)
+
+        for page in content_reader.pages:
+            writer.add_page(page)
+
+        output = BytesIO()
+        writer.write(output)
+        return output.getvalue()
+    except Exception:
+        return content_pdf
+
+
 def build_agent_pdf(
     title: str,
     agent_name: str,
@@ -156,9 +236,14 @@ def build_agent_pdf(
         brand_label = brand.company_name or "Documento corporativo"
 
     story: list[Any] = []
+    display_title = (
+        title.replace(".pdf", "").replace("-", " ").title()
+        if title.lower().endswith(".pdf") or "-" in title
+        else title
+    )
     if brand_label:
         story.append(Paragraph(_clean_text(brand_label), styles["Brand"]))
-    story.append(Paragraph(_clean_text(title.replace(".pdf", "").replace("-", " ").title()), styles["Title"]))
+    story.append(Paragraph(_clean_text(display_title), styles["Title"]))
     story.append(Paragraph(_clean_text(agent_name), styles["Meta"]))
     story.append(Paragraph(datetime.utcnow().strftime("Fecha de generacion: %Y-%m-%d %H:%M UTC"), styles["Meta"]))
     if brand.user_name or brand.company_name:
@@ -194,4 +279,4 @@ def build_agent_pdf(
         )
     )
     doc.build(story, onFirstPage=lambda canvas, doc_: _draw_footer(canvas, doc_, brand), onLaterPages=lambda canvas, doc_: _draw_footer(canvas, doc_, brand))
-    return buffer.getvalue()
+    return _prepend_template_cover(buffer.getvalue(), display_title, agent_name, brand)
