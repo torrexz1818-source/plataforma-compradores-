@@ -306,8 +306,8 @@ export class UsersService {
   }
 
   async createCheckoutSession(userId: string, itemType: CheckoutItemType, itemKey: string) {
-    await this.requireActiveUser(userId);
-    const amount = this.resolveCheckoutAmount(itemType, itemKey);
+    const user = await this.requireActiveUser(userId);
+    const amount = this.resolveCheckoutAmount(itemType, itemKey, user.role);
     const now = new Date();
     const session: CheckoutSessionRecord = {
       id: crypto.randomUUID(),
@@ -1331,7 +1331,7 @@ export class UsersService {
 
     await this.ensureMembershipRecord(user);
     const created = await this.getMembershipByUserId(userId);
-    if (!created) throw new NotFoundException('Membresia no encontrada');
+    if (!created) throw new NotFoundException('Membresía no encontrada');
     return created;
   }
 
@@ -1376,15 +1376,17 @@ export class UsersService {
     };
   }
 
-  private resolveCheckoutAmount(itemType: CheckoutItemType, itemKey: string) {
+  private resolveCheckoutAmount(itemType: CheckoutItemType, itemKey: string, userRole: UserRole) {
     if (itemType === 'membership') {
-      const plan = [...buyerMembershipPlans, ...supplierMembershipPlans].find((item) => item.key === itemKey);
+      const audience = this.getMembershipAudience(userRole);
+      const plans = audience === 'supplier' ? supplierMembershipPlans : buyerMembershipPlans;
+      const plan = plans.find((item) => item.key === itemKey);
       if (!plan) throw new NotFoundException('Plan no encontrado');
       return plan.priceAmount;
     }
     if (itemType === 'credits') {
       const pack = aiCreditPacks.find((item) => item.key === itemKey);
-      if (!pack) throw new NotFoundException('Pack de creditos no encontrado');
+      if (!pack) throw new NotFoundException('Pack de créditos no encontrado');
       return pack.priceAmount;
     }
     const service = additionalServices.find((item) => item.key === itemKey);
@@ -1416,7 +1418,7 @@ export class UsersService {
 
   private async applyCreditPurchase(userId: string, packKey: string) {
     const pack = aiCreditPacks.find((item) => item.key === packKey);
-    if (!pack) throw new NotFoundException('Pack de creditos no encontrado');
+    if (!pack) throw new NotFoundException('Pack de créditos no encontrado');
     await this.ensureMembershipForUser(userId);
     await this.membershipsCollection().updateOne(
       { userId },

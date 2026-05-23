@@ -446,16 +446,16 @@ const NexuIA = () => {
       return;
     }
 
-    if (!(await ensureNodusIaCredit())) {
-      return;
-    }
-
     if (!isAgentActive) {
       toast({
         title: selectedAgent.status === 'coming_soon' ? 'Agente proximamente' : 'Agente no disponible',
         description: 'El administrador puede cambiar la disponibilidad desde Gestion de agentes IA.',
         variant: 'destructive',
       });
+      return;
+    }
+
+    if (!(await ensureNodusIaCredit())) {
       return;
     }
 
@@ -482,10 +482,6 @@ const NexuIA = () => {
       return;
     }
 
-    if (!(await ensureNodusIaCredit())) {
-      return;
-    }
-
     if (!comparisonService.trim()) {
       toast({
         title: 'Falta el servicio o categoría',
@@ -501,6 +497,10 @@ const NexuIA = () => {
         description: 'Sube al menos 2 propuestas de proveedores para iniciar el análisis.',
         variant: 'destructive',
       });
+      return;
+    }
+
+    if (!(await ensureNodusIaCredit())) {
       return;
     }
 
@@ -748,10 +748,6 @@ const NexuIA = () => {
       return;
     }
 
-    if (!(await ensureNodusIaCredit())) {
-      return;
-    }
-
     const requiredGeneral = [
       tcoGeneral.title,
       tcoGeneral.itemName,
@@ -776,6 +772,10 @@ const NexuIA = () => {
         description: 'El agente necesita documentos para detectar proveedores, costos y condiciones.',
         variant: 'destructive',
       });
+      return;
+    }
+
+    if (!(await ensureNodusIaCredit())) {
       return;
     }
 

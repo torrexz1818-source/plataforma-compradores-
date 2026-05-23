@@ -461,10 +461,12 @@ export class AgentsService {
     const planAllowsWhiteLabel = plan === 'professional' || plan === 'premium';
     const planAllowsCustomBrand = plan === 'premium';
     const premiumActive = userSettings.premiumPdfStatus === 'active';
+    const userAllowsWhiteLabel = planAllowsWhiteLabel || (premiumActive && userSettings.whiteLabelPdfEnabled);
+    const userAllowsCustomBrand = planAllowsCustomBrand || (premiumActive && userSettings.customBrandPdfEnabled);
     const modes = {
       standardBranded: userSettings.standardPdfEnabled && agentSettings.standardPdfEnabled,
-      whiteLabel: planAllowsWhiteLabel || (premiumActive && userSettings.whiteLabelPdfEnabled && agentSettings.whiteLabelAvailable),
-      customBrand: planAllowsCustomBrand || (premiumActive && userSettings.customBrandPdfEnabled && agentSettings.customBrandAvailable),
+      whiteLabel: userAllowsWhiteLabel && agentSettings.whiteLabelAvailable,
+      customBrand: userAllowsCustomBrand && agentSettings.customBrandAvailable,
     };
 
     return {
