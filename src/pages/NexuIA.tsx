@@ -728,7 +728,7 @@ const NexuIA = () => {
         dataType: dashboardForm.dataType,
         visualizationFocus: dashboardForm.visualizationFocus,
         additionalContext: dashboardForm.additionalContext,
-        useLlmInsights: true,
+        useLlmInsights: false,
         files: dashboardFiles,
       },
       {

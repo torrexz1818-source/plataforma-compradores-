@@ -71,11 +71,20 @@ function getAiEngineBaseUrl() {
 
 async function readError(response: Response, fallback: string) {
   try {
-    const data = (await response.json()) as { detail?: unknown; message?: unknown };
+    const data = (await response.clone().json()) as { detail?: unknown; message?: unknown };
     if (typeof data.detail === 'string') return data.detail;
     if (typeof data.message === 'string') return data.message;
+    if (Array.isArray(data.detail)) {
+      return data.detail
+        .map((item) => {
+          if (item && typeof item === 'object' && 'msg' in item) return String((item as { msg: unknown }).msg);
+          return String(item);
+        })
+        .join(' ');
+    }
   } catch {
-    return response.statusText || fallback;
+    const text = await response.text().catch(() => '');
+    return text.trim().slice(0, 220) || response.statusText || fallback;
   }
   return fallback;
 }
