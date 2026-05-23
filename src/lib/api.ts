@@ -50,6 +50,7 @@ import {
   CheckoutItemType,
   CheckoutSession,
 } from '@/types';
+import { nodusIaAgents } from '../../shared/nodusIaAgents';
 
 const DEFAULT_PRODUCTION_API_URL = 'https://api.buyernodus.com';
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL?.trim() || DEFAULT_PRODUCTION_API_URL;
@@ -59,6 +60,7 @@ const API_BASE_URL = RAW_API_BASE_URL.endsWith('/')
   : RAW_API_BASE_URL;
 
 const TOKEN_KEY = 'buyernodus_token';
+const AGENT_STATUS_OVERRIDES_KEY = 'buyernodus_agent_status_overrides';
 
 type RequestOptions = RequestInit & {
   auth?: boolean;
@@ -75,6 +77,8 @@ type PostMutationResponse = {
 type CommentMutationResponse = {
   comment: Comment;
 };
+
+type AgentStatus = 'active' | 'coming_soon' | 'disabled' | 'hidden';
 
 type LikeResponse = {
   liked: boolean;
@@ -124,6 +128,50 @@ export function setStoredToken(token: string | null) {
   }
 
   localStorage.removeItem(TOKEN_KEY);
+}
+
+function getAgentStatusOverrides(): Record<string, AgentStatus> {
+  try {
+    const raw = localStorage.getItem(AGENT_STATUS_OVERRIDES_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, AgentStatus>;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setAgentStatusOverride(agentKey: string, status: AgentStatus) {
+  try {
+    localStorage.setItem(
+      AGENT_STATUS_OVERRIDES_KEY,
+      JSON.stringify({ ...getAgentStatusOverrides(), [agentKey]: status }),
+    );
+  } catch {
+    // Local persistence is only a UI fallback while production backend catches up.
+  }
+}
+
+function buildCatalogFallbackAgents(apiAgents: Agent[] = []): Agent[] {
+  const overrides = getAgentStatusOverrides();
+  const apiByKey = new Map(apiAgents.map((agent) => [agent.agentKey ?? agent.id, agent]));
+
+  return nodusIaAgents.map((baseAgent) => {
+    const apiAgent = apiByKey.get(baseAgent.agentKey);
+    const status = overrides[baseAgent.agentKey] ?? apiAgent?.status ?? baseAgent.status;
+
+    return {
+      ...baseAgent,
+      status,
+      visibleToBuyer: status !== 'hidden',
+      isActive: status === 'active',
+      executions: apiAgent?.executions,
+      averageStars: apiAgent?.averageStars,
+      metrics: apiAgent?.metrics,
+      recommendations: apiAgent?.recommendations,
+      updatedAt: apiAgent?.updatedAt ?? baseAgent.updatedAt,
+    } satisfies Agent;
+  });
 }
 
 function isBrowserLocalHost(hostname: string) {
@@ -835,7 +883,11 @@ export async function getAdminAgentUsage() {
 }
 
 export async function getAdminAiAgents() {
-  return apiRequest<Agent[]>('/admin/ai-agents', { auth: true });
+  try {
+    return await apiRequest<Agent[]>('/admin/ai-agents', { auth: true });
+  } catch {
+    return buildCatalogFallbackAgents();
+  }
 }
 
 export async function getAdminAgentMetrics() {
@@ -848,13 +900,20 @@ export async function getAdminAgentFeedback() {
 
 export async function updateAdminAgentStatus(
   agentKey: string,
-  status: 'active' | 'coming_soon' | 'disabled' | 'hidden',
+  status: AgentStatus,
 ) {
-  return apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
-    method: 'PATCH',
-    auth: true,
-    body: JSON.stringify({ status }),
-  });
+  try {
+    return await apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify({ status }),
+    });
+  } catch {
+    setAgentStatusOverride(agentKey, status);
+    const agent = buildCatalogFallbackAgents().find((item) => (item.agentKey ?? item.id) === agentKey);
+    if (!agent) throw new Error('Agente no encontrado');
+    return { agent, message: 'Estado actualizado localmente. El backend de produccion aun requiere redeploy.' };
+  }
 }
 
 export async function getAdminUserPdfBranding(userId: string) {
@@ -1373,14 +1432,26 @@ export async function getAgents(params?: {
   category?: string;
   automationType?: string;
 }) {
-  const data = await apiRequest<{ items: Agent[] }>(
-    `/agents${buildQuery({
-      category: params?.category,
-      automationType: params?.automationType,
-    })}`,
-    { auth: true },
-  );
-  return data.items;
+  try {
+    const data = await apiRequest<{ items: Agent[] }>(
+      `/agents${buildQuery({
+        category: params?.category,
+        automationType: params?.automationType,
+      })}`,
+      { auth: true },
+    );
+    return buildCatalogFallbackAgents(data.items).filter((agent) => {
+      const matchesCategory = !params?.category || agent.category === params.category;
+      const matchesAutomation = !params?.automationType || agent.automationType === params.automationType;
+      return matchesCategory && matchesAutomation && agent.status !== 'hidden';
+    });
+  } catch {
+    return buildCatalogFallbackAgents().filter((agent) => {
+      const matchesCategory = !params?.category || agent.category === params.category;
+      const matchesAutomation = !params?.automationType || agent.automationType === params.automationType;
+      return matchesCategory && matchesAutomation && agent.status !== 'hidden';
+    });
+  }
 }
 
 export async function getAgentDetail(id: string) {
