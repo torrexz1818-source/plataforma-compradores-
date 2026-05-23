@@ -2412,15 +2412,6 @@ const Admin = () => {
                     <span>Visible para comprador</span>
                     <span className="font-medium text-foreground">{agent.status === 'hidden' ? 'No' : 'Si'}</span>
                   </div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="mt-3 w-full"
-                    disabled
-                  >
-                    Ver detalle
-                  </Button>
                 </div>
               );
             })}
