@@ -30,7 +30,9 @@ import {
   adminDeletePost,
   adminUpdatePost,
   getAdminMemberships,
+  getAdminAgentUsage,
   getAdminAiAgents,
+  getAdminAgentMetrics,
   getAdminDashboard,
   getAdminModuleActivations,
   getAdminUserPdfBranding,
@@ -260,6 +262,16 @@ const Admin = () => {
     queryFn: getAdminAiAgents,
     enabled: user?.role === 'admin',
   });
+  const agentUsageQuery = useQuery({
+    queryKey: ['admin-agent-usage'],
+    queryFn: getAdminAgentUsage,
+    enabled: user?.role === 'admin',
+  });
+  const agentMetricsQuery = useQuery({
+    queryKey: ['admin-agent-metrics'],
+    queryFn: getAdminAgentMetrics,
+    enabled: user?.role === 'admin',
+  });
   const moduleActivationsQuery = useQuery({
     queryKey: ['admin-module-activations'],
     queryFn: getAdminModuleActivations,
@@ -273,6 +285,7 @@ const Admin = () => {
       updateAdminAgentStatus(agentKey, status),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-ai-agents'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-agent-metrics'] });
     },
   });
   const userPdfBrandingMutation = useMutation({
@@ -2416,6 +2429,151 @@ const Admin = () => {
               );
             })}
           </div>
+
+          <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {agentMetricsQuery.data ? (
+              [
+                ['Ejecuciones totales', agentMetricsQuery.data.totalExecutions],
+                ['Costo total', `US$ ${agentMetricsQuery.data.totalTokenCost.toFixed(6)}`],
+                ['Tokens input', agentMetricsQuery.data.tokensInputTotal],
+                ['Tokens output', agentMetricsQuery.data.tokensOutputTotal],
+                ['Tiempo promedio', `${agentMetricsQuery.data.averageLatencyMs} ms`],
+                ['Calificacion promedio', agentMetricsQuery.data.averageStars || 'Sin datos'],
+                ['Feedback pendiente', agentMetricsQuery.data.pendingNegativeFeedback],
+                ['Agente mas usado', agentMetricsQuery.data.mostUsedAgent],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">Cargando resumen tecnico de agentes...</p>
+            )}
+          </div>
+
+          <Card className="mb-5 rounded-xl shadow-[var(--shadow-card)]">
+            <CardHeader>
+              <CardTitle className="text-lg">Resumen tecnico por agente</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Promedios y acumulados por agente calculados desde las ejecuciones registradas.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[1180px] text-left text-sm">
+                  <thead className="bg-muted/60 text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Agente</th>
+                      <th className="px-4 py-3 font-medium">Estado</th>
+                      <th className="px-4 py-3 font-medium">Visible comprador</th>
+                      <th className="px-4 py-3 font-medium">Ejecuciones</th>
+                      <th className="px-4 py-3 font-medium">Tokens input</th>
+                      <th className="px-4 py-3 font-medium">Tokens output</th>
+                      <th className="px-4 py-3 font-medium">Costo input</th>
+                      <th className="px-4 py-3 font-medium">Costo output</th>
+                      <th className="px-4 py-3 font-medium">Costo total</th>
+                      <th className="px-4 py-3 font-medium">Costo promedio</th>
+                      <th className="px-4 py-3 font-medium">Tiempo promedio</th>
+                      <th className="px-4 py-3 font-medium">Calificacion</th>
+                      <th className="px-4 py-3 font-medium">Feedbacks pendientes</th>
+                      <th className="px-4 py-3 font-medium">PDFs</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(adminAgentsQuery.data ?? []).map((agent) => {
+                      const metrics = agent.metrics;
+                      const executions = metrics?.executions ?? 0;
+                      const averageCost = executions ? (metrics?.costTotal ?? 0) / executions : 0;
+
+                      return (
+                        <tr key={agent.agentKey ?? agent.id} className="border-t border-border align-top">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-foreground">{agent.name}</p>
+                            <p className="mt-1 text-xs text-muted-foreground">{agent.category}</p>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{getAgentStatusLabel(agent.status)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{agent.status === 'hidden' ? 'No' : 'Si'}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{executions}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{metrics?.tokensInput ?? 0}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{metrics?.tokensOutput ?? 0}</td>
+                          <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costInput ?? 0).toFixed(6)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costOutput ?? 0).toFixed(6)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costTotal ?? 0).toFixed(6)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">US$ {averageCost.toFixed(6)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{metrics?.averageLatencyMs ?? 0} ms</td>
+                          <td className="px-4 py-3 text-muted-foreground">{metrics?.averageStars || 'Sin datos'}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{metrics?.pendingFeedback ?? 0}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{metrics?.pdfGenerated ?? 0}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {!adminAgentsQuery.isLoading && !(adminAgentsQuery.data ?? []).length ? (
+                <p className="mt-3 text-sm text-muted-foreground">Todavia no hay agentes registrados.</p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-xl shadow-[var(--shadow-card)]">
+            <CardHeader>
+              <CardTitle className="text-lg">Uso real de agentes</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Cada fila aparece cuando un usuario ejecuta un agente e incluye usuario, tokens, costos, modelo y fecha.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[1180px] text-left text-sm">
+                  <thead className="bg-muted/60 text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Usuario</th>
+                      <th className="px-4 py-3 font-medium">Rol</th>
+                      <th className="px-4 py-3 font-medium">Agente</th>
+                      <th className="px-4 py-3 font-medium">Operacion</th>
+                      <th className="px-4 py-3 font-medium">Fecha/hora</th>
+                      <th className="px-4 py-3 font-medium">Modelo</th>
+                      <th className="px-4 py-3 font-medium">Tokens input</th>
+                      <th className="px-4 py-3 font-medium">Tokens output</th>
+                      <th className="px-4 py-3 font-medium">Tokens total</th>
+                      <th className="px-4 py-3 font-medium">Costo input</th>
+                      <th className="px-4 py-3 font-medium">Costo output</th>
+                      <th className="px-4 py-3 font-medium">Costo total</th>
+                      <th className="px-4 py-3 font-medium">Tiempo</th>
+                      <th className="px-4 py-3 font-medium">PDF</th>
+                      <th className="px-4 py-3 font-medium">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(agentUsageQuery.data ?? []).map((usage) => (
+                      <tr key={usage.id} className="border-t border-border">
+                        <td className="px-4 py-3 font-medium text-foreground">{usage.userName}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{getRoleLabel(usage.userRole)}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.agentName}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.operationName}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{formatDateTime(usage.createdAt)}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.model ?? 'No especificado'}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.inputTokens}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.outputTokens}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.totalTokens}</td>
+                        <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costInput ?? 0).toFixed(6)}</td>
+                        <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costOutput ?? 0).toFixed(6)}</td>
+                        <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costTotal ?? usage.costAmount).toFixed(6)}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.latencyMs ?? 0} ms</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.pdfGenerated ? 'Si' : 'No'}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{usage.status ?? 'completed'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!agentUsageQuery.isLoading && !(agentUsageQuery.data ?? []).length ? (
+                <p className="mt-3 text-sm text-muted-foreground">Aun no hay usos registrados. Cuando alguien use un agente, aparecera aqui.</p>
+              ) : null}
+            </CardContent>
+          </Card>
 
         </section>}
         {showLegacyUsersSection && <section className="bg-card rounded-lg border border-border p-5">
