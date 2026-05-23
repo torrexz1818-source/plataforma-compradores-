@@ -152,6 +152,20 @@ function setAgentStatusOverride(agentKey: string, status: AgentStatus) {
   }
 }
 
+function applyAgentStatusOverride(agent: Agent): Agent {
+  const agentKey = agent.agentKey ?? agent.id;
+  const status = getAgentStatusOverrides()[agentKey] ?? agent.status;
+
+  if (!status) return agent;
+
+  return {
+    ...agent,
+    status,
+    isActive: status === 'active',
+    visibleToBuyer: status !== 'hidden',
+  };
+}
+
 function buildCatalogFallbackAgents(apiAgents: Agent[] = [], useLocalOverrides = false): Agent[] {
   const overrides = useLocalOverrides ? getAgentStatusOverrides() : {};
   const apiByKey = new Map(apiAgents.map((agent) => [agent.agentKey ?? agent.id, agent]));
@@ -884,7 +898,7 @@ export async function getAdminAgentUsage() {
 
 export async function getAdminAiAgents() {
   const agents = await apiRequest<Agent[]>('/admin/ai-agents', { auth: true, cache: 'no-store' });
-  return buildCatalogFallbackAgents(agents);
+  return buildCatalogFallbackAgents(agents, true);
 }
 
 export async function getAdminAgentMetrics() {
@@ -899,11 +913,28 @@ export async function updateAdminAgentStatus(
   agentKey: string,
   status: AgentStatus,
 ) {
-  const response = await apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
-    method: 'PATCH',
-    auth: true,
-    body: JSON.stringify({ status }),
-  });
+  setAgentStatusOverride(agentKey, status);
+
+  let response: { agent: Agent; message: string };
+
+  try {
+    response = await apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
+      method: 'PATCH',
+      auth: true,
+      body: JSON.stringify({ status }),
+    });
+  } catch {
+    const fallbackAgent = buildCatalogFallbackAgents([], true).find((agent) => (agent.agentKey ?? agent.id) === agentKey);
+    if (!fallbackAgent) {
+      throw new Error('No se pudo guardar el estado del agente.');
+    }
+
+    response = {
+      agent: fallbackAgent,
+      message: 'Estado guardado localmente mientras el servidor termina de actualizar.',
+    };
+  }
+
   return {
     ...response,
     agent: {
@@ -1439,13 +1470,13 @@ export async function getAgents(params?: {
       })}`,
       { auth: true, cache: 'no-store' },
     );
-    return buildCatalogFallbackAgents(data.items).filter((agent) => {
+    return buildCatalogFallbackAgents(data.items, true).filter((agent) => {
       const matchesCategory = !params?.category || agent.category === params.category;
       const matchesAutomation = !params?.automationType || agent.automationType === params.automationType;
       return matchesCategory && matchesAutomation && agent.status !== 'hidden';
     });
   } catch {
-    return buildCatalogFallbackAgents().filter((agent) => {
+    return buildCatalogFallbackAgents([], true).filter((agent) => {
       const matchesCategory = !params?.category || agent.category === params.category;
       const matchesAutomation = !params?.automationType || agent.automationType === params.automationType;
       return matchesCategory && matchesAutomation && agent.status !== 'hidden';
@@ -1454,7 +1485,16 @@ export async function getAgents(params?: {
 }
 
 export async function getAgentDetail(id: string) {
-  return apiRequest<Agent>(`/agents/${id}`, { auth: true, cache: 'no-store' });
+  try {
+    const agent = await apiRequest<Agent>(`/agents/${id}`, { auth: true, cache: 'no-store' });
+    return applyAgentStatusOverride(agent);
+  } catch {
+    const fallbackAgent = buildCatalogFallbackAgents([], true).find((agent) =>
+      [agent.id, agent.agentKey, agent.slug].includes(id),
+    );
+    if (!fallbackAgent) throw new Error('Agente no encontrado');
+    return fallbackAgent;
+  }
 }
 
 export async function activateAgent(agentId: string) {
