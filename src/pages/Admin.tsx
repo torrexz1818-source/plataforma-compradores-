@@ -199,6 +199,10 @@ const Admin = () => {
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+  const [agentStatusNotice, setAgentStatusNotice] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const [isPublishingContent, setIsPublishingContent] = useState(false);
   const [publishError, setPublishError] = useState('');
@@ -290,6 +294,7 @@ const Admin = () => {
     mutationFn: ({ agentKey, status }: { agentKey: string; status: 'active' | 'coming_soon' | 'disabled' | 'hidden' }) =>
       updateAdminAgentStatus(agentKey, status),
     onMutate: async (variables) => {
+      setAgentStatusNotice(null);
       await queryClient.cancelQueries({ queryKey: ['admin-ai-agents'] });
       const previous = queryClient.getQueryData<Agent[]>(['admin-ai-agents']);
 
@@ -312,12 +317,20 @@ const Admin = () => {
       queryClient.setQueryData<Agent[]>(['admin-ai-agents'], (current = []) =>
         current.map((agent) => ((agent.agentKey ?? agent.id) === (data.agent.agentKey ?? data.agent.id) ? data.agent : agent)),
       );
+      setAgentStatusNotice({
+        type: 'success',
+        message: `Estado guardado: ${getAgentStatusLabel(data.agent.status)}. El comprador ya debe ver este estado.`,
+      });
       void queryClient.invalidateQueries({ queryKey: ['admin-agent-metrics'] });
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       if (context?.previous) {
         queryClient.setQueryData(['admin-ai-agents'], context.previous);
       }
+      setAgentStatusNotice({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'No se pudo guardar el estado del agente en el servidor.',
+      });
     },
   });
   const userPdfBrandingMutation = useMutation({
@@ -2424,6 +2437,22 @@ const Admin = () => {
               Autoriza si cada agente esta activo, proximamente, en mantenimiento u oculto para compradores.
             </p>
           </div>
+          {adminAgentsQuery.isError ? (
+            <p className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              No se pudo cargar la configuracion real de agentes desde el servidor. No se muestran controles falsos.
+            </p>
+          ) : null}
+          {agentStatusNotice ? (
+            <p
+              className={`mb-4 rounded-lg border px-4 py-3 text-sm ${
+                agentStatusNotice.type === 'success'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : 'border-destructive/20 bg-destructive/5 text-destructive'
+              }`}
+            >
+              {agentStatusNotice.message}
+            </p>
+          ) : null}
 
           <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
             {(adminAgentsQuery.data ?? []).map((agent) => {

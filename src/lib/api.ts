@@ -883,12 +883,8 @@ export async function getAdminAgentUsage() {
 }
 
 export async function getAdminAiAgents() {
-  try {
-    const agents = await apiRequest<Agent[]>('/admin/ai-agents', { auth: true, cache: 'no-store' });
-    return buildCatalogFallbackAgents(agents);
-  } catch {
-    return buildCatalogFallbackAgents();
-  }
+  const agents = await apiRequest<Agent[]>('/admin/ai-agents', { auth: true, cache: 'no-store' });
+  return buildCatalogFallbackAgents(agents);
 }
 
 export async function getAdminAgentMetrics() {
