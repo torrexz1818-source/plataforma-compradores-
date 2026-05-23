@@ -66,6 +66,19 @@ export type TcoAnalysisResult = {
   risk_analysis: Array<Record<string, unknown>>;
   sensitivity_analysis: Record<string, unknown>;
   strategic_recommendation: Record<string, unknown>;
+  detected_alternatives?: Array<{
+    supplier_name: string;
+    source_file: string;
+    data_detected: string[];
+    data_missing: string[];
+    confidence_level?: 'low' | 'medium' | 'high';
+  }>;
+  extracted_data_quality?: {
+    detected_alternatives_count: number;
+    documents_processed: number;
+    confidence_level: 'low' | 'medium' | 'high';
+    warnings: string[];
+  };
   missing_information: string[];
   questions_for_user_or_suppliers: string[];
   assumptions_and_limits: string[];
@@ -91,7 +104,8 @@ export type AnalyzeTcoPayload = {
   currency: string;
   purchaseVolume?: string;
   objective?: string;
-  alternatives: TcoAlternativeInput[];
+  alternatives?: TcoAlternativeInput[];
+  generalContext?: string;
   additionalInstructions?: string;
   files: File[];
 };
@@ -139,10 +153,13 @@ export async function analyzeTco(payload: AnalyzeTcoPayload): Promise<TcoAnalysi
   formData.append('evaluation_horizon', payload.evaluationHorizon);
   formData.append('comparison_unit', payload.comparisonUnit);
   formData.append('currency', payload.currency);
-  formData.append('alternatives_json', JSON.stringify(payload.alternatives));
+  if (payload.alternatives?.length) {
+    formData.append('alternatives_json', JSON.stringify(payload.alternatives));
+  }
 
   if (payload.purchaseVolume?.trim()) formData.append('purchase_volume', payload.purchaseVolume.trim());
   if (payload.objective?.trim()) formData.append('objective', payload.objective.trim());
+  if (payload.generalContext?.trim()) formData.append('general_context', payload.generalContext.trim());
   if (payload.additionalInstructions?.trim()) {
     formData.append('additional_instructions', payload.additionalInstructions.trim());
   }

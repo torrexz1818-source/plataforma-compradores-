@@ -32,6 +32,21 @@ class SupportingDocumentSummary(BaseModel):
     limitations: list[str] = Field(default_factory=list)
 
 
+class DetectedAlternative(BaseModel):
+    supplier_name: str
+    source_file: str
+    data_detected: list[str] = Field(default_factory=list)
+    data_missing: list[str] = Field(default_factory=list)
+    confidence_level: RiskLevel = "medium"
+
+
+class ExtractedDataQuality(BaseModel):
+    detected_alternatives_count: int = 0
+    documents_processed: int = 0
+    confidence_level: RiskLevel = "low"
+    warnings: list[str] = Field(default_factory=list)
+
+
 class ExecutiveSummary(BaseModel):
     best_alternative: str
     why_it_wins: str
@@ -128,6 +143,8 @@ class TcoAnalysisResult(BaseModel):
     risk_analysis: list[RiskAnalysisItem] = Field(default_factory=list)
     sensitivity_analysis: SensitivityAnalysis
     strategic_recommendation: StrategicRecommendation
+    detected_alternatives: list[DetectedAlternative] = Field(default_factory=list)
+    extracted_data_quality: ExtractedDataQuality = Field(default_factory=ExtractedDataQuality)
     missing_information: list[str] = Field(default_factory=list)
     questions_for_user_or_suppliers: list[str] = Field(default_factory=list)
     assumptions_and_limits: list[str] = Field(default_factory=list)

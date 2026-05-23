@@ -18,7 +18,8 @@ async def analyze(
     currency: str = Form(...),
     purchase_volume: str | None = Form(default=None),
     objective: str | None = Form(default=None),
-    alternatives_json: str = Form(...),
+    alternatives_json: str | None = Form(default=None),
+    general_context: str | None = Form(default=None),
     additional_instructions: str | None = Form(default=None),
     files: list[UploadFile] = File(default=[]),
 ):
@@ -32,6 +33,7 @@ async def analyze(
         purchase_volume=purchase_volume,
         objective=objective,
         alternatives_json=alternatives_json,
+        general_context=general_context,
         additional_instructions=additional_instructions,
         files=files,
     )

@@ -24,8 +24,8 @@ def validate_required_fields(values: dict[str, str]) -> None:
 def validate_alternatives(alternatives: Any) -> list[dict[str, Any]]:
     if not isinstance(alternatives, list):
         raise HTTPException(status_code=400, detail="alternatives_json debe ser una lista JSON.")
-    if len(alternatives) < 2:
-        raise HTTPException(status_code=400, detail="Debes ingresar al menos dos alternativas.")
+    if len(alternatives) < 1:
+        raise HTTPException(status_code=400, detail="Ingresa al menos una alternativa o sube documentos para analizar.")
     if len(alternatives) > 5:
         raise HTTPException(status_code=400, detail="Puedes comparar hasta 5 alternativas en esta fase.")
 

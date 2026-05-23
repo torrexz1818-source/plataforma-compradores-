@@ -28,12 +28,45 @@ RELEVANT_TERMS = (
 )
 
 
-def parse_alternatives_json(alternatives_json: str) -> list[dict[str, Any]]:
+def parse_alternatives_json(alternatives_json: str | None) -> list[dict[str, Any]]:
+    if not alternatives_json or not alternatives_json.strip():
+        return []
     try:
         parsed = json.loads(alternatives_json)
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=400, detail="alternatives_json no es JSON válido.") from exc
     return validate_alternatives(parsed)
+
+
+def build_detected_alternatives_from_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    detected: list[dict[str, Any]] = []
+    for document in documents:
+        findings = "\n".join(str(item) for item in document.get("relevant_findings", []))
+        data_detected = [
+            label for label, terms in {
+                "precio": ["precio", "total", "monto", "usd", "pen", "eur"],
+                "garantía": ["garantía", "garantia", "warranty"],
+                "lead time": ["lead time", "plazo", "entrega"],
+                "forma de pago": ["pago", "crédito", "credito", "adelanto"],
+                "costos logísticos": ["flete", "transporte", "seguro", "aduana", "arancel"],
+                "mantenimiento/soporte": ["mantenimiento", "soporte", "repuestos"],
+            }.items()
+            if any(term in findings.lower() for term in terms)
+        ]
+        data_missing = [
+            item for item in ["mantenimiento", "repuestos", "vida útil", "riesgos", "costos no incluidos"]
+            if item not in data_detected
+        ]
+        detected.append(
+            {
+                "supplier_name": f"Proveedor detectado en {document.get('file_name', 'documento')}",
+                "source_file": str(document.get("file_name", "No especificado")),
+                "data_detected": data_detected,
+                "data_missing": data_missing,
+                "confidence_level": "low",
+            }
+        )
+    return detected
 
 
 def compact_text_for_tco(text: str) -> tuple[str, list[str]]:
@@ -132,6 +165,15 @@ def build_fallback_result(
         "questions_for_user_or_suppliers": ["¿Qué costos de mantenimiento, operación, garantía y soporte aplican por alternativa?"],
         "assumptions_and_limits": ["No se inventaron impuestos, aranceles ni tipo de cambio."],
         "supporting_documents_summary": documents,
+        "detected_alternatives": build_detected_alternatives_from_documents(documents) if documents else [],
+        "extracted_data_quality": {
+            "detected_alternatives_count": len(documents),
+            "documents_processed": len(documents),
+            "confidence_level": "low",
+            "warnings": [
+                "OpenAI no estuvo disponible; se generó una lectura documental básica sin extracción avanzada."
+            ] if documents else [],
+        },
         "calculation_warnings": [*calculation_warnings, *warnings],
         "disclaimer": "Este análisis TCO es una recomendación asistida por IA y debe ser validado por el comprador antes de tomar una decisión final.",
     }
@@ -186,6 +228,16 @@ def ensure_result_defaults(
     result.setdefault("tco_totals", [])
     result.setdefault("ranking", [])
     result.setdefault("risk_analysis", [])
+    result.setdefault("detected_alternatives", [])
+    result.setdefault(
+        "extracted_data_quality",
+        {
+            "detected_alternatives_count": len(result.get("detected_alternatives", [])),
+            "documents_processed": 0,
+            "confidence_level": "low",
+            "warnings": [],
+        },
+    )
     result.setdefault("missing_information", [])
     result.setdefault("questions_for_user_or_suppliers", [])
     result.setdefault("assumptions_and_limits", [])
@@ -202,7 +254,8 @@ async def analyze_tco(
     currency: str,
     purchase_volume: str | None,
     objective: str | None,
-    alternatives_json: str,
+    alternatives_json: str | None,
+    general_context: str | None,
     additional_instructions: str | None,
     files: list[UploadFile],
 ) -> TcoAnalysisResult:
@@ -220,6 +273,12 @@ async def analyze_tco(
     )
     alternatives = parse_alternatives_json(alternatives_json)
 
+    if not alternatives and not files:
+        raise HTTPException(
+            status_code=400,
+            detail="Sube al menos una cotización/propuesta o ingresa datos de alternativas para analizar el TCO.",
+        )
+
     if len(files) > 8:
         raise HTTPException(status_code=400, detail="Puedes subir como máximo 8 archivos por análisis TCO.")
 
@@ -234,7 +293,11 @@ async def analyze_tco(
         for path, upload in zip(temp_paths, files):
             documents.append(build_document_summary(path, upload.filename or path.name))
 
-        matrix, totals, ranking, calculation_warnings = calculate_tco(alternatives, evaluation_horizon)
+        matrix, totals, ranking, calculation_warnings = (
+            calculate_tco(alternatives, evaluation_horizon)
+            if alternatives
+            else ([], [], [], ["Análisis documental: no se recibieron alternativas manuales para cálculo Python previo."])
+        )
         python_calculations = {
             "tco_matrix": matrix,
             "tco_totals": totals,
@@ -252,6 +315,7 @@ async def analyze_tco(
             purchase_volume=purchase_volume,
             objective=objective,
             alternatives=alternatives,
+            general_context=general_context,
             additional_instructions=additional_instructions,
             documents=documents,
             python_calculations=python_calculations,
@@ -287,7 +351,24 @@ async def analyze_tco(
         raw_result["supporting_documents_summary"] = [
             SupportingDocumentSummary.model_validate(item).model_dump() for item in documents
         ]
-        raw_result = merge_calculations(raw_result, alternatives, evaluation_horizon)
+        if alternatives:
+            raw_result = merge_calculations(raw_result, alternatives, evaluation_horizon)
+        raw_result["detected_alternatives"] = raw_result.get("detected_alternatives") or build_detected_alternatives_from_documents(documents)
+        quality = raw_result.get("extracted_data_quality") or {}
+        quality.setdefault("detected_alternatives_count", len(raw_result.get("detected_alternatives", [])))
+        quality.setdefault("documents_processed", len(documents))
+        quality.setdefault("confidence_level", "medium" if len(raw_result.get("detected_alternatives", [])) >= 2 else "low")
+        quality.setdefault("warnings", [])
+        if len(raw_result.get("detected_alternatives", [])) == 1:
+            quality["warnings"] = [
+                *quality.get("warnings", []),
+                "Solo se detectó una alternativa. Para comparar TCO entre proveedores, sube al menos dos propuestas.",
+            ]
+            raw_result["missing_information"] = [
+                *raw_result.get("missing_information", []),
+                "Solo se detectó una alternativa. Para comparar TCO entre proveedores, sube al menos dos propuestas.",
+            ]
+        raw_result["extracted_data_quality"] = quality
         raw_result["sensitivity_analysis"] = build_sensitivity_from_totals(raw_result.get("tco_totals", []))
         raw_result.setdefault(
             "disclaimer",
