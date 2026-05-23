@@ -728,14 +728,13 @@ export class AgentsService {
       ),
     );
 
-    await this.agentsCollection().updateMany(
+    await this.agentsCollection().deleteMany(
       {
         $or: [
           { agentKey: { $exists: false } },
           { agentKey: { $nin: currentAgentKeys } },
         ],
-      },
-      { $set: { status: 'hidden', visibleToBuyer: false, updatedAt: now } },
+      }
     );
   }
 
