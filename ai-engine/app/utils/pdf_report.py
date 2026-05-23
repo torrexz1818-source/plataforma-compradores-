@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
@@ -15,6 +15,38 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, Tabl
 
 PdfMode = Literal["standard_branded", "white_label", "custom_brand"]
 TEMPLATE_PATH = Path(__file__).resolve().parents[1] / "assets" / "pdf" / "buyer_nodus_report_template.pdf"
+LABELS = {
+    "analysis_title": "Titulo del analisis",
+    "service": "Servicio evaluado",
+    "objective": "Objetivo del analisis",
+    "executive_summary": "Resumen ejecutivo",
+    "summary": "Resumen",
+    "recommended_supplier": "Proveedor recomendado",
+    "supplier_name": "Proveedor",
+    "weighted_score": "Puntaje ponderado",
+    "ranking_position": "Posicion",
+    "main_strengths": "Fortalezas principales",
+    "main_risks": "Riesgos principales",
+    "missing_information": "Informacion faltante",
+    "questions_for_suppliers": "Preguntas para proveedores",
+    "final_recommendation": "Recomendacion final",
+    "criterion": "Criterio",
+    "weight_percent": "Peso",
+    "values": "Valores",
+    "ratings": "Calificaciones",
+    "observations": "Observacion",
+    "verification_source": "Fuente de verificacion",
+    "evaluation_scale_description": "Que evalua",
+    "row_label": "Aspecto",
+    "total_amount": "Precio",
+    "payment_terms": "Forma de pago",
+    "warranty": "Garantia",
+    "certifications": "Certificaciones",
+    "included_services": "Alcance",
+    "risks": "Riesgos",
+    "strengths": "Fortalezas",
+    "contact": "Contacto",
+}
 
 
 @dataclass
@@ -55,13 +87,18 @@ def _clean_text(value: Any) -> str:
     )
 
 
+def _label(value: Any) -> str:
+    raw = str(value)
+    return LABELS.get(raw, raw.replace("_", " ").capitalize())
+
+
 def _flatten_value(value: Any) -> str:
     if value is None:
         return "No especificado."
     if isinstance(value, dict):
         lines = []
         for key, item in value.items():
-            label = str(key).replace("_", " ").title()
+            label = _label(key)
             if isinstance(item, (dict, list)):
                 lines.append(f"<b>{_clean_text(label)}:</b><br/>{_flatten_value(item)}")
             else:
@@ -74,7 +111,37 @@ def _flatten_value(value: Any) -> str:
     return _clean_text(value)
 
 
-def _build_table_from_list(items: list[Any]) -> Table | None:
+def _paragraph(value: Any, style: ParagraphStyle) -> Paragraph:
+    return Paragraph(_clean_text(value), style)
+
+
+def _build_table(data: list[list[Any]], styles: dict[str, ParagraphStyle], col_widths: list[float] | None = None) -> Table:
+    wrapped = []
+    for row_index, row in enumerate(data):
+        style = styles["TableHeader"] if row_index == 0 else styles["TableCell"]
+        wrapped.append([_paragraph(cell, style) for cell in row])
+
+    table = Table(wrapped, repeatRows=1, colWidths=col_widths)
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2ff")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1e3a8a")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#dbe3f0")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+            ]
+        )
+    )
+    return table
+
+
+def _build_table_from_list(items: list[Any], styles: dict[str, ParagraphStyle]) -> Table | None:
     dict_items = [item for item in items if isinstance(item, dict)]
     if not dict_items:
         return None
@@ -83,26 +150,11 @@ def _build_table_from_list(items: list[Any]) -> Table | None:
     if not keys:
         return None
 
-    data = [[str(key).replace("_", " ").title() for key in keys]]
+    data = [[_label(key) for key in keys]]
     for item in dict_items[:18]:
-        data.append([_clean_text(item.get(key, "No especificado"))[:180] for key in keys])
+        data.append([_flatten_value(item.get(key, "No especificado"))[:260] for key in keys])
 
-    table = Table(data, repeatRows=1)
-    table.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2ff")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1e3a8a")),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 7.4),
-                ("LEADING", (0, 0), (-1, -1), 9),
-                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#dbe3f0")),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
-            ]
-        )
-    )
-    return table
+    return _build_table(data, styles)
 
 
 def _footer_text(branding: PdfBranding) -> str:
@@ -225,6 +277,9 @@ def build_agent_pdf(
         "Meta": ParagraphStyle("Meta", parent=base["BodyText"], fontSize=8.5, leading=12, textColor=colors.HexColor("#64748b")),
         "Section": ParagraphStyle("Section", parent=base["Heading2"], fontName="Helvetica-Bold", fontSize=11.5, leading=15, textColor=primary, spaceBefore=9),
         "Body": ParagraphStyle("Body", parent=base["BodyText"], fontSize=9.2, leading=13.5, textColor=colors.HexColor("#111827")),
+        "Card": ParagraphStyle("Card", parent=base["BodyText"], fontSize=9, leading=13, textColor=colors.HexColor("#334155"), alignment=TA_LEFT),
+        "TableHeader": ParagraphStyle("TableHeader", parent=base["BodyText"], fontName="Helvetica-Bold", fontSize=7.2, leading=9, textColor=primary),
+        "TableCell": ParagraphStyle("TableCell", parent=base["BodyText"], fontSize=7.2, leading=9.3, textColor=colors.HexColor("#334155")),
         "Disclaimer": ParagraphStyle("Disclaimer", parent=base["Italic"], fontSize=8.2, leading=11.5, textColor=colors.HexColor("#64748b")),
         "Cover": ParagraphStyle("Cover", parent=base["Title"], fontSize=22, leading=27, alignment=TA_CENTER, textColor=colors.HexColor("#0f172a")),
     }
@@ -253,16 +308,29 @@ def build_agent_pdf(
     summary = result.get("executive_summary") or result.get("summary") or result.get("final_recommendation")
     if summary:
         story.append(Paragraph("Resumen ejecutivo", styles["Section"]))
-        story.append(Paragraph(_flatten_value(summary), styles["Body"]))
+        card = Table([[Paragraph(_flatten_value(summary), styles["Card"])]], colWidths=[doc.width])
+        card.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#eef2ff")),
+                    ("BOX", (0, 0), (-1, -1), 0.35, colors.HexColor("#c7d2fe")),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 9),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+                    ("TOPPADDING", (0, 0), (-1, -1), 8),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ]
+            )
+        )
+        story.append(card)
         story.append(Spacer(1, 0.2 * cm))
 
     for key, value in result.items():
-        if key in {"executive_summary", "summary"}:
+        if key in {"executive_summary", "summary", "disclaimer"}:
             continue
-        title_label = str(key).replace("_", " ").title()
+        title_label = _label(key)
         story.append(Paragraph(_clean_text(title_label), styles["Section"]))
         if isinstance(value, list):
-            table = _build_table_from_list(value)
+            table = _build_table_from_list(value, styles)
             if table is not None:
                 story.append(table)
             else:
@@ -272,11 +340,7 @@ def build_agent_pdf(
         story.append(Spacer(1, 0.22 * cm))
 
     story.append(Spacer(1, 0.2 * cm))
-    story.append(
-        Paragraph(
-            "Documento generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos, condiciones comerciales y supuestos antes de tomar decisiones finales.",
-            styles["Disclaimer"],
-        )
-    )
+    story.append(Paragraph("Disclaimer", styles["Section"]))
+    story.append(Paragraph(_clean_text(result.get("disclaimer") or "Documento generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos, condiciones comerciales y supuestos antes de tomar decisiones finales."), styles["Disclaimer"]))
     doc.build(story, onFirstPage=lambda canvas, doc_: _draw_footer(canvas, doc_, brand), onLaterPages=lambda canvas, doc_: _draw_footer(canvas, doc_, brand))
     return _prepend_template_cover(buffer.getvalue(), display_title, agent_name, brand)

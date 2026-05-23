@@ -1,13 +1,396 @@
 import jsPDF from 'jspdf';
 import type { AgentPdfMode, AgentPdfOptions } from '@/types';
 
+type PdfInput = {
+  title: string;
+  agentName?: string;
+  userName?: string;
+  result: unknown;
+  fileName?: string;
+  pdfMode?: AgentPdfMode;
+  pdfOptions?: AgentPdfOptions;
+};
+
+type PdfContext = {
+  doc: jsPDF;
+  marginX: number;
+  pageWidth: number;
+  pageHeight: number;
+  maxWidth: number;
+  primaryColor: string;
+  mode: AgentPdfMode;
+  options?: AgentPdfOptions;
+  y: number;
+};
+
+const labelMap: Record<string, string> = {
+  analysis_title: 'Titulo del analisis',
+  service: 'Servicio evaluado',
+  objective: 'Objetivo del analisis',
+  executive_summary: 'Resumen ejecutivo',
+  recommended_supplier: 'Proveedor recomendado',
+  supplier_name: 'Proveedor',
+  weighted_score: 'Puntaje ponderado',
+  ranking_position: 'Posicion',
+  main_strengths: 'Fortalezas principales',
+  main_risks: 'Riesgos principales',
+  missing_information: 'Informacion faltante',
+  questions_for_suppliers: 'Preguntas para proveedores',
+  final_recommendation: 'Recomendacion final',
+  criterion: 'Criterio',
+  weight_percent: 'Peso',
+  observations: 'Observacion',
+  verification_source: 'Fuente de verificacion',
+  evaluation_scale_description: 'Que evalua',
+  row_label: 'Aspecto',
+  total_amount: 'Precio',
+  payment_terms: 'Forma de pago',
+  warranty: 'Garantia',
+  certifications: 'Certificaciones',
+  included_services: 'Alcance',
+  risks: 'Riesgos',
+  strengths: 'Fortalezas',
+  contact: 'Contacto',
+  ruc: 'RUC',
+};
+
 function formatLabel(value: string) {
-  return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return labelMap[value] ?? value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asText(value: unknown, fallback = 'No especificado') {
+  if (value === null || value === undefined || value === '') return fallback;
+  if (Array.isArray(value)) return value.map((item) => asText(item, '')).filter(Boolean).join(', ') || fallback;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function shortText(value: unknown, max = 180) {
+  const text = asText(value, '').replace(/\s+/g, ' ').trim();
+  return text.length > max ? `${text.slice(0, max - 1)}...` : text || 'No especificado';
+}
+
+function getFooter(mode: AgentPdfMode, options?: AgentPdfOptions) {
+  if (mode === 'standard_branded') return 'Generado por Buyer Nodus - Nodus IA';
+  if (mode === 'custom_brand') return options?.branding.footerText || `Generado para ${options?.branding.companyName || 'tu empresa'}`;
+  return 'Documento generado por asistente de inteligencia artificial';
+}
+
+function createContext(input: PdfInput): PdfContext {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const marginX = 14;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  return {
+    doc,
+    marginX,
+    pageWidth,
+    pageHeight,
+    maxWidth: pageWidth - marginX * 2,
+    primaryColor: input.pdfOptions?.branding.primaryColor || '#09008B',
+    mode: input.pdfMode ?? 'standard_branded',
+    options: input.pdfOptions,
+    y: 16,
+  };
+}
+
+function addFooter(ctx: PdfContext) {
+  const { doc, marginX, pageWidth, pageHeight, mode, options } = ctx;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor('#64748b');
+  doc.text(getFooter(mode, options), marginX, pageHeight - 8);
+  doc.text(`Pagina ${doc.getNumberOfPages()}`, pageWidth - marginX, pageHeight - 8, { align: 'right' });
+}
+
+function ensurePage(ctx: PdfContext, needed = 12) {
+  if (ctx.y + needed <= ctx.pageHeight - 16) return;
+  addFooter(ctx);
+  ctx.doc.addPage();
+  ctx.y = 16;
+}
+
+function addText(ctx: PdfContext, text: string, options: { size?: number; bold?: boolean; color?: string; width?: number; gap?: number } = {}) {
+  const { doc } = ctx;
+  const size = options.size ?? 9;
+  doc.setFont('helvetica', options.bold ? 'bold' : 'normal');
+  doc.setFontSize(size);
+  doc.setTextColor(options.color ?? '#111827');
+  const lines = doc.splitTextToSize(text, options.width ?? ctx.maxWidth);
+  lines.forEach((line: string) => {
+    ensurePage(ctx, size >= 14 ? 9 : 6);
+    doc.text(line, ctx.marginX, ctx.y);
+    ctx.y += size >= 14 ? 7 : 5;
+  });
+  ctx.y += options.gap ?? 0;
+}
+
+function addSection(ctx: PdfContext, title: string) {
+  ensurePage(ctx, 12);
+  ctx.y += 2;
+  addText(ctx, title, { size: 12, bold: true, color: ctx.primaryColor, gap: 1 });
+}
+
+function addHeader(ctx: PdfContext, input: PdfInput, subtitle?: string) {
+  const { doc } = ctx;
+  doc.setFillColor(ctx.primaryColor);
+  doc.roundedRect(ctx.marginX, ctx.y, ctx.maxWidth, 28, 3, 3, 'F');
+  doc.setTextColor('#ffffff');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.text(input.title, ctx.marginX + 6, ctx.y + 10);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  const brand =
+    ctx.mode === 'standard_branded'
+      ? 'Buyer Nodus - Nodus IA'
+      : ctx.mode === 'custom_brand'
+        ? input.pdfOptions?.branding.companyName || 'Documento corporativo'
+        : 'Reporte profesional';
+  doc.text(`${brand} | ${input.agentName || input.title}`, ctx.marginX + 6, ctx.y + 17);
+  doc.text(new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()), ctx.marginX + 6, ctx.y + 23);
+  ctx.y += 35;
+  if (input.userName || input.pdfOptions?.branding.companyName || subtitle) {
+    addText(ctx, `Usuario/empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}`, {
+      size: 9,
+      color: '#475569',
+    });
+    if (subtitle) addText(ctx, subtitle, { size: 9, color: '#475569', gap: 2 });
+  }
+}
+
+function addCard(ctx: PdfContext, title: string, body: string | string[], tone: 'blue' | 'green' | 'amber' = 'blue') {
+  const fill = tone === 'green' ? '#ecfdf5' : tone === 'amber' ? '#fffbeb' : '#eef2ff';
+  const stroke = tone === 'green' ? '#a7f3d0' : tone === 'amber' ? '#fde68a' : '#c7d2fe';
+  const titleColor = tone === 'green' ? '#047857' : tone === 'amber' ? '#92400e' : ctx.primaryColor;
+  const lines = Array.isArray(body) ? body : [body];
+  const textLines = lines.flatMap((line) => ctx.doc.splitTextToSize(line, ctx.maxWidth - 12));
+  const height = Math.max(22, 11 + textLines.length * 5);
+  ensurePage(ctx, height + 4);
+  ctx.doc.setFillColor(fill);
+  ctx.doc.setDrawColor(stroke);
+  ctx.doc.roundedRect(ctx.marginX, ctx.y, ctx.maxWidth, height, 3, 3, 'FD');
+  ctx.y += 7;
+  addText(ctx, title, { size: 10.5, bold: true, color: titleColor, width: ctx.maxWidth - 12, gap: 1 });
+  lines.forEach((line) => addText(ctx, line, { size: 8.8, color: '#334155', width: ctx.maxWidth - 12 }));
+  ctx.y += 5;
+}
+
+function addBulletList(ctx: PdfContext, title: string, items: unknown[], limit = 5) {
+  const values = items.map((item) => shortText(item, 170)).filter(Boolean).slice(0, limit);
+  if (!values.length) return;
+  addText(ctx, title, { size: 9.2, bold: true, color: '#0f172a' });
+  values.forEach((item) => addText(ctx, `- ${item}`, { size: 8.5, color: '#475569' }));
+}
+
+function addTable(ctx: PdfContext, headers: string[], rows: unknown[][], widths?: number[]) {
+  if (!rows.length) return;
+  const { doc } = ctx;
+  const colWidths = widths ?? headers.map(() => ctx.maxWidth / headers.length);
+  const headerHeight = 8;
+  const drawHeader = () => {
+    ensurePage(ctx, headerHeight + 4);
+    doc.setFillColor('#eef2ff');
+    doc.setDrawColor('#cbd5e1');
+    doc.rect(ctx.marginX, ctx.y, ctx.maxWidth, headerHeight, 'FD');
+    let x = ctx.marginX;
+    headers.forEach((header, index) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(ctx.primaryColor);
+      doc.text(doc.splitTextToSize(header, colWidths[index] - 3), x + 1.5, ctx.y + 5);
+      x += colWidths[index];
+    });
+    ctx.y += headerHeight;
+  };
+
+  drawHeader();
+  rows.forEach((row, rowIndex) => {
+    const cells = row.map((cell, index) => doc.splitTextToSize(shortText(cell, 220), colWidths[index] - 3));
+    const rowHeight = Math.max(8, ...cells.map((cell) => cell.length * 4.2 + 3));
+    if (ctx.y + rowHeight > ctx.pageHeight - 16) {
+      addFooter(ctx);
+      doc.addPage();
+      ctx.y = 16;
+      drawHeader();
+    }
+    doc.setFillColor(rowIndex % 2 ? '#f8fafc' : '#ffffff');
+    doc.setDrawColor('#e2e8f0');
+    doc.rect(ctx.marginX, ctx.y, ctx.maxWidth, rowHeight, 'FD');
+    let x = ctx.marginX;
+    cells.forEach((cell, index) => {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.4);
+      doc.setTextColor('#334155');
+      doc.text(cell, x + 1.5, ctx.y + 5);
+      x += colWidths[index];
+    });
+    ctx.y += rowHeight;
+  });
+  ctx.y += 4;
+}
+
+function getRecommendedRanking(result: Record<string, unknown>) {
+  const recommended = asText(result.recommended_supplier, '');
+  const ranking = asArray(result.ranking).map(asRecord);
+  return ranking.find((item) => asText(item.supplier_name, '') === recommended) ?? ranking[0] ?? {};
+}
+
+function addProposalComparisonPdf(input: PdfInput) {
+  const result = asRecord(input.result);
+  const ctx = createContext(input);
+  const suppliers = asArray(result.suppliers).map(asRecord);
+  const ranking = asArray(result.ranking).map(asRecord);
+  const recommended = getRecommendedRanking(result);
+  const recommendedName = asText(result.recommended_supplier || recommended.supplier_name, 'No especificado');
+  const subtitle = `Servicio evaluado: ${asText(result.service)} | Objetivo: ${shortText(result.objective, 120)}`;
+
+  addHeader(ctx, input, subtitle);
+  addCard(ctx, 'Resumen ejecutivo', [
+    `Propuestas evaluadas: ${suppliers.length}`,
+    `Proveedor recomendado: ${recommendedName}`,
+    `Motivo principal: ${shortText(recommended.reason || result.executive_summary, 210)}`,
+    `Riesgo principal: ${shortText(asArray(recommended.main_risks)[0] || asArray(result.global_risks)[0], 160)}`,
+  ]);
+
+  addCard(ctx, 'Proveedor recomendado', [
+    `${recommendedName}`,
+    `Puntaje: ${asText(recommended.weighted_score ?? recommended.score, 'Sin puntaje')} / 5`,
+    `Por que gana: ${shortText(recommended.reason, 220)}`,
+  ], 'green');
+  addBulletList(ctx, 'Fortalezas clave', asArray(recommended.main_strengths));
+  addBulletList(ctx, 'Riesgos a validar', asArray(recommended.main_risks));
+
+  addSection(ctx, 'Ranking de proveedores');
+  addTable(
+    ctx,
+    ['Posicion', 'Proveedor', 'Puntaje ponderado', 'Nivel', 'Motivo breve'],
+    ranking.map((item, index) => [
+      item.position ?? index + 1,
+      item.supplier_name,
+      item.weighted_score ?? item.score,
+      index === 0 ? 'Recomendado' : index === 1 ? 'Alternativa viable' : 'Requiere validacion',
+      item.reason,
+    ]),
+    [18, 38, 31, 32, ctx.maxWidth - 119],
+  );
+
+  const matrix = asRecord(result.evaluation_matrix);
+  const criteria = asArray(matrix.criteria).map(asRecord);
+  if (criteria.length && suppliers.length) {
+    addSection(ctx, 'Matriz de evaluacion comparativa');
+    const supplierNames = suppliers.map((supplier) => asText(supplier.supplier_name));
+    addTable(
+      ctx,
+      ['N', 'Criterio', 'Peso', ...supplierNames, 'Observacion'],
+      criteria.map((criterion) => {
+        const ratings = asRecord(criterion.ratings);
+        return [
+          criterion.number,
+          criterion.criterion,
+          `${asText(criterion.weight_percent)}%`,
+          ...supplierNames.map((name) => `${asText(ratings[name], '-')}/5`),
+          criterion.observations,
+        ];
+      }),
+      [10, 34, 16, ...supplierNames.map(() => 22), ctx.maxWidth - 60 - supplierNames.length * 22],
+    );
+  }
+
+  addSection(ctx, 'Puntaje ponderado total');
+  addTable(
+    ctx,
+    ['Proveedor', 'Puntaje ponderado', 'Posicion'],
+    asArray(matrix.weighted_totals).map((item) => {
+      const total = asRecord(item);
+      return [total.supplier_name, total.weighted_score, total.ranking_position];
+    }),
+    [70, 55, 35],
+  );
+
+  const criteriaGuide = asArray(result.criteria_guide).map(asRecord);
+  if (criteriaGuide.length) {
+    addSection(ctx, 'Guia de criterios');
+    addTable(
+      ctx,
+      ['Criterio', 'Peso', 'Que evalua', 'Fuente de verificacion'],
+      criteriaGuide.map((item) => [item.criterion, `${asText(item.weight_percent)}%`, item.evaluation_scale_description, item.verification_source]),
+      [40, 18, 65, ctx.maxWidth - 123],
+    );
+  }
+
+  const executiveRows = asArray(result.executive_comparison_table).map(asRecord);
+  if (executiveRows.length) {
+    addSection(ctx, 'Comparativo ejecutivo');
+    const supplierNames = suppliers.map((supplier) => asText(supplier.supplier_name));
+    addTable(
+      ctx,
+      ['Aspecto', ...supplierNames],
+      executiveRows.map((row) => {
+        const values = asRecord(row.values);
+        return [row.row_label, ...supplierNames.map((name) => values[name] ?? 'No especificado')];
+      }),
+      [36, ...supplierNames.map(() => (ctx.maxWidth - 36) / Math.max(supplierNames.length, 1))],
+    );
+  }
+
+  addSection(ctx, 'Ficha resumida por proveedor');
+  suppliers.forEach((supplier) => {
+    addCard(ctx, asText(supplier.supplier_name), [
+      `RUC: ${asText(supplier.ruc)}`,
+      `Contacto: ${asText(supplier.contact || supplier.email || supplier.phone)}`,
+      `Precio: ${asText(supplier.total_amount)} ${asText(supplier.currency, '')}`.trim(),
+      `Forma de pago: ${asText(supplier.payment_terms)}`,
+      `Garantia: ${asText(supplier.warranty)}`,
+    ]);
+    addBulletList(ctx, 'Fortalezas', asArray(supplier.strengths));
+    addBulletList(ctx, 'Riesgos', asArray(supplier.risks));
+    addBulletList(ctx, 'Informacion faltante', asArray(supplier.missing_information));
+  });
+
+  addSection(ctx, 'Riesgos globales');
+  addCard(ctx, 'Alertas principales', asArray(result.global_risks).slice(0, 5).map((item) => `- ${shortText(item, 180)}`).join('\n') || 'Sin riesgos globales registrados.', 'amber');
+
+  addSection(ctx, 'Informacion faltante');
+  addBulletList(ctx, 'Datos a solicitar o validar', asArray(result.missing_information), 8);
+
+  addSection(ctx, 'Preguntas para proveedores');
+  addTable(
+    ctx,
+    ['Proveedor', 'Pregunta'],
+    asArray(result.questions_for_suppliers).map((question) => {
+      const text = asText(question);
+      const supplier = suppliers.find((item) => text.toLowerCase().includes(asText(item.supplier_name, '').toLowerCase()));
+      return [supplier?.supplier_name ?? 'General', text];
+    }),
+    [50, ctx.maxWidth - 50],
+  );
+
+  addCard(ctx, 'Recomendacion final', asText(result.final_recommendation), 'green');
+  addSection(ctx, 'Disclaimer');
+  addText(ctx, asText(result.disclaimer, 'Documento generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos antes de tomar decisiones finales.'), {
+    size: 8.5,
+    color: '#64748b',
+  });
+  addFooter(ctx);
+  ctx.doc.save(input.fileName ?? 'comparativo-propuestas-nodus-ia.pdf');
+}
+
+function isProposalComparison(result: unknown) {
+  const data = asRecord(result);
+  return Boolean(data.evaluation_matrix && data.ranking && data.suppliers && data.recommended_supplier);
 }
 
 function formatValue(value: unknown, depth = 0): string[] {
   const prefix = depth > 0 ? '  '.repeat(depth) : '';
-
   if (value === null || value === undefined) return [`${prefix}No especificado`];
   if (Array.isArray(value)) {
     if (!value.length) return [`${prefix}Sin datos`];
@@ -19,96 +402,41 @@ function formatValue(value: unknown, depth = 0): string[] {
       return [`${prefix}${formatLabel(key)}: ${String(item ?? 'No especificado')}`];
     });
   }
-
   return [`${prefix}${String(value)}`];
 }
 
-function getFooter(mode: AgentPdfMode, options?: AgentPdfOptions) {
-  if (mode === 'standard_branded') return 'Generado por Buyer Nodus - Nodus IA';
-  if (mode === 'custom_brand') return options?.branding.footerText || `Generado para ${options?.branding.companyName || 'tu empresa'}`;
-  return 'Documento generado por asistente de inteligencia artificial';
-}
-
-export function downloadAgentResultPdf(input: {
-  title: string;
-  agentName?: string;
-  userName?: string;
-  result: unknown;
-  fileName?: string;
-  pdfMode?: AgentPdfMode;
-  pdfOptions?: AgentPdfOptions;
-}) {
-  const mode = input.pdfMode ?? 'standard_branded';
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const marginX = 16;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const maxWidth = pageWidth - marginX * 2;
-  const primaryColor = input.pdfOptions?.branding.primaryColor || '#1d4ed8';
-  let y = 18;
-
-  const addFooter = () => {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor('#64748b');
-    doc.text(getFooter(mode, input.pdfOptions), marginX, pageHeight - 9);
-    doc.text(String(doc.getNumberOfPages()), pageWidth - marginX, pageHeight - 9, { align: 'right' });
-  };
-
-  const ensurePage = (extra = 10) => {
-    if (y > pageHeight - 18 - extra) {
-      addFooter();
-      doc.addPage();
-      y = 18;
-    }
-  };
-
-  const addLine = (text: string, size = 9.5, isBold = false, color = '#111827') => {
-    doc.setFont('helvetica', isBold ? 'bold' : 'normal');
-    doc.setFontSize(size);
-    doc.setTextColor(color);
-    const lines = doc.splitTextToSize(text, maxWidth);
-    lines.forEach((line: string) => {
-      ensurePage(size >= 13 ? 12 : 7);
-      doc.text(line, marginX, y);
-      y += size >= 13 ? 7 : 5.2;
-    });
-  };
-
-  if (mode === 'standard_branded') {
-    addLine('Buyer Nodus - Nodus IA', 9, true, primaryColor);
-  } else if (mode === 'custom_brand') {
-    addLine(input.pdfOptions?.branding.companyName || 'Documento corporativo', 9, true, primaryColor);
-  }
-  addLine(input.title, 18, true);
-  addLine(`Agente: ${input.agentName || input.title}`, 9.5, false, '#475569');
-  addLine(`Fecha: ${new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date())}`, 9.5, false, '#475569');
-  addLine(`Usuario/empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}`, 9.5, false, '#475569');
-  y += 4;
-
-  const result = input.result as Record<string, unknown>;
+function addGenericPdf(input: PdfInput) {
+  const ctx = createContext(input);
+  addHeader(ctx, input);
+  const result = asRecord(input.result);
   const summary = result?.executive_summary ?? result?.summary ?? result?.final_recommendation;
-  if (summary) {
-    doc.setFillColor('#eef2ff');
-    doc.roundedRect(marginX, y - 3, maxWidth, 18, 2, 2, 'F');
-    y += 2;
-    addLine('Resumen ejecutivo', 11, true, primaryColor);
-    formatValue(summary).slice(0, 5).forEach((line) => addLine(line, 9.2));
-    y += 5;
-  }
+  if (summary) addCard(ctx, 'Resumen ejecutivo', formatValue(summary).slice(0, 5));
 
   Object.entries(result ?? {}).forEach(([key, value]) => {
-    if (['executive_summary', 'summary'].includes(key)) return;
-    ensurePage(16);
-    addLine(formatLabel(key), 11.5, true, primaryColor);
-    formatValue(value).forEach((line) => addLine(line, 8.8));
-    y += 2;
+    if (['executive_summary', 'summary', 'disclaimer'].includes(key)) return;
+    addSection(ctx, formatLabel(key));
+    if (Array.isArray(value) && value.every((item) => item && typeof item === 'object' && !Array.isArray(item))) {
+      const records = value.map(asRecord);
+      const keys = Object.keys(records[0] ?? {}).slice(0, 5);
+      addTable(ctx, keys.map(formatLabel), records.slice(0, 18).map((record) => keys.map((item) => record[item])));
+    } else {
+      formatValue(value).slice(0, 35).forEach((line) => addText(ctx, line, { size: 8.7, color: '#334155' }));
+    }
   });
 
-  y += 4;
-  addLine('Disclaimer', 10, true, primaryColor);
-  addLine('Documento generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos antes de tomar decisiones finales.', 8.5, false, '#64748b');
-  addFooter();
+  addSection(ctx, 'Disclaimer');
+  addText(ctx, asText(result.disclaimer, 'Documento generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos antes de tomar decisiones finales.'), {
+    size: 8.5,
+    color: '#64748b',
+  });
+  addFooter(ctx);
+  ctx.doc.save(input.fileName ?? 'resultado-nodus-ia.pdf');
+}
 
-  doc.save(input.fileName ?? 'resultado-nodus-ia.pdf');
+export function downloadAgentResultPdf(input: PdfInput) {
+  if (isProposalComparison(input.result)) {
+    addProposalComparisonPdf(input);
+    return;
+  }
+  addGenericPdf(input);
 }
