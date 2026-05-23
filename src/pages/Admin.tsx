@@ -197,6 +197,10 @@ const Admin = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedAgentKey, setSelectedAgentKey] = useState<string | null>(null);
   const [agentAuthorizerOpen, setAgentAuthorizerOpen] = useState(false);
+  const [moduleActivationNotice, setModuleActivationNotice] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const [isPublishingContent, setIsPublishingContent] = useState(false);
   const [publishError, setPublishError] = useState('');
@@ -304,17 +308,22 @@ const Admin = () => {
     },
   });
   const moduleActivationMutation = useMutation({
-    mutationFn: ({ role, moduleKey, enabled }: { role: string; moduleKey: string; enabled: boolean }) =>
+    mutationFn: ({ role, moduleKey, enabled }: { role: ModuleActivationSetting['role']; moduleKey: string; enabled: boolean }) =>
       updateAdminModuleActivation(role, moduleKey, enabled),
-    onSuccess: (updatedSetting, variables) => {
+    onMutate: async (variables) => {
+      setModuleActivationNotice(null);
+      await queryClient.cancelQueries({ queryKey: ['admin-module-activations'] });
+      const previous = queryClient.getQueryData<ModuleActivationSetting[]>(['admin-module-activations']);
+      const now = new Date().toISOString();
+
       queryClient.setQueryData<ModuleActivationSetting[]>(['admin-module-activations'], (current = []) => {
-        const nextSetting = updatedSetting ?? {
+        const nextSetting: ModuleActivationSetting = {
           id: `${variables.role}-${variables.moduleKey}`,
-          role: variables.role as ModuleActivationSetting['role'],
+          role: variables.role,
           moduleKey: variables.moduleKey,
           enabled: variables.enabled,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: now,
+          updatedAt: now,
         };
         const exists = current.some(
           (item) => item.role === nextSetting.role && item.moduleKey === nextSetting.moduleKey,
@@ -322,10 +331,44 @@ const Admin = () => {
 
         return exists
           ? current.map((item) =>
-              item.role === nextSetting.role && item.moduleKey === nextSetting.moduleKey ? nextSetting : item,
+              item.role === nextSetting.role && item.moduleKey === nextSetting.moduleKey
+                ? { ...item, enabled: variables.enabled, updatedAt: now }
+                : item,
             )
           : [...current, nextSetting];
       });
+
+      return { previous };
+    },
+    onSuccess: (updatedSetting, variables) => {
+      queryClient.setQueryData<ModuleActivationSetting[]>(['admin-module-activations'], (current = []) => {
+        const exists = current.some(
+          (item) => item.role === updatedSetting.role && item.moduleKey === updatedSetting.moduleKey,
+        );
+
+        return exists
+          ? current.map((item) =>
+              item.role === updatedSetting.role && item.moduleKey === updatedSetting.moduleKey ? updatedSetting : item,
+            )
+          : [...current, updatedSetting];
+      });
+      const roleLabel =
+        variables.role === 'buyer' ? 'compradores' : variables.role === 'supplier' ? 'proveedores' : 'expertos';
+      setModuleActivationNotice({
+        type: 'success',
+        message: `${variables.enabled ? 'Activado' : 'Desactivado'} para usuarios ${roleLabel}.`,
+      });
+    },
+    onError: (error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['admin-module-activations'], context.previous);
+      }
+      setModuleActivationNotice({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'No se pudo guardar el cambio del modulo.',
+      });
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-module-activations'] });
       void queryClient.invalidateQueries({ queryKey: ['module-activations'] });
       void queryClient.refetchQueries({ queryKey: ['admin-module-activations'] });
@@ -2205,64 +2248,95 @@ const Admin = () => {
         )}
 
         {isModulesAdminView && (
-          <section className="grid gap-6 lg:grid-cols-2">
-            {(['buyer', 'supplier', 'expert'] as const).map((role) => {
-              const modules = moduleActivationCatalog[role];
-              if (!modules.length) return null;
-              const title = role === 'buyer' ? 'Comprador' : role === 'supplier' ? 'Proveedor' : 'Experto';
+          <section className="space-y-4">
+            {moduleActivationsQuery.isLoading && (
+              <p className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-primary">
+                Cargando configuracion real de modulos...
+              </p>
+            )}
+            {moduleActivationsQuery.isError && (
+              <p className="rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                No se pudo cargar el activador de modulos desde el servidor. Los cambios quedan bloqueados hasta que la
+                configuracion responda correctamente.
+              </p>
+            )}
+            {moduleActivationNotice && (
+              <p
+                className={`rounded-lg border px-4 py-3 text-sm ${
+                  moduleActivationNotice.type === 'success'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-destructive/20 bg-destructive/5 text-destructive'
+                }`}
+              >
+                {moduleActivationNotice.message}
+              </p>
+            )}
+            <div className="grid gap-6 lg:grid-cols-2">
+              {(['buyer', 'supplier', 'expert'] as const).map((role) => {
+                const modules = moduleActivationCatalog[role];
+                if (!modules.length) return null;
+                const title = role === 'buyer' ? 'Comprador' : role === 'supplier' ? 'Proveedor' : 'Experto';
+                const controlsDisabled =
+                  moduleActivationMutation.isPending ||
+                  moduleActivationsQuery.isLoading ||
+                  moduleActivationsQuery.isError ||
+                  !moduleActivationsQuery.data;
 
-              return (
-                <Card key={role} className="rounded-xl shadow-[var(--shadow-card)]">
-                  <CardHeader>
-                    <CardTitle className="text-lg">{title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {modules.map((module) => {
-                      const setting = moduleActivationsQuery.data?.find(
-                        (item) => item.role === role && item.moduleKey === module.key,
-                      );
-                      const enabled = setting?.enabled ?? module.defaultEnabled;
+                return (
+                  <Card key={role} className="rounded-xl shadow-[var(--shadow-card)]">
+                    <CardHeader>
+                      <CardTitle className="text-lg">{title}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {modules.map((module) => {
+                        const setting = moduleActivationsQuery.data?.find(
+                          (item) => item.role === role && item.moduleKey === module.key,
+                        );
+                        const enabled = setting?.enabled ?? module.defaultEnabled;
 
-                      return (
-                        <div
-                          key={module.key}
-                          className={`flex items-center justify-between gap-4 rounded-lg border bg-background p-3 transition-colors ${
-                            enabled ? 'border-primary/45' : 'border-slate-200'
-                          }`}
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{module.label}</p>
-                            <p className={`text-xs ${enabled ? 'text-primary' : 'text-slate-500'}`}>{enabled ? 'Activo' : 'Inactivo'}</p>
-                          </div>
-                          <button
-                            type="button"
-                            aria-pressed={enabled}
-                            aria-label={`${enabled ? 'Desactivar' : 'Activar'} ${module.label}`}
-                            disabled={moduleActivationMutation.isPending}
-                            onClick={() =>
-                              moduleActivationMutation.mutate({
-                                role,
-                                moduleKey: module.key,
-                                enabled: !enabled,
-                              })
-                            }
-                            className={`relative h-7 w-12 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                              enabled ? 'border-primary bg-primary' : 'border-slate-300 bg-slate-200'
+                        return (
+                          <div
+                            key={module.key}
+                            className={`flex items-center justify-between gap-4 rounded-lg border bg-background p-3 transition-colors ${
+                              enabled ? 'border-primary/45' : 'border-slate-200'
                             }`}
                           >
-                            <span
-                              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                                enabled ? 'translate-x-5' : 'translate-x-1'
+                            <div>
+                              <p className="text-sm font-medium text-foreground">{module.label}</p>
+                              <p className={`text-xs ${enabled ? 'text-primary' : 'text-slate-500'}`}>
+                                {enabled ? 'Activo' : 'Inactivo'}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              aria-pressed={enabled}
+                              aria-label={`${enabled ? 'Desactivar' : 'Activar'} ${module.label}`}
+                              disabled={controlsDisabled}
+                              onClick={() =>
+                                moduleActivationMutation.mutate({
+                                  role,
+                                  moduleKey: module.key,
+                                  enabled: !enabled,
+                                })
+                              }
+                              className={`relative h-7 w-12 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                enabled ? 'border-primary bg-primary' : 'border-slate-300 bg-slate-200'
                               }`}
-                            />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </CardContent>
-                </Card>
-              );
-            })}
+                            >
+                              <span
+                                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                                  enabled ? 'translate-x-5' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </section>
         )}
 
