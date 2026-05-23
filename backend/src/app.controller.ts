@@ -27,6 +27,9 @@ export class AppController {
         hasRedirectUri: Boolean(process.env.GOOGLE_OAUTH_REDIRECT_URI?.trim()),
         hasGlobalRefreshToken: Boolean(process.env.GOOGLE_REFRESH_TOKEN?.trim()),
       },
+      version: {
+        commit: process.env.RENDER_GIT_COMMIT?.trim() || process.env.COMMIT_SHA?.trim() || 'local',
+      },
     };
   }
 }

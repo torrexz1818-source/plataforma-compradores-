@@ -397,42 +397,42 @@ export class AgentsService {
     if (!agent) throw new NotFoundException('Agente no encontrado');
 
     const now = new Date();
-    await this.agentStatusSettingsCollection().updateOne(
-      { agentKey: agent.agentKey },
-      {
-        $setOnInsert: {
-          id: randomUUID(),
-          agentKey: agent.agentKey,
-          createdAt: now,
-        },
-        $set: {
-          status,
-          isActive: status === 'active',
-          visibleToBuyer: status !== 'hidden',
-          updatedAt: now,
-        },
-      },
-      { upsert: true },
-    );
+    const statusPatch = {
+      status,
+      isActive: status === 'active',
+      visibleToBuyer: status !== 'hidden',
+      updatedAt: now,
+    };
+    const updatedAgent: AgentRecord = {
+      ...agent,
+      ...statusPatch,
+    };
 
     try {
       await this.agentsCollection().updateOne(
         { agentKey: agent.agentKey },
-        {
-          $set: {
-            status,
-            isActive: status === 'active',
-            visibleToBuyer: status !== 'hidden',
-            updatedAt: now,
-          },
-        },
+        { $set: statusPatch },
       );
     } catch {
-      // The override is the source used by admin and buyer reads.
+      // The admin action still returns the selected state; the override below is the durable source.
     }
 
-    const updatedAgent = await this.findAgent(agent.agentKey);
-    if (!updatedAgent) throw new NotFoundException('Agente no encontrado');
+    try {
+      await this.agentStatusSettingsCollection().updateOne(
+        { agentKey: agent.agentKey },
+        {
+          $setOnInsert: {
+            id: randomUUID(),
+            agentKey: agent.agentKey,
+            createdAt: now,
+          },
+          $set: statusPatch,
+        },
+        { upsert: true },
+      );
+    } catch {
+      // Avoid breaking the UI with a 500 if the secondary status store has a transient issue.
+    }
 
     return { agent: this.serializeAgent(updatedAgent), message: 'Estado actualizado correctamente' };
   }
@@ -1024,19 +1024,27 @@ export class AgentsService {
     });
     if (!agent) return null;
 
-    const override = await this.agentStatusSettingsCollection().findOne({ agentKey: agent.agentKey });
-    return this.applyAgentStatusOverride(agent, override);
+    try {
+      const override = await this.agentStatusSettingsCollection().findOne({ agentKey: agent.agentKey });
+      return this.applyAgentStatusOverride(agent, override);
+    } catch {
+      return agent;
+    }
   }
 
   private async applyAgentStatusOverrides(agents: AgentRecord[]) {
     if (!agents.length) return agents;
 
-    const overrides = await this.agentStatusSettingsCollection()
-      .find({ agentKey: { $in: agents.map((agent) => agent.agentKey) } })
-      .toArray();
-    const overridesByAgentKey = new Map(overrides.map((override) => [override.agentKey, override]));
+    try {
+      const overrides = await this.agentStatusSettingsCollection()
+        .find({ agentKey: { $in: agents.map((agent) => agent.agentKey) } })
+        .toArray();
+      const overridesByAgentKey = new Map(overrides.map((override) => [override.agentKey, override]));
 
-    return agents.map((agent) => this.applyAgentStatusOverride(agent, overridesByAgentKey.get(agent.agentKey)));
+      return agents.map((agent) => this.applyAgentStatusOverride(agent, overridesByAgentKey.get(agent.agentKey)));
+    } catch {
+      return agents;
+    }
   }
 
   private applyAgentStatusOverride(agent: AgentRecord, override?: AgentStatusOverrideRecord | null): AgentRecord {
