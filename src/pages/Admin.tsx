@@ -2195,14 +2195,20 @@ const Admin = () => {
                       const enabled = setting?.enabled ?? module.defaultEnabled;
 
                       return (
-                        <div key={module.key} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background p-3">
+                        <div
+                          key={module.key}
+                          className={`flex items-center justify-between gap-4 rounded-lg border bg-background p-3 transition-colors ${
+                            enabled ? 'border-primary/45' : 'border-slate-200'
+                          }`}
+                        >
                           <div>
                             <p className="text-sm font-medium text-foreground">{module.label}</p>
-                            <p className="text-xs text-muted-foreground">{enabled ? 'Activo' : 'Inactivo'}</p>
+                            <p className={`text-xs ${enabled ? 'text-primary' : 'text-slate-500'}`}>{enabled ? 'Activo' : 'Inactivo'}</p>
                           </div>
                           <button
                             type="button"
                             aria-pressed={enabled}
+                            aria-label={`${enabled ? 'Desactivar' : 'Activar'} ${module.label}`}
                             disabled={moduleActivationMutation.isPending}
                             onClick={() =>
                               moduleActivationMutation.mutate({
@@ -2211,8 +2217,8 @@ const Admin = () => {
                                 enabled: !enabled,
                               })
                             }
-                            className={`relative h-7 w-12 rounded-full transition-colors ${
-                              enabled ? 'bg-primary' : 'bg-muted'
+                            className={`relative h-7 w-12 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                              enabled ? 'border-primary bg-primary' : 'border-slate-300 bg-slate-200'
                             }`}
                           >
                             <span
