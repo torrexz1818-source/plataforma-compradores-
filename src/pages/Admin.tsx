@@ -890,6 +890,93 @@ const Admin = () => {
     );
   }
 
+  function renderCommentManagement() {
+    return (
+      <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.2fr)]">
+        <div className="min-w-0 overflow-hidden bg-card rounded-lg border border-border p-5">
+          <h2 className="text-lg font-medium text-foreground mb-3">Categorias activas</h2>
+          <div className="space-y-2">
+            {categoryCommentCounts.map((category) => (
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => openCategoryComments(category.id)}
+                className={`w-full rounded-md border px-3 py-3 text-left transition-colors ${
+                  selectedCategoryId === category.id
+                    ? 'border-primary bg-primary/10'
+                    : 'border-border bg-muted/40 hover:bg-muted/70'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{category.name}</p>
+                    <p className="text-xs text-muted-foreground">{category.slug}</p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{category.commentsCount} comentarios</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            Haz clic en una categoria para ver todos sus comentarios.
+          </p>
+        </div>
+
+        <div id="admin-category-comments" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-medium text-foreground">
+                {selectedCategory ? `Comentarios en ${selectedCategory.name}` : 'Inteligencia colectiva'}
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {selectedCategory
+                  ? `Mostrando todos los comentarios asociados a ${selectedCategory.name.toLowerCase()}.`
+                  : 'Mostrando todos los comentarios de la comunidad.'}
+              </p>
+            </div>
+            {selectedCategoryId && (
+              <Button variant="outline" size="sm" onClick={() => setSelectedCategoryId(null)}>
+                Ver todos
+              </Button>
+            )}
+          </div>
+          <div className="space-y-3">
+            {commentsBySelectedCategory.map((comment) => (
+              <div key={comment.id} className="rounded-lg border border-border p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{comment.user.fullName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      En {comment.postTitle} - {postsById.get(comment.postId)?.category.name ?? 'Sin categoria'} -{' '}
+                      {comment.repliesCount} respuestas
+                    </p>
+                  </div>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={deleteCommentMutation.isPending}
+                    onClick={() => void deleteCommentMutation.mutateAsync(comment.id)}
+                  >
+                    Eliminar
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">{comment.content}</p>
+              </div>
+            ))}
+            {!commentsBySelectedCategory.length && (
+              <p className="text-sm text-muted-foreground">
+                No hay comentarios en esta categoria todavia.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   const handleMainMediaChange = async (file: File | null, mediaType: 'video' | 'image') => {
     setPublishError('');
     setPublishSuccess(false);
@@ -1300,6 +1387,8 @@ const Admin = () => {
           </Card>
         </section>}
 
+        {!isDedicatedAdminView && renderCommentManagement()}
+
         {isContentAdminView && (
           <>
             <section className="grid min-w-0 gap-4 md:grid-cols-2">
@@ -1355,7 +1444,7 @@ const Admin = () => {
               })}
             </section>
 
-        <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
+        <section className="grid min-w-0 gap-6">
           <div id="admin-content-form" className="min-w-0 overflow-hidden bg-card rounded-lg border border-border p-5 space-y-4 scroll-mt-6">
             <div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1808,40 +1897,9 @@ const Admin = () => {
             </Button>
           </div>
 
-          <div className="min-w-0 overflow-hidden bg-card rounded-lg border border-border p-5">
-            <h2 className="text-lg font-medium text-foreground mb-3">Categorias activas</h2>
-            <div className="space-y-2">
-              {categoryCommentCounts.map((category) => (
-                <button
-                  key={category.id}
-                  type="button"
-                  onClick={() => openCategoryComments(category.id)}
-                  className={`w-full rounded-md border px-3 py-3 text-left transition-colors ${
-                    selectedCategoryId === category.id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border bg-muted/40 hover:bg-muted/70'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{category.name}</p>
-                      <p className="text-xs text-muted-foreground">{category.slug}</p>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{category.commentsCount} comentarios</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Haz clic en una categoria para ver todos sus comentarios.
-            </p>
-          </div>
         </section>
 
-        <section className="grid lg:grid-cols-2 gap-6">
+        <section className="grid min-w-0 gap-6">
           <div id="admin-educational-content" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
             <h2 className="text-lg font-medium text-foreground mb-4">Gestion de Contenido Educativo</h2>
             {isLoading && <p className="text-sm text-muted-foreground">Cargando contenido...</p>}
@@ -1947,54 +2005,6 @@ const Admin = () => {
             </div>
           </div>
 
-          <div id="admin-category-comments" className="bg-card rounded-lg border border-border p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-              <div>
-                <h2 className="text-lg font-medium text-foreground">
-                  {selectedCategory ? `Comentarios en ${selectedCategory.name}` : 'Inteligencia colectiva'}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {selectedCategory
-                    ? `Mostrando todos los comentarios asociados a ${selectedCategory.name.toLowerCase()}.`
-                    : 'Mostrando todos los comentarios de la comunidad.'}
-                </p>
-              </div>
-              {selectedCategoryId && (
-                <Button variant="outline" size="sm" onClick={() => setSelectedCategoryId(null)}>
-                  Ver todos
-                </Button>
-              )}
-            </div>
-            <div className="space-y-3">
-              {commentsBySelectedCategory.map((comment) => (
-                <div key={comment.id} className="rounded-lg border border-border p-4">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{comment.user.fullName}</p>
-                      <p className="text-xs text-muted-foreground">
-                        En {comment.postTitle} - {postsById.get(comment.postId)?.category.name ?? 'Sin categoria'} -{' '}
-                        {comment.repliesCount} respuestas
-                      </p>
-                    </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      disabled={deleteCommentMutation.isPending}
-                      onClick={() => void deleteCommentMutation.mutateAsync(comment.id)}
-                    >
-                      Eliminar
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-2">{comment.content}</p>
-                </div>
-              ))}
-              {!commentsBySelectedCategory.length && (
-                <p className="text-sm text-muted-foreground">
-                  No hay comentarios en esta categoria todavia.
-                </p>
-              )}
-            </div>
-          </div>
         </section>
           </>
         )}
