@@ -2328,6 +2328,7 @@ const Admin = () => {
                               checked={enabled}
                               disabled={controlsDisabled}
                               aria-label={`${enabled ? 'Desactivar' : 'Activar'} ${module.label}`}
+                              className="data-[state=checked]:bg-primary data-[state=unchecked]:bg-slate-300"
                               onCheckedChange={(checked) =>
                                 moduleActivationMutation.mutate({
                                   role,
@@ -2429,7 +2430,10 @@ const Admin = () => {
               );
             })}
           </div>
+        </section>}
 
+        {isAgentsAdminView && (
+          <section className="space-y-5">
           <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {agentMetricsQuery.data ? (
               [
@@ -2575,7 +2579,8 @@ const Admin = () => {
             </CardContent>
           </Card>
 
-        </section>}
+          </section>
+        )}
         {showLegacyUsersSection && <section className="bg-card rounded-lg border border-border p-5">
           <h2 className="text-lg font-medium text-foreground mb-4">Usuarios</h2>
           <div className="space-y-3">
