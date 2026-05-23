@@ -477,6 +477,21 @@ const Admin = () => {
     () => (agentFeedbackQuery.data ?? []).filter((item) => item.agentKey === (selectedAgent?.agentKey ?? selectedAgent?.id)),
     [agentFeedbackQuery.data, selectedAgent],
   );
+  const handleOpenAgentAuthorizer = () => {
+    const firstAgent = (adminAgentsQuery.data ?? [])[0];
+    const targetAgentKey = selectedAgentKey ?? (firstAgent ? firstAgent.agentKey ?? firstAgent.id : null);
+
+    if (targetAgentKey) {
+      setSelectedAgentKey(targetAgentKey);
+    }
+
+    window.setTimeout(() => {
+      document.getElementById(targetAgentKey ? 'admin-ai-agent-authorizer' : 'admin-ai-agents')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 80);
+  };
 
   useEffect(() => {
     if (!categories.length) return;
@@ -2215,9 +2230,9 @@ const Admin = () => {
                     <Bot className="h-7 w-7" />
                   </div>
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-foreground">Gestión de agentes IA</h2>
+                    <h2 className="text-base font-semibold text-foreground">Autorizador de agentes IA</h2>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      Administra los agentes IA de la plataforma, su disponibilidad, estado y configuración.
+                      Autoriza la visibilidad y funcionamiento de cada agente en la plataforma.
                     </p>
                   </div>
                 </div>
@@ -2225,14 +2240,9 @@ const Admin = () => {
                   type="button"
                   variant="outline"
                   className="mt-auto w-fit justify-start"
-                  onClick={() =>
-                    document.getElementById('admin-ai-agents')?.scrollIntoView({
-                      behavior: 'smooth',
-                      block: 'start',
-                    })
-                  }
+                  onClick={handleOpenAgentAuthorizer}
                 >
-                  Gestionar agentes IA
+                  Autorizador
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </CardContent>
@@ -2343,7 +2353,7 @@ const Admin = () => {
           </div>
 
           {selectedAgent ? (
-            <div className="mb-5 rounded-lg border border-border bg-muted/20 p-4">
+            <div id="admin-ai-agent-authorizer" className="mb-5 scroll-mt-6 rounded-lg border border-border bg-muted/20 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <h3 className="text-base font-semibold text-foreground">{selectedAgent.name}</h3>
