@@ -8,7 +8,7 @@ services:
       - key: VITE_API_URL
         value: https://api.buyernodus.com
       - key: VITE_AI_ENGINE_URL
-        value: https://ai.buyernodus.com
+        value: https://plataforma-compradores-128y.onrender.com
 
   - type: web
     name: buyernodus-ai-engine

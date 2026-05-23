@@ -17,7 +17,7 @@ async def generate(
     data_type: str | None = Form(default=None),
     visualization_focus: str | None = Form(default="Automático"),
     additional_context: str | None = Form(default=None),
-    use_llm_insights: bool = Form(default=True),
+    use_llm_insights: bool = Form(default=False),
     files: list[UploadFile] = File(...),
 ):
     return await generate_dashboard(

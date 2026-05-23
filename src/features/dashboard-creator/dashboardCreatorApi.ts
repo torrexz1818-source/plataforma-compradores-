@@ -101,7 +101,7 @@ export async function generateDashboard(payload: GenerateDashboardPayload): Prom
   const formData = new FormData();
   formData.append('title', payload.title);
   formData.append('objective', payload.objective);
-  formData.append('use_llm_insights', String(payload.useLlmInsights ?? true));
+  formData.append('use_llm_insights', String(payload.useLlmInsights ?? false));
   if (payload.audience?.trim()) formData.append('audience', payload.audience.trim());
   if (payload.period?.trim()) formData.append('period', payload.period.trim());
   if (payload.dataType?.trim()) formData.append('data_type', payload.dataType.trim());
