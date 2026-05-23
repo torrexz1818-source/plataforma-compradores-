@@ -8,6 +8,9 @@ from app.utils.pdf_report import build_agent_pdf
 def build_tco_pdf(result: dict[str, Any], branding: dict[str, Any] | None = None) -> bytes:
     ordered: dict[str, Any] = {
         "Resumen ejecutivo": result.get("executive_summary"),
+        "Alternativas detectadas desde documentos": result.get("detected_alternatives"),
+        "Archivos procesados": result.get("supporting_documents_summary"),
+        "Calidad de extracción": result.get("extracted_data_quality"),
         "Datos usados": result.get("data_used"),
         "Matriz TCO comparativa": result.get("tco_matrix"),
         "Totales TCO": result.get("tco_totals"),
