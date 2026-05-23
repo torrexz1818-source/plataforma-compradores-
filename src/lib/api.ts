@@ -899,7 +899,7 @@ export async function updateAdminAgentPdfSettings(
 }
 
 export async function getAdminModuleActivations() {
-  return apiRequest<ModuleActivationSetting[]>('/admin/module-activations', { auth: true });
+  return apiRequest<ModuleActivationSetting[]>('/admin/module-activations', { auth: true, cache: 'no-store' });
 }
 
 export async function updateAdminModuleActivation(role: string, moduleKey: string, enabled: boolean) {
@@ -1457,6 +1457,7 @@ export async function getMyAgentPdfOptions(agentKey: string) {
 export async function getMyModuleActivations() {
   return apiRequest<{ role: string; modules: ModuleActivationSetting[] }>('/agents/module-activations/mine', {
     auth: true,
+    cache: 'no-store',
   });
 }
 

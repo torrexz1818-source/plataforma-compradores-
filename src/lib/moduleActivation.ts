@@ -116,6 +116,9 @@ export function useMyModuleActivations() {
     queryKey: ['module-activations', 'mine', user?.role],
     queryFn: getMyModuleActivations,
     enabled: Boolean(user?.role && user.role !== 'admin'),
-    staleTime: 30_000,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
+    refetchInterval: 5_000,
   });
 }

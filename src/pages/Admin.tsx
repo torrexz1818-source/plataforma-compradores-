@@ -62,7 +62,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { AgentPdfSettings, Post, PostResource, UserPdfBrandingSettings, UserStatus } from '@/types';
+import { AgentPdfSettings, ModuleActivationSetting, Post, PostResource, UserPdfBrandingSettings, UserStatus } from '@/types';
 
 const SKILL_CATEGORY_SLUG = 'mejorar-skill';
 const PROFESSIONAL_ROUTE_ID: LearningRouteId = 'ruta-5';
@@ -305,9 +305,29 @@ const Admin = () => {
   const moduleActivationMutation = useMutation({
     mutationFn: ({ role, moduleKey, enabled }: { role: string; moduleKey: string; enabled: boolean }) =>
       updateAdminModuleActivation(role, moduleKey, enabled),
-    onSuccess: () => {
+    onSuccess: (updatedSetting, variables) => {
+      queryClient.setQueryData<ModuleActivationSetting[]>(['admin-module-activations'], (current = []) => {
+        const nextSetting = updatedSetting ?? {
+          id: `${variables.role}-${variables.moduleKey}`,
+          role: variables.role as ModuleActivationSetting['role'],
+          moduleKey: variables.moduleKey,
+          enabled: variables.enabled,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        const exists = current.some(
+          (item) => item.role === nextSetting.role && item.moduleKey === nextSetting.moduleKey,
+        );
+
+        return exists
+          ? current.map((item) =>
+              item.role === nextSetting.role && item.moduleKey === nextSetting.moduleKey ? nextSetting : item,
+            )
+          : [...current, nextSetting];
+      });
       void queryClient.invalidateQueries({ queryKey: ['admin-module-activations'] });
       void queryClient.invalidateQueries({ queryKey: ['module-activations'] });
+      void queryClient.refetchQueries({ queryKey: ['admin-module-activations'] });
     },
   });
 
