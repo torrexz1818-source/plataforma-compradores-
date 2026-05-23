@@ -12,4 +12,4 @@ pytesseract==0.3.13
 Pillow==11.0.0
 reportlab==4.2.5
 pypdf==5.1.0
-markitdown @ git+https://github.com/microsoft/markitdown.git@main#subdirectory=packages/markitdown
+markitdown[pdf,docx,xlsx]==0.1.5
