@@ -1338,7 +1338,7 @@ const NexuIA = () => {
               Nodus IA
             </Badge>
             <h1 className="mt-5 max-w-3xl text-4xl font-bold tracking-tight text-white md:text-5xl">
-              Agentes IA y automatizaciones
+              Buyer agentes
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-8 text-white/85 md:text-[1.1rem]">
               Explora agentes especializados, activa automatizaciones y ejecuta flujos de compras
