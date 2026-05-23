@@ -7,40 +7,14 @@ from app.agents.proposal_comparison.schemas import ExtractedDocument, ProposalCo
 from app.agents.proposal_comparison.scoring import normalize_ranking
 from app.ai.llm_client import analyze_with_openai
 from app.config import get_settings
-from app.document_processing.csv_reader import read_csv
-from app.document_processing.docx_reader import read_docx
+from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type, validate_allowed_file
-from app.document_processing.image_ocr import read_image
-from app.document_processing.pdf_reader import read_pdf
-from app.document_processing.text_cleaner import clean_text
-from app.document_processing.xlsx_reader import read_xlsx
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
 
 
 def extract_text_from_file(path: Path, filename: str) -> ExtractedDocument:
-    file_type = detect_file_type(filename)
-    warnings: list[str] = []
-
-    if file_type == "pdf":
-        text, file_warnings = read_pdf(path)
-        warnings.extend(file_warnings)
-    elif file_type == "docx":
-        text = read_docx(path)
-    elif file_type == "xlsx":
-        text = read_xlsx(path)
-    elif file_type == "csv":
-        text = read_csv(path)
-    elif file_type in {"jpg", "jpeg", "png"}:
-        text, file_warnings = read_image(path)
-        warnings.extend(file_warnings)
-    else:
-        raise HTTPException(status_code=400, detail=f"Formato no soportado: {filename}")
-
-    cleaned = clean_text(text)
-    if not cleaned:
-        warnings.append("No se pudo extraer texto suficiente del archivo.")
-
-    return ExtractedDocument(filename=filename, file_type=file_type, text=cleaned, warnings=warnings)
+    text, file_type, warnings = read_document_text(path, filename)
+    return ExtractedDocument(filename=filename, file_type=file_type, text=text, warnings=warnings)
 
 
 async def analyze_proposals(

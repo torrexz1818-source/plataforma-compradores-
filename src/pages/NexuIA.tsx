@@ -81,6 +81,19 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
+function normalizeAgentKey(agent: Pick<Agent, 'id' | 'agentKey' | 'slug'>) {
+  const raw = agent.agentKey || agent.id || agent.slug;
+  const legacyMap: Record<string, string> = {
+    'agent-quote-comparator': 'proposal_comparison',
+    'comparador-cotizaciones': 'proposal_comparison',
+    'comparativos-propuestas-proveedores': 'proposal_comparison',
+    'agent-terms-reference': 'terms_of_reference',
+    'elaboracion-terminos-referencia': 'terms_of_reference',
+  };
+
+  return legacyMap[raw] ?? raw;
+}
+
 const NexuIA = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -218,16 +231,27 @@ const NexuIA = () => {
 
   const catalogAgents = useMemo(() => {
     const agentsFromApi = agentsQuery.data ?? [];
-    if (agentsFromApi.length) {
-      return agentsFromApi
-        .filter((agent) => agent.status !== 'hidden')
-        .sort((a, b) => (a.sortOrder ?? 99) - (b.sortOrder ?? 99));
-    }
-    const merged = nodusIaAgents.map((curatedAgent) => {
-      const apiAgent = agentsFromApi.find((agent) => agent.id === curatedAgent.id);
-      return apiAgent ? { ...apiAgent, ...curatedAgent } : curatedAgent;
-    });
-    return merged;
+    const agentsByKey = new Map(agentsFromApi.map((agent) => [normalizeAgentKey(agent), agent]));
+
+    return nodusIaAgents
+      .map((baseAgent) => {
+        const apiAgent = agentsByKey.get(baseAgent.agentKey);
+        const status = apiAgent?.status ?? baseAgent.status;
+
+        return {
+          ...baseAgent,
+          status,
+          isActive: status === 'active',
+          visibleToBuyer: status !== 'hidden',
+          executions: apiAgent?.executions,
+          averageStars: apiAgent?.averageStars,
+          metrics: apiAgent?.metrics,
+          recommendations: apiAgent?.recommendations,
+          updatedAt: apiAgent?.updatedAt ?? baseAgent.updatedAt,
+        } satisfies Agent;
+      })
+      .filter((agent) => agent.status !== 'hidden')
+      .sort((a, b) => (a.sortOrder ?? 99) - (b.sortOrder ?? 99));
   }, [agentsQuery.data]);
 
   const categories = useMemo(() => {
@@ -257,12 +281,16 @@ const NexuIA = () => {
     });
   }, [catalogAgents, search, selectedAutomationType, selectedCategory]);
 
-  const selectedAgent = routeCuratedAgent
-    ? routeCuratedAgent
+  const selectedAgentFromCatalog = routeAgentId
+    ? catalogAgents.find((agent) => agent.id === routeAgentId || agent.slug === routeAgentId)
+    : undefined;
+  const selectedAgent = selectedAgentFromCatalog
+    ? selectedAgentFromCatalog
     : detailQuery.data
       ? {
-          ...detailQuery.data,
-          ...(curatedAgentsById.get(detailQuery.data.id) ?? {}),
+          ...(curatedAgentsById.get(normalizeAgentKey(detailQuery.data)) ?? detailQuery.data),
+          status: detailQuery.data.status,
+          isActive: detailQuery.data.status === 'active',
         }
       : undefined;
   const isDetailView = Boolean(routeAgentId);
