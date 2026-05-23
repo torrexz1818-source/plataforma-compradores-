@@ -188,16 +188,14 @@ export class AgentsService {
         agentKey: { $in: AGENT_CATALOG.map((agent) => agent.agentKey) },
       };
 
-      if (!filters?.includeHidden) {
-        query.visibleToBuyer = true;
-        query.status = { $ne: 'hidden' };
-      }
       if (filters?.category?.trim()) query.category = filters.category.trim();
       if (filters?.automationType?.trim()) query.automationType = filters.automationType.trim();
 
       const agents = await this.agentsCollection().find(query).sort({ sortOrder: 1, name: 1 }).toArray();
       const agentsWithStatus = await this.applyAgentStatusOverrides(agents);
-      return agentsWithStatus.map((agent) => this.serializeAgent(agent));
+      return agentsWithStatus
+        .filter((agent) => filters?.includeHidden || (agent.visibleToBuyer && agent.status !== 'hidden'))
+        .map((agent) => this.serializeAgent(agent));
     } catch {
       return this.getCatalogFallbackAgents(filters);
     }
@@ -417,7 +415,14 @@ export class AgentsService {
     try {
       await this.agentsCollection().updateOne(
         { agentKey: agent.agentKey },
-        { $set: statusPatch },
+        {
+          $setOnInsert: {
+            ...this.findCatalogAgent(agent.agentKey),
+            createdAt: now,
+          },
+          $set: statusPatch,
+        },
+        { upsert: true },
       );
     } catch {
       // The admin action still returns the selected state; the override below is the durable source.
