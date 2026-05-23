@@ -568,7 +568,7 @@ const Admin = () => {
     });
   };
 
-  const formatChoice = (value?: string) => {
+  function formatChoice(value?: string) {
     if (!value) return 'No registrado';
 
     const choiceMap: Record<string, string> = {
@@ -582,7 +582,7 @@ const Admin = () => {
     };
 
     return choiceMap[value] ?? value;
-  };
+  }
 
   const renderDetailRow = (label: string, value?: string | string[]) => {
     const content = Array.isArray(value)
@@ -647,8 +647,9 @@ const Admin = () => {
     return rawMessage;
   };
 
-  const renderManagedUsers = (users: typeof buyerUsers, roleLabel: string, sectionId?: string) => (
-    <section id={sectionId} className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
+  function renderManagedUsers(users: typeof buyerUsers, roleLabel: string, sectionId?: string) {
+    return (
+      <section id={sectionId} className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium text-foreground">{roleLabel}</h2>
@@ -819,11 +820,13 @@ const Admin = () => {
         })}
         {!users.length && <p className="text-sm text-muted-foreground">No hay usuarios en esta categoria.</p>}
       </div>
-    </section>
-  );
+      </section>
+    );
+  }
 
-  const renderSupplierVerification = () => (
-    <section id="admin-provider-verification" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
+  function renderSupplierVerification() {
+    return (
+      <section id="admin-provider-verification" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium text-foreground">Verificación de proveedores</h2>
@@ -883,8 +886,9 @@ const Admin = () => {
       ) : (
         <p className="text-sm text-muted-foreground">No hay proveedores pendientes de aprobación.</p>
       )}
-    </section>
-  );
+      </section>
+    );
+  }
 
   const handleMainMediaChange = async (file: File | null, mediaType: 'video' | 'image') => {
     setPublishError('');
