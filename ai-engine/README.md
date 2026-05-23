@@ -264,3 +264,54 @@ Limitaciones actuales:
 - La precisión del análisis depende de los costos entregados por el comprador o extraídos de documentos.
 - Si faltan impuestos, aranceles, tipo de cambio, fletes o seguros, el agente los marca como faltantes y no los inventa.
 - Tokens y costos reales dependen de la respuesta de OpenAI; si el proveedor no devuelve usage al cliente compartido, quedan sin registrar y el frontend registra una métrica aproximada.
+
+## Agente: Creador de Dashboard
+
+Convierte archivos de datos en un dashboard visual con KPIs, gráficos simples, tablas, insights y recomendaciones. Python genera el dashboard base; OpenAI solo interpreta un resumen compacto.
+
+Flujo de datos:
+
+1. Python recibe archivos XLSX, CSV, PDF, DOCX, JPG, JPEG o PNG.
+2. Excel/CSV se procesan con pandas como fuente tabular principal.
+3. PDF/DOCX/imágenes usan `document_reader.py`, MarkItDown si está disponible y fallback a extractores actuales.
+4. Python detecta columnas numéricas, fechas, categorías, proveedores, montos, calidad de datos y valores faltantes.
+5. Python calcula KPIs, agregados, tablas y datasets para gráficos.
+6. Solo se envía a OpenAI un resumen compacto con columnas, KPIs, top agrupaciones, alertas, objetivo y audiencia.
+7. Si OpenAI falla, el dashboard sigue funcionando con insights básicos generados por Python.
+
+Endpoints:
+
+- `POST /agents/dashboard-creator/generate`
+- `POST /agents/dashboard-creator/generate-pdf`
+
+Ejemplo:
+
+```bash
+curl -X POST "http://localhost:8000/agents/dashboard-creator/generate" \
+  -F "title=Dashboard de gastos por proveedor 2026" \
+  -F "objective=Visualizar gastos por proveedor, categoría y periodo para detectar oportunidades de ahorro" \
+  -F "audience=Gerencia" \
+  -F "period=Enero a marzo 2026" \
+  -F "data_type=Gastos" \
+  -F "visualization_focus=Ejecutivo" \
+  -F "additional_context=Priorizar proveedores con mayor concentración de gasto y variaciones mensuales" \
+  -F "use_llm_insights=true" \
+  -F "files=@./samples/gastos.xlsx"
+```
+
+PDF:
+
+```bash
+curl -X POST "http://localhost:8000/agents/dashboard-creator/generate-pdf" \
+  -H "Content-Type: application/json" \
+  -d "{\"result\":{\"dashboard_title\":\"Dashboard de gastos\",\"executive_summary\":\"Resumen\"},\"pdf_mode\":\"standard_branded\"}" \
+  --output dashboard.pdf
+```
+
+Privacidad: los archivos se guardan solo temporalmente y se eliminan al finalizar. No se guardan datasets completos, documentos originales, Markdown completo ni texto extraído completo.
+
+Limitaciones:
+
+- Los gráficos en PDF se representan como tablas o estructuras equivalentes.
+- PDF/DOCX/imágenes dependen de extracción de texto/OCR y pueden requerir validación.
+- El dashboard no reemplaza una herramienta BI completa; entrega una vista ejecutiva inicial.

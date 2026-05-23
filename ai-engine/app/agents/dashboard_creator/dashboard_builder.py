@@ -1,0 +1,55 @@
+from __future__ import annotations
+
+from typing import Any
+
+
+def build_dashboard_result(
+    *,
+    title: str,
+    objective: str,
+    audience: str | None,
+    period: str | None,
+    data_type: str | None,
+    profiled: dict[str, Any],
+    executive_summary: str,
+    insights: list[dict[str, Any]],
+    recommendations: list[str],
+    missing_information: list[str],
+    llm_used: bool,
+    model_provider: str | None,
+    model_name: str | None,
+    latency_ms: int,
+) -> dict[str, Any]:
+    profile = profiled["profile"]
+    layout = [
+        {"section": "Resumen ejecutivo", "component_type": "insight", "title": "Resumen ejecutivo", "priority": 1},
+        {"section": "KPIs", "component_type": "kpi", "title": "KPIs principales", "priority": 2},
+        {"section": "Gráficos", "component_type": "chart", "title": "Visualizaciones", "priority": 3},
+        {"section": "Tablas", "component_type": "table", "title": "Tablas resumen", "priority": 4},
+    ]
+    if profile["data_quality_warnings"]:
+        layout.append({"section": "Calidad de datos", "component_type": "alert", "title": "Advertencias", "priority": 5})
+
+    return {
+        "dashboard_title": title,
+        "objective": objective,
+        "audience": audience,
+        "period": period,
+        "data_type": data_type,
+        "executive_summary": executive_summary,
+        "llm_used": llm_used,
+        "data_profile": profile,
+        "kpis": profiled.get("kpis", []),
+        "charts": profiled.get("charts", []),
+        "tables": profiled.get("tables", []),
+        "insights": insights,
+        "recommendations": recommendations,
+        "missing_information": missing_information,
+        "suggested_filters": profiled.get("suggested_filters", []),
+        "layout_suggestion": layout,
+        "pdf_available": True,
+        "model_provider": model_provider,
+        "model_name": model_name,
+        "latency_ms": latency_ms,
+        "disclaimer": "Este dashboard fue generado con asistencia de IA y análisis automatizado. Debe ser validado por el comprador antes de tomar decisiones.",
+    }

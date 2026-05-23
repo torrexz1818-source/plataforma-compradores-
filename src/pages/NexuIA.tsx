@@ -54,6 +54,8 @@ import {
   validateTermsFiles,
   type TermsFormField,
 } from '@/features/terms-of-reference/termsOfReferenceApi';
+import { useDashboardCreator, useDownloadDashboardPdf } from '@/features/dashboard-creator/useDashboardCreator';
+import type { DashboardChart } from '@/features/dashboard-creator/dashboardCreatorApi';
 import { useDownloadTcoPdf, useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
 import { downloadAgentResultPdf } from '@/lib/agentPdf';
 import MonetizationPanel from '@/components/MonetizationPanel';
@@ -83,6 +85,9 @@ const tcoAnalysisTypes = [
 const tcoEvaluationHorizons = ['Por compra', 'Mensual', 'Anual', '3 años', '5 años', 'Vida útil', 'Personalizado'];
 const tcoComparisonUnits = ['Por unidad', 'Por lote', 'Por usuario', 'Por km', 'Por hora', 'Por contrato', 'Por proyecto', 'Por año', 'Por mes'];
 const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
+const dashboardAudiences = ['Gerencia', 'Compras', 'Finanzas', 'Operaciones', 'Proveedores', 'Auditoría', 'Otro'];
+const dashboardDataTypes = ['Gastos', 'Proveedores', 'Compras', 'Contratos', 'Inventario', 'Cotizaciones', 'Indicadores KPI', 'Datos mixtos', 'Otro'];
+const dashboardFocusOptions = ['Automático', 'Ejecutivo', 'Operativo', 'Financiero', 'Proveedores', 'Gastos', 'Compras', 'Auditoría'];
 
 function getAgentIcon(icon: string) {
   return iconMap[icon as keyof typeof iconMap] ?? Bot;
@@ -134,8 +139,20 @@ const NexuIA = () => {
   const termsFormSchemaMutation = useTermsFormSchema();
   const termsGenerateMutation = useGenerateTermsOfReference();
   const termsPdfMutation = useDownloadTermsPdf();
+  const dashboardCreatorMutation = useDashboardCreator();
+  const dashboardPdfMutation = useDownloadDashboardPdf();
   const tcoAnalysisMutation = useTcoAnalysis();
   const tcoPdfMutation = useDownloadTcoPdf();
+  const [dashboardForm, setDashboardForm] = useState({
+    title: '',
+    objective: '',
+    audience: 'Gerencia',
+    period: '',
+    dataType: 'Datos mixtos',
+    visualizationFocus: 'Automático',
+    additionalContext: '',
+  });
+  const [dashboardFiles, setDashboardFiles] = useState<File[]>([]);
   const [tcoGeneral, setTcoGeneral] = useState({
     title: '',
     itemName: '',
@@ -217,6 +234,18 @@ const NexuIA = () => {
     termsFormSchemaMutation.reset();
     termsGenerateMutation.reset();
     termsPdfMutation.reset();
+    dashboardCreatorMutation.reset();
+    dashboardPdfMutation.reset();
+    setDashboardForm({
+      title: '',
+      objective: '',
+      audience: 'Gerencia',
+      period: '',
+      dataType: 'Datos mixtos',
+      visualizationFocus: 'Automático',
+      additionalContext: '',
+    });
+    setDashboardFiles([]);
     tcoAnalysisMutation.reset();
     tcoPdfMutation.reset();
     setTcoGeneral({
@@ -360,6 +389,10 @@ const NexuIA = () => {
     selectedAgent?.id === 'tco_analysis' ||
     selectedAgent?.agentKey === 'tco_analysis' ||
     selectedAgent?.slug === 'analisis-costo-total-tco';
+  const isDashboardCreator =
+    selectedAgent?.id === 'dashboard_creator' ||
+    selectedAgent?.agentKey === 'dashboard_creator' ||
+    selectedAgent?.slug === 'creador-dashboard';
   const selectedAgentKey = selectedAgent ? normalizeAgentKey(selectedAgent) : '';
   const pdfOptionsQuery = useQuery({
     queryKey: ['agent-pdf-options', selectedAgentKey],
@@ -629,6 +662,87 @@ const NexuIA = () => {
     );
   };
 
+  const updateDashboardForm = (field: keyof typeof dashboardForm, value: string) => {
+    setDashboardForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const handleDashboardFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    const validationMessage = validateTermsFiles(files);
+    if (validationMessage) {
+      toast({
+        title: validationMessage,
+        description: 'Formatos soportados: XLSX, CSV, PDF, DOCX, JPG, JPEG y PNG.',
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
+    if (files.length > 8) {
+      toast({
+        title: 'Puedes subir como máximo 8 archivos.',
+        description: 'Reduce la cantidad de archivos de datos para este dashboard.',
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
+    setDashboardFiles(files);
+  };
+
+  const handleCreateDashboard = async () => {
+    if (!selectedAgent) return;
+    if (!(await ensureNodusIaCredit())) return;
+
+    if (!dashboardForm.title.trim() || !dashboardForm.objective.trim()) {
+      toast({
+        title: 'Completa los campos obligatorios.',
+        description: 'Nombre y objetivo del dashboard son obligatorios.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!dashboardFiles.length) {
+      toast({
+        title: 'Sube al menos un archivo de datos para crear el dashboard.',
+        description: 'Puedes usar Excel, CSV, PDF, DOCX o imágenes.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    dashboardCreatorMutation.mutate(
+      {
+        title: dashboardForm.title.trim(),
+        objective: dashboardForm.objective.trim(),
+        audience: dashboardForm.audience,
+        period: dashboardForm.period,
+        dataType: dashboardForm.dataType,
+        visualizationFocus: dashboardForm.visualizationFocus,
+        additionalContext: dashboardForm.additionalContext,
+        useLlmInsights: true,
+        files: dashboardFiles,
+      },
+      {
+        onSuccess: (result) => {
+          logAgentUsage(selectedAgent.id, 'Creador de Dashboard', result as unknown as Record<string, unknown>, false);
+          toast({
+            title: 'Dashboard creado',
+            description: 'El dashboard visual ya está listo para revisar.',
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: 'No se pudo generar el dashboard.',
+            description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
+  };
+
   const handleGenerateTerms = async () => {
     const requiredFields = ['title', 'requirement_type', 'objective', 'scope', 'deliverables', 'justification'];
     const hasMissingRequired = requiredFields.some((field) => !termsFields[field]?.trim());
@@ -854,6 +968,39 @@ const NexuIA = () => {
     });
   };
 
+  const handleDownloadDashboardPdf = async () => {
+    if (!dashboardCreatorMutation.data) return;
+
+    try {
+      await ensurePdfModeAllowed();
+    } catch (error) {
+      toast({
+        title: 'Formato PDF no disponible',
+        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    dashboardPdfMutation.mutate(
+      { result: dashboardCreatorMutation.data, pdfMode: selectedPdfMode, branding: buildPdfBrandingPayload() },
+      {
+        onSuccess: () => {
+          if (selectedAgent) {
+            logAgentUsage(selectedAgent.id, 'Descarga PDF Creador de Dashboard', dashboardCreatorMutation.data as unknown as Record<string, unknown>, true);
+          }
+        },
+        onError: (error) => {
+          toast({
+            title: 'No se pudo descargar el PDF.',
+            description: error instanceof Error ? error.message : 'Intenta nuevamente.',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
+  };
+
   const handleDownloadProposalPdf = async () => {
     if (!proposalComparisonResult) {
       return;
@@ -933,6 +1080,7 @@ const NexuIA = () => {
   const termsFormSchema = termsFormSchemaMutation.data;
   const termsResult = termsGenerateMutation.data;
   const tcoResult = tcoAnalysisMutation.data;
+  const dashboardResult = dashboardCreatorMutation.data;
 
   const renderTermsField = (field: TermsFormField) => {
     if (field.type === 'file') {
@@ -1144,6 +1292,39 @@ const NexuIA = () => {
       ))}
     </div>
   );
+
+  const renderSimpleChart = (chart: DashboardChart) => {
+    const maxValue = Math.max(...chart.data.map((item) => Number(item.value) || 0), 1);
+
+    return (
+      <div className="rounded-2xl border border-primary/15 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">{chart.title}</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground/70">{chart.description}</p>
+          </div>
+          <Badge variant="outline" className="border-primary/15 text-muted-foreground">{chart.type}</Badge>
+        </div>
+        <div className="mt-4 space-y-3">
+          {chart.data.slice(0, 10).map((item) => {
+            const width = `${Math.max(5, (Number(item.value) / maxValue) * 100)}%`;
+            return (
+              <div key={`${chart.chart_id}-${item.label}`} className="space-y-1">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="truncate text-foreground/80">{item.label}</span>
+                  <span className="shrink-0 text-muted-foreground">{Number(item.value).toLocaleString('es-PE')}</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-primary/10">
+                  <div className="h-2.5 rounded-full bg-primary" style={{ width }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground/70">{chart.insight}</p>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 pb-8">
@@ -1519,6 +1700,82 @@ const NexuIA = () => {
                               ) : null}
                             </div>
                           </>
+                        ) : isDashboardCreator ? (
+                          <div className="space-y-5">
+                            <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                              <p className="text-sm font-medium text-foreground">Paso 1 - Información general del dashboard</p>
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <div className="space-y-1.5">
+                                  <label className="text-sm font-medium text-foreground/80">Nombre del dashboard *</label>
+                                  <Input value={dashboardForm.title} onChange={(event) => updateDashboardForm('title', event.target.value)} placeholder="Ejemplo: Dashboard de gastos por proveedor 2026" className="rounded-xl border-primary/15" />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-sm font-medium text-foreground/80">Audiencia</label>
+                                  <select value={dashboardForm.audience} onChange={(event) => updateDashboardForm('audience', event.target.value)} className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground">
+                                    {dashboardAudiences.map((option) => <option key={option} value={option}>{option}</option>)}
+                                  </select>
+                                </div>
+                                <div className="space-y-1.5 md:col-span-2">
+                                  <label className="text-sm font-medium text-foreground/80">Objetivo del dashboard *</label>
+                                  <Textarea value={dashboardForm.objective} onChange={(event) => updateDashboardForm('objective', event.target.value)} placeholder="Ejemplo: visualizar gastos por proveedor, detectar categorías con mayor consumo, identificar oportunidades de ahorro..." className="min-h-[88px] rounded-2xl border-primary/15" />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-sm font-medium text-foreground/80">Periodo</label>
+                                  <Input value={dashboardForm.period} onChange={(event) => updateDashboardForm('period', event.target.value)} placeholder="Ejemplo: enero a marzo 2026" className="rounded-xl border-primary/15" />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-sm font-medium text-foreground/80">Tipo de datos</label>
+                                  <select value={dashboardForm.dataType} onChange={(event) => updateDashboardForm('dataType', event.target.value)} className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground">
+                                    {dashboardDataTypes.map((option) => <option key={option} value={option}>{option}</option>)}
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                              <p className="text-sm font-medium text-foreground">Paso 2 - Archivos de datos</p>
+                              <p className="text-xs leading-5 text-muted-foreground/70">
+                                Sube Excel, CSV, PDF, imágenes, reportes o documentos con datos. El agente analizará la información y generará un dashboard visual con KPIs, tablas, gráficos e insights.
+                              </p>
+                              <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-white px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
+                                <Upload className="h-5 w-5 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm font-medium text-foreground">Subir archivos para dashboard</p>
+                                  <p className="mt-1 text-xs text-muted-foreground/70">XLSX, CSV, PDF, DOCX, JPG, JPEG o PNG. Máximo 8 archivos.</p>
+                                </div>
+                                <input type="file" multiple accept=".xlsx,.csv,.pdf,.docx,.jpg,.jpeg,.png" onChange={handleDashboardFilesChange} className="hidden" />
+                              </label>
+                              {dashboardFiles.length ? (
+                                <div className="space-y-2 rounded-2xl border border-primary/15 bg-white p-3">
+                                  {dashboardFiles.map((file) => {
+                                    const isSpreadsheet = file.name.endsWith('.xls') || file.name.endsWith('.xlsx') || file.name.endsWith('.csv');
+                                    const FileIcon = isSpreadsheet ? FileSpreadsheet : FileText;
+                                    return (
+                                      <div key={`${file.name}-${file.size}`} className="flex items-center justify-between gap-3 rounded-xl bg-primary/5 px-3 py-2">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                          <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                          <span className="truncate text-sm text-foreground/80">{file.name}</span>
+                                        </div>
+                                        <span className="shrink-0 text-xs text-muted-foreground/70">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
+                              <label className="text-sm font-medium text-foreground/80">Paso 3 - Contexto adicional</label>
+                              <Textarea value={dashboardForm.additionalContext} onChange={(event) => updateDashboardForm('additionalContext', event.target.value)} placeholder="Agrega instrucciones, restricciones, definiciones de columnas, objetivos de negocio, KPIs deseados, filtros, áreas, centros de costo, categorías o cualquier dato que ayude a interpretar el dashboard." className="min-h-[96px] rounded-2xl border-primary/15" />
+                            </div>
+
+                            <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
+                              <label className="text-sm font-medium text-foreground/80">Paso 4 - Enfoque del dashboard</label>
+                              <select value={dashboardForm.visualizationFocus} onChange={(event) => updateDashboardForm('visualizationFocus', event.target.value)} className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground">
+                                {dashboardFocusOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                              </select>
+                            </div>
+                          </div>
                         ) : isTcoAnalysis ? (
                           <div className="space-y-5">
                             <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
@@ -1653,7 +1910,7 @@ const NexuIA = () => {
                             </div>
                           ))
                         )}
-                        {!isQuoteComparator && !isTermsReference && !isTcoAnalysis ? (
+                        {!isQuoteComparator && !isTermsReference && !isDashboardCreator && !isTcoAnalysis ? (
                           <div className="space-y-1.5">
                             <label className="text-sm font-medium text-foreground/80">
                               Contexto adicional
@@ -1750,6 +2007,16 @@ const NexuIA = () => {
                           ? 'Nodus IA está trabajando en tu solicitud…'
                           : 'Analizar propuestas'}
                       </Button>
+                    ) : isDashboardCreator ? (
+                      <Button
+                        type="button"
+                        className="rounded-full bg-primary hover:bg-primary"
+                        onClick={handleCreateDashboard}
+                        disabled={dashboardCreatorMutation.isPending}
+                      >
+                        <PlayCircle className="mr-2 h-4 w-4" />
+                        {dashboardCreatorMutation.isPending ? 'Analizando datos y creando dashboard…' : 'Crear dashboard'}
+                      </Button>
                     ) : isTcoAnalysis ? (
                       <Button
                         type="button"
@@ -1775,9 +2042,13 @@ const NexuIA = () => {
                     )}
                   </div>
 
-                  {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || tcoAnalysisMutation.isPending || runMutation.isPending) ? (
+                  {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || dashboardCreatorMutation.isPending || tcoAnalysisMutation.isPending || runMutation.isPending) ? (
                     <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
-                      {tcoAnalysisMutation.isPending ? 'Analizando documentos y calculando TCO…' : 'Nodus IA está trabajando en tu solicitud…'}
+                      {dashboardCreatorMutation.isPending
+                        ? 'Analizando datos y creando dashboard…'
+                        : tcoAnalysisMutation.isPending
+                          ? 'Analizando documentos y calculando TCO…'
+                          : 'Nodus IA está trabajando en tu solicitud…'}
                     </div>
                   ) : null}
 
@@ -1913,6 +2184,102 @@ const NexuIA = () => {
                   ) : null}
 
                   {isTermsReference && termsResult ? renderAgentFeedbackPanel() : null}
+
+                  {isDashboardCreator && dashboardResult ? (
+                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{dashboardResult.dashboard_title}</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{dashboardResult.executive_summary}</p>
+                        </div>
+                        <div className="flex flex-col items-start gap-2 sm:items-end">
+                          {renderPdfFormatSelector()}
+                          <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadDashboardPdf} disabled={dashboardPdfMutation.isPending}>
+                            <Download className="mr-2 h-4 w-4" />
+                            {dashboardPdfMutation.isPending ? 'Generando PDF...' : 'Descargar PDF'}
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {dashboardResult.kpis.map((kpi) => (
+                          <div key={kpi.title} className="rounded-2xl border border-primary/15 bg-white p-4">
+                            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">{kpi.title}</p>
+                            <p className="mt-2 text-2xl font-semibold text-foreground">{kpi.value}</p>
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground/70">{kpi.description}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {dashboardResult.charts.length ? (
+                        <div className="grid gap-4 lg:grid-cols-2">
+                          {dashboardResult.charts.map((chart) => renderSimpleChart(chart))}
+                        </div>
+                      ) : null}
+
+                      {dashboardResult.tables.length ? (
+                        <div className="space-y-4">
+                          {dashboardResult.tables.map((table) => (
+                            <div key={table.title} className="rounded-2xl border border-primary/15 bg-white p-4">
+                              <p className="text-sm font-medium text-foreground">{table.title}</p>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground/70">{table.description}</p>
+                              <div className="mt-3 overflow-x-auto">
+                                <table className="w-full min-w-[520px] text-left text-sm">
+                                  <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                    <tr>{table.columns.map((column) => <th key={column} className="px-3 py-2 font-medium">{column}</th>)}</tr>
+                                  </thead>
+                                  <tbody>
+                                    {table.rows.slice(0, 10).map((row, index) => (
+                                      <tr key={index} className="border-t border-primary/10">
+                                        {table.columns.map((column) => <td key={column} className="px-3 py-2 text-muted-foreground">{String(row[column] ?? '')}</td>)}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Insights detectados</p>
+                          <div className="mt-3 space-y-2">
+                            {dashboardResult.insights.map((insight) => (
+                              <div key={insight.title} className="rounded-xl bg-primary/5 p-3">
+                                <p className="text-sm font-medium text-foreground">{insight.title}</p>
+                                <p className="mt-1 text-sm text-muted-foreground">{insight.description}</p>
+                                <p className="mt-1 text-xs text-muted-foreground/70">Acción: {insight.recommended_action}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Recomendaciones</p>
+                          <div className="mt-2">{renderValueList(dashboardResult.recommendations)}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Calidad de datos</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {dashboardResult.data_profile.rows_detected} filas, {dashboardResult.data_profile.columns_detected} columnas, {dashboardResult.data_profile.files_processed} archivo(s).
+                          </p>
+                          <div className="mt-2">{renderValueList(dashboardResult.data_profile.data_quality_warnings)}</div>
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Filtros sugeridos e información faltante</p>
+                          <div className="mt-2">{renderValueList([...dashboardResult.suggested_filters, ...dashboardResult.missing_information])}</div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs leading-5 text-muted-foreground/70">{dashboardResult.disclaimer}</p>
+                    </div>
+                  ) : null}
+
+                  {isDashboardCreator && dashboardResult ? renderAgentFeedbackPanel() : null}
 
                   {isTcoAnalysis && tcoResult ? (
                     <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
