@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { BookOpen, Bot, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, FileText, LayoutDashboard, LogOut, Menu, MessageCircle, Newspaper, Shield, Users } from 'lucide-react';
+import { ElementType, useEffect, useState } from 'react';
+import { BookOpen, Bot, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, FileText, LayoutDashboard, LogOut, Menu, MessageCircle, Newspaper, Shield, Store, Users } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import NotificationBell from '@/components/NotificationBell';
@@ -41,10 +41,19 @@ const MAIN_DESKTOP_OFFSET = 'lg:ml-72';
 const MAIN_MINI_OFFSET = 'lg:ml-20';
 const MOBILE_DRAWER_WIDTH = '!w-[min(92dvw,360px)] max-[430px]:!w-[min(90dvw,350px)]';
 
+type SidebarNavItem = {
+  to: string;
+  label: string;
+  icon: ElementType;
+  children?: SidebarNavItem[];
+};
+
 const BuyerLayout = () => {
   const { user, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [compradorOpen, setCompradorOpen] = useState(false);
+  const [proveedorOpen, setProveedorOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
@@ -140,6 +149,113 @@ const BuyerLayout = () => {
     navigate('/login', { replace: true });
   };
 
+  const renderNavItem = (
+    item: SidebarNavItem,
+    onNavigate?: () => void,
+    isCollapsed = false,
+    nested = false,
+  ) => (
+    item.children ? (
+      <div key={item.label} className="space-y-1">
+        <NavLink
+          to={item.to}
+          onClick={onNavigate}
+          title={isCollapsed ? item.label : undefined}
+          className={`flex min-h-11 items-center rounded-lg py-2 text-sm font-medium transition-colors ${isCollapsed ? 'justify-center px-2' : `gap-3 px-3 ${nested ? 'ml-4' : ''}`} ${
+            isActive(item.to)
+              ? 'sidebar-link-active'
+              : 'sidebar-link'
+          }`}
+        >
+          <item.icon className="h-4 w-4 shrink-0" />
+          {!isCollapsed && <span className="min-w-0 truncate">{item.label}</span>}
+        </NavLink>
+        <div className={cn('space-y-1', isCollapsed ? 'mt-1' : 'ml-4 border-l border-white/10 pl-3')}>
+          {item.children.map((child) => renderNavItem(child, onNavigate, isCollapsed))}
+        </div>
+      </div>
+    ) : (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        onClick={onNavigate}
+        title={isCollapsed ? item.label : undefined}
+        className={`flex min-h-11 items-center rounded-lg py-2 text-sm font-medium transition-colors ${isCollapsed ? 'justify-center px-2' : `gap-3 px-3 ${nested ? 'ml-4' : ''}`} ${
+          isActive(item.to)
+            ? 'sidebar-link-active'
+            : 'sidebar-link'
+        }`}
+      >
+        <item.icon className="h-4 w-4 shrink-0" />
+        {!isCollapsed && <span className="min-w-0 truncate">{item.label}</span>}
+      </NavLink>
+    )
+  );
+
+  const renderNavSection = (
+    section: { title: string; items: SidebarNavItem[] },
+    onNavigate?: () => void,
+    isCollapsed = false,
+  ) => {
+    const isBuyerSection = section.title === 'Comprador';
+    const isSupplierSection = section.title === 'Proveedor';
+    const isCollapsibleSection = isAdmin && (isBuyerSection || isSupplierSection);
+
+    if (!isCollapsibleSection) {
+      return (
+        <div key={section.title || 'default'} className="space-y-0.5">
+          {section.title && !isCollapsed && (
+            <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-white/55">
+              {section.title}
+            </p>
+          )}
+          {section.items.map((item) => renderNavItem(item, onNavigate, isCollapsed))}
+        </div>
+      );
+    }
+
+    const open = isBuyerSection ? compradorOpen : proveedorOpen;
+    const setOpen = isBuyerSection ? setCompradorOpen : setProveedorOpen;
+    const GroupIcon = isBuyerSection ? Users : Store;
+    const hasActiveItem = section.items.some((item) => (
+      isActive(item.to) || item.children?.some((child) => isActive(child.to))
+    ));
+
+    return (
+      <div key={section.title} className="space-y-0.5">
+        <button
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+          aria-expanded={open}
+          title={isCollapsed ? section.title : undefined}
+          className={cn(
+            'flex min-h-11 w-full items-center rounded-lg py-2 text-sm font-medium transition-colors',
+            isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
+            hasActiveItem ? 'sidebar-link-active' : 'sidebar-link',
+          )}
+        >
+          <GroupIcon className="h-4 w-4 shrink-0" />
+          {!isCollapsed && (
+            <>
+              <span className="min-w-0 flex-1 truncate text-left">{section.title}</span>
+              <ChevronRight className={cn('h-4 w-4 shrink-0 transition-transform duration-200', open && 'rotate-90')} />
+            </>
+          )}
+        </button>
+        <div
+          className={cn(
+            'grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out',
+            open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className="min-h-0 space-y-1">
+            {section.items.map((item) => renderNavItem(item, onNavigate, isCollapsed, !isCollapsed))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderSidebarContent = (onNavigate?: () => void, isCollapsed = false) => (
     <>
       <div className={cn('border-b border-white/15 py-4', isCollapsed ? 'px-2 text-center' : 'px-4')}>
@@ -162,67 +278,7 @@ const BuyerLayout = () => {
       </div>
 
       <nav className={cn('flex-1 space-y-2 overflow-y-auto py-3', isCollapsed ? 'px-2' : 'px-3')}>
-        {navSections.map((section) => (
-          <div key={section.title || 'default'} className="space-y-0.5">
-            {section.title && !isCollapsed && (
-              <p className="px-3 pb-1 text-[11px] uppercase tracking-wide text-white/55">
-                {section.title}
-              </p>
-            )}
-            {section.items.map((item) => (
-              item.children ? (
-                <div key={item.label} className="space-y-1">
-                  <NavLink
-                    to={item.to}
-                    onClick={onNavigate}
-                    title={isCollapsed ? item.label : undefined}
-                    className={`flex min-h-11 items-center rounded-lg py-2 text-sm font-medium transition-colors ${isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
-                      isActive(item.to)
-                        ? 'sidebar-link-active'
-                        : 'sidebar-link'
-                    }`}
-                  >
-                    <item.icon className="h-4 w-4 shrink-0" />
-                    {!isCollapsed && <span className="min-w-0 truncate">{item.label}</span>}
-                  </NavLink>
-                  <div className={cn('space-y-1', isCollapsed ? 'mt-1' : 'ml-4 border-l border-white/10 pl-3')}>
-                    {item.children.map((child) => (
-                      <NavLink
-                        key={child.to}
-                        to={child.to}
-                        onClick={onNavigate}
-                        title={isCollapsed ? child.label : undefined}
-                        className={`flex min-h-11 items-center rounded-lg py-2 text-sm font-medium transition-colors ${isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
-                          isActive(child.to)
-                            ? 'sidebar-link-active'
-                            : 'sidebar-link'
-                        }`}
-                      >
-                        <child.icon className="h-4 w-4 shrink-0" />
-                        {!isCollapsed && <span className="min-w-0 truncate">{child.label}</span>}
-                      </NavLink>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  onClick={onNavigate}
-                  title={isCollapsed ? item.label : undefined}
-                  className={`flex min-h-11 items-center rounded-lg py-2 text-sm font-medium transition-colors ${isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${
-                    isActive(item.to)
-                      ? 'sidebar-link-active'
-                      : 'sidebar-link'
-                  }`}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {!isCollapsed && <span className="min-w-0 truncate">{item.label}</span>}
-                </NavLink>
-              )
-            ))}
-          </div>
-        ))}
+        {navSections.map((section) => renderNavSection(section, onNavigate, isCollapsed))}
       </nav>
 
     </>

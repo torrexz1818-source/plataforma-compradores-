@@ -74,12 +74,12 @@ const membershipPlans: Array<{
   {
     id: 'free',
     label: 'Plan gratuito',
-    description: '1 agente y 1 publicaciÃ³n por dÃ­a. InformaciÃ³n limitada.',
+    description: '1 agente y 1 publicación por día. Información limitada.',
   },
   {
     id: 'professional',
     label: 'Plan profesional',
-    description: '3 automatizaciones por dÃ­a, notificaciones sectoriales y reuniones grupales.',
+    description: '3 automatizaciones por día, notificaciones sectoriales y reuniones grupales.',
   },
   {
     id: 'premium',
@@ -564,7 +564,7 @@ const Admin = () => {
 
     if (
       hasRequiredLearningRoute &&
-      /selecciona una ruta|ruta tematica|ruta temÃ¡tica/i.test(rawMessage)
+      /selecciona una ruta|ruta tematica|ruta temática/i.test(rawMessage)
     ) {
       return '';
     }
@@ -1790,7 +1790,7 @@ const Admin = () => {
         <section className="bg-card rounded-lg border border-border p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-medium text-foreground">VerificaciÃ³n de proveedores</h2>
+              <h2 className="text-lg font-medium text-foreground">Verificación de proveedores</h2>
               <p className="text-sm text-muted-foreground">
                 Solicitudes pendientes antes de habilitar acceso al ecosistema.
               </p>
@@ -1845,7 +1845,7 @@ const Admin = () => {
               </table>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No hay proveedores pendientes de aprobaciÃ³n.</p>
+            <p className="text-sm text-muted-foreground">No hay proveedores pendientes de aprobación.</p>
           )}
         </section>
 
@@ -2093,7 +2093,7 @@ const Admin = () => {
                     </p>
                     {managedUser.role !== 'admin' && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        MembresÃ­a:{' '}
+                        Membresía:{' '}
                         {(() => {
                           const membership = membershipsByUserId.get(managedUser.id);
                           if (!membership) return 'No activa';
@@ -2137,7 +2137,7 @@ const Admin = () => {
                           const membership = membershipsByUserId.get(managedUser.id);
                           const isAuthorized =
                             membership?.status === 'active' && membership.adminApproved;
-                          return isAuthorized ? 'Suspender membresÃ­a' : 'Autorizar membresÃ­a';
+                          return isAuthorized ? 'Suspender membresía' : 'Autorizar membresía';
                         })()}
                       </Button>
                     </div>
@@ -2150,9 +2150,9 @@ const Admin = () => {
                     <p><span className="font-medium text-foreground">Empresa:</span> {selectedUser.company}</p>
                     <p><span className="font-medium text-foreground">Cargo:</span> {selectedUser.position}</p>
                     <p><span className="font-medium text-foreground">Sector:</span> {selectedUser.sector ?? 'General'}</p>
-                    <p><span className="font-medium text-foreground">UbicaciÃ³n:</span> {selectedUser.location ?? 'Sin ubicaciÃ³n'}</p>
+                    <p><span className="font-medium text-foreground">Ubicación:</span> {selectedUser.location ?? 'Sin ubicación'}</p>
                     <p><span className="font-medium text-foreground">Puntos:</span> {selectedUser.points}</p>
-                    <p className="sm:col-span-2"><span className="font-medium text-foreground">DescripciÃ³n:</span> {selectedUser.description ?? 'Sin descripciÃ³n'}</p>
+                    <p className="sm:col-span-2"><span className="font-medium text-foreground">Descripción:</span> {selectedUser.description ?? 'Sin descripción'}</p>
                   </div>
                 )}
               </div>

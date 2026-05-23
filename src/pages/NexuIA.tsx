@@ -347,7 +347,7 @@ const NexuIA = () => {
 
     const used = Number(localStorage.getItem(getUsageKey()) ?? '0');
     if (used >= limit) {
-      setLimitNotice('Has alcanzado el lÃ­mite de tu plan. Cambia de plan para seguir usando Nodus IA.');
+      setLimitNotice('Has alcanzado el límite de tu plan. Cambia de plan para seguir usando Nodus IA.');
       return false;
     }
 
@@ -433,8 +433,8 @@ const NexuIA = () => {
 
     if (!comparisonService.trim()) {
       toast({
-        title: 'Falta el servicio o categorÃ­a',
-        description: 'Indica quÃ© servicio, producto o categorÃ­a deseas comparar.',
+        title: 'Falta el servicio o categoría',
+        description: 'Indica qué servicio, producto o categoría deseas comparar.',
         variant: 'destructive',
       });
       return;
@@ -443,7 +443,7 @@ const NexuIA = () => {
     if (uploadedComparisonFiles.length < 2) {
       toast({
         title: 'Faltan propuestas',
-        description: 'Sube al menos 2 propuestas de proveedores para iniciar el anÃ¡lisis.',
+        description: 'Sube al menos 2 propuestas de proveedores para iniciar el análisis.',
         variant: 'destructive',
       });
       return;
@@ -461,8 +461,8 @@ const NexuIA = () => {
           registerNodusIaUsage();
           logAgentUsage(selectedAgent.id, 'Comparativo de propuestas de proveedores', result as unknown as Record<string, unknown>);
           toast({
-            title: 'AnÃ¡lisis completado',
-            description: 'El comparativo ya estÃ¡ listo para revisar.',
+            title: 'Análisis completado',
+            description: 'El comparativo ya está listo para revisar.',
           });
         },
         onError: (error) => {
@@ -471,7 +471,7 @@ const NexuIA = () => {
             description:
               error instanceof Error
                 ? error.message
-                : 'No se pudo conectar con el AI Engine o completar el anÃ¡lisis.',
+                : 'No se pudo conectar con el AI Engine o completar el análisis.',
             variant: 'destructive',
           });
         },
@@ -486,8 +486,8 @@ const NexuIA = () => {
   const handleCreateTermsForm = () => {
     if (!termsInitialDescription.trim()) {
       toast({
-        title: 'Describe primero quÃ© necesitas realizar.',
-        description: 'Agrega una descripciÃ³n inicial para crear el formulario inteligente.',
+        title: 'Describe primero qué necesitas realizar.',
+        description: 'Agrega una descripción inicial para crear el formulario inteligente.',
         variant: 'destructive',
       });
       return;
@@ -509,7 +509,7 @@ const NexuIA = () => {
         setTermsSafetyRequirements(schema.recommended_safety_requirements);
         toast({
           title: 'Formulario inteligente creado',
-          description: 'Revisa la categorÃ­a sugerida y completa los campos del requerimiento.',
+          description: 'Revisa la categoría sugerida y completa los campos del requerimiento.',
         });
       },
       onError: (error) => {
@@ -549,8 +549,8 @@ const NexuIA = () => {
 
     if (!termsInitialDescription.trim()) {
       toast({
-        title: 'Describe primero quÃ© necesitas realizar.',
-        description: 'Ese texto inicial ayuda a la IA a contextualizar el tÃ©rmino de referencia.',
+        title: 'Describe primero qué necesitas realizar.',
+        description: 'Ese texto inicial ayuda a la IA a contextualizar el término de referencia.',
         variant: 'destructive',
       });
       return;
@@ -558,8 +558,8 @@ const NexuIA = () => {
 
     if (hasMissingRequired) {
       toast({
-        title: 'Completa los campos obligatorios antes de generar el tÃ©rmino de referencia.',
-        description: 'Revisa nombre, tipo, objetivo, alcance, entregables y justificaciÃ³n.',
+        title: 'Completa los campos obligatorios antes de generar el término de referencia.',
+        description: 'Revisa nombre, tipo, objetivo, alcance, entregables y justificación.',
         variant: 'destructive',
       });
       return;
@@ -585,16 +585,16 @@ const NexuIA = () => {
         onSuccess: (result) => {
           registerNodusIaUsage();
           if (selectedAgent) {
-            logAgentUsage(selectedAgent.id, 'ElaboraciÃ³n de tÃ©rminos de referencia', result as unknown as Record<string, unknown>);
+            logAgentUsage(selectedAgent.id, 'Elaboración de términos de referencia', result as unknown as Record<string, unknown>);
           }
           toast({
-            title: 'TÃ©rmino de referencia generado',
-            description: 'El documento ya estÃ¡ listo para revisar y descargar.',
+            title: 'Término de referencia generado',
+            description: 'El documento ya está listo para revisar y descargar.',
           });
         },
         onError: (error) => {
           toast({
-            title: 'No se pudo generar el tÃ©rmino de referencia. Intenta nuevamente.',
+            title: 'No se pudo generar el término de referencia. Intenta nuevamente.',
             description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
             variant: 'destructive',
           });
@@ -676,15 +676,15 @@ const NexuIA = () => {
         <div key={field.name} className="space-y-2">
           <label className="text-sm font-medium text-foreground/80">{field.label}</label>
           <p className="text-xs leading-5 text-muted-foreground/70">
-            Puedes subir planos con medidas, fichas tÃ©cnicas, fotos, croquis, documentos previos,
-            Excel con cantidades, manuales tÃ©cnicos o imÃ¡genes del estado actual.
+            Puedes subir planos con medidas, fichas técnicas, fotos, croquis, documentos previos,
+            Excel con cantidades, manuales técnicos o imágenes del estado actual.
           </p>
           <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-primary/5 px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
             <Upload className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="text-sm font-medium text-foreground">Subir documentos de apoyo</p>
               <p className="mt-1 text-xs text-muted-foreground/70">
-                PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. MÃ¡ximo 8 archivos.
+                PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. Máximo 8 archivos.
               </p>
             </div>
             <input
@@ -757,7 +757,7 @@ const NexuIA = () => {
             className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground"
             required={field.required}
           >
-            <option value="">Selecciona una opciÃ³n</option>
+            <option value="">Selecciona una opción</option>
             {field.options.map((option) => (
               <option key={option} value={option}>{option}</option>
             ))}
@@ -791,7 +791,7 @@ const NexuIA = () => {
 
     return (
       <div className="rounded-[24px] border border-primary/15 bg-white p-4">
-        <p className="text-sm font-medium text-foreground">Â¿CÃ³mo fue tu experiencia con este agente?</p>
+        <p className="text-sm font-medium text-foreground">¿Cómo fue tu experiencia con este agente?</p>
         <div className="mt-3 flex flex-wrap gap-2">
           {[1, 2, 3, 4, 5].map((star) => (
             <button
@@ -805,13 +805,13 @@ const NexuIA = () => {
               }`}
               aria-label={`${star} estrellas`}
             >
-              â˜…
+              ★
             </button>
           ))}
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {[
-            ['me_sirvio', 'Me sirviÃ³'],
+            ['me_sirvio', 'Me sirvió'],
             ['tuvo_errores', 'Tuvo errores'],
             ['sugerencia', 'Quiero sugerir una mejora'],
           ].map(([value, label]) => (
@@ -830,13 +830,13 @@ const NexuIA = () => {
         <Textarea
           value={feedbackComment}
           onChange={(event) => setFeedbackComment(event.target.value)}
-          placeholder="CuÃ©ntanos quÃ© funcionÃ³, quÃ© fallÃ³ o quÃ© mejorarÃ­as."
+          placeholder="Cuéntanos qué funcionó, qué falló o qué mejorarías."
           className="mt-3 min-h-[88px] rounded-2xl border-primary/15"
         />
         <Textarea
           value={feedbackCorrection}
           onChange={(event) => setFeedbackCorrection(event.target.value)}
-          placeholder="Si deseas, escribe cÃ³mo deberÃ­a corregirse."
+          placeholder="Si deseas, escribe cómo debería corregirse."
           className="mt-3 min-h-[72px] rounded-2xl border-primary/15"
         />
         <Button
@@ -863,7 +863,7 @@ const NexuIA = () => {
               Nodus IA
             </Badge>
             <h1 className="mt-5 max-w-3xl text-4xl font-bold tracking-tight text-white md:text-5xl">
-              Agentes IA y automatizaciones
+              Buyer agents
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-8 text-white/85 md:text-[1.1rem]">
               Explora agentes especializados, activa automatizaciones y ejecuta flujos de compras
@@ -1080,12 +1080,12 @@ const NexuIA = () => {
                           <>
                             <div className="space-y-1.5">
                               <label className="text-sm font-medium text-foreground/80">
-                                Describe quÃ© necesitas realizar
+                                Describe qué necesitas realizar
                               </label>
                               <Textarea
                                 value={termsInitialDescription}
                                 onChange={(event) => setTermsInitialDescription(event.target.value)}
-                                placeholder="Ejemplo: Necesito mantenimiento de luminarias en planta, reparaciÃ³n de paredes con humedad, implementaciÃ³n de estacionamiento, inspecciÃ³n de equipos de aire acondicionado, compra de laptops..."
+                                placeholder="Ejemplo: Necesito mantenimiento de luminarias en planta, reparación de paredes con humedad, implementación de estacionamiento, inspección de equipos de aire acondicionado, compra de laptops..."
                                 className="min-h-[112px] rounded-2xl border-primary/15"
                                 required
                               />
@@ -1105,7 +1105,7 @@ const NexuIA = () => {
                                 <div className="grid gap-3 md:grid-cols-3">
                                   <div className="rounded-xl bg-white p-3">
                                     <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
-                                      CategorÃ­a sugerida
+                                      Categoría sugerida
                                     </p>
                                     <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.detected_category}</p>
                                   </div>
@@ -1149,15 +1149,15 @@ const NexuIA = () => {
                           <>
                             <div className="space-y-1.5">
                               <label className="text-sm font-medium text-foreground/80">
-                                Servicio, producto o categorÃ­a a comparar
+                                Servicio, producto o categoría a comparar
                               </label>
                               <p className="text-xs text-muted-foreground/70">
-                                AquÃ­ indica para quÃ© son las propuestas que vas a comparar.
+                                Aquí indica para qué son las propuestas que vas a comparar.
                               </p>
                               <Textarea
                                 value={comparisonService}
                                 onChange={(event) => setComparisonService(event.target.value)}
-                                placeholder="Ejemplo: Servicio de limpieza integral de oficinas 300 mÂ², pintado de paredes, compra de laptops, mantenimiento preventivo, proveedor logÃ­sticoâ€¦"
+                                placeholder="Ejemplo: Servicio de limpieza integral de oficinas 300 m², pintado de paredes, compra de laptops, mantenimiento preventivo, proveedor logístico…"
                                 className="min-h-[92px] rounded-2xl border-primary/15"
                                 required
                               />
@@ -1170,7 +1170,7 @@ const NexuIA = () => {
                               <Textarea
                                 value={comparisonObjective}
                                 onChange={(event) => setComparisonObjective(event.target.value)}
-                                placeholder="Ejemplo: Seleccionar el proveedor mÃ¡s conveniente considerando precio, alcance, garantÃ­a, condiciones comerciales y riesgo operativo."
+                                placeholder="Ejemplo: Seleccionar el proveedor más conveniente considerando precio, alcance, garantía, condiciones comerciales y riesgo operativo."
                                 className="min-h-[92px] rounded-2xl border-primary/15"
                               />
                             </div>
@@ -1183,7 +1183,7 @@ const NexuIA = () => {
                                 <Upload className="h-5 w-5 text-muted-foreground" />
                                 <div>
                                   <p className="text-sm font-medium text-foreground">
-                                    Subir PDF, DOCX, Excel, CSV o imÃ¡genes
+                                    Subir PDF, DOCX, Excel, CSV o imágenes
                                   </p>
                                   <p className="mt-1 text-xs text-muted-foreground/70">
                                     Carga 2 a 5 propuestas. Los archivos se procesan temporalmente.
@@ -1315,8 +1315,8 @@ const NexuIA = () => {
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         {termsGenerateMutation.isPending
-                          ? 'Nodus IA estÃ¡ trabajando en tu solicitudâ€¦'
-                          : 'Generar tÃ©rmino de referencia'}
+                          ? 'Nodus IA está trabajando en tu solicitud…'
+                          : 'Generar término de referencia'}
                       </Button>
                     ) : isQuoteComparator ? (
                       <Button
@@ -1327,7 +1327,7 @@ const NexuIA = () => {
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         {proposalComparisonMutation.isPending
-                          ? 'Nodus IA estÃ¡ trabajando en tu solicitudâ€¦'
+                          ? 'Nodus IA está trabajando en tu solicitud…'
                           : 'Analizar propuestas'}
                       </Button>
                     ) : (
@@ -1339,7 +1339,7 @@ const NexuIA = () => {
                           disabled={runMutation.isPending}
                         >
                           <PlayCircle className="mr-2 h-4 w-4" />
-                          {runMutation.isPending ? 'Nodus IA estÃ¡ trabajando en tu solicitudâ€¦' : 'Ejecutar agente'}
+                          {runMutation.isPending ? 'Nodus IA está trabajando en tu solicitud…' : 'Ejecutar agente'}
                         </Button>
                       </>
                     )}
@@ -1347,7 +1347,7 @@ const NexuIA = () => {
 
                   {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || runMutation.isPending) ? (
                     <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
-                      Nodus IA estÃ¡ trabajando en tu solicitudâ€¦
+                      Nodus IA está trabajando en tu solicitud…
                     </div>
                   ) : null}
 
@@ -1406,7 +1406,7 @@ const NexuIA = () => {
                             <p>{termsResult.generated_document.scope}</p>
                           </div>
                           {[
-                            ['CaracterÃ­sticas tÃ©cnicas', termsResult.generated_document.technical_characteristics],
+                            ['Características técnicas', termsResult.generated_document.technical_characteristics],
                             ['Actividades requeridas', termsResult.generated_document.required_activities],
                             ['Producto final / entregables', termsResult.generated_document.final_deliverables],
                             ['Requisitos de seguridad', termsResult.generated_document.safety_requirements],
@@ -1427,7 +1427,7 @@ const NexuIA = () => {
 
                       <div className="grid gap-4 md:grid-cols-3">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">InformaciÃ³n faltante</p>
+                          <p className="text-sm font-medium text-foreground">Información faltante</p>
                           <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                             {termsResult.missing_information.map((item) => (
                               <li key={item}>- {item}</li>
@@ -1443,9 +1443,9 @@ const NexuIA = () => {
                           </ul>
                         </div>
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">ValidaciÃ³n de calidad</p>
+                          <p className="text-sm font-medium text-foreground">Validación de calidad</p>
                           <p className="mt-2 text-sm text-muted-foreground">
-                            {termsResult.quality_check.is_complete ? 'Documento completo segÃºn la validaciÃ³n bÃ¡sica.' : 'Requiere completar secciones antes de enviarlo.'}
+                            {termsResult.quality_check.is_complete ? 'Documento completo según la validación básica.' : 'Requiere completar secciones antes de enviarlo.'}
                           </p>
                           {termsResult.quality_check.warnings.length ? (
                             <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
@@ -1459,7 +1459,7 @@ const NexuIA = () => {
 
                       {termsResult.supporting_documents_summary.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Documentos de apoyo leÃ­dos</p>
+                          <p className="text-sm font-medium text-foreground">Documentos de apoyo leídos</p>
                           <div className="mt-3 space-y-2">
                             {termsResult.supporting_documents_summary.map((doc) => (
                               <div key={doc.file_name} className="rounded-xl bg-primary/5 p-3 text-sm text-muted-foreground">
@@ -1536,19 +1536,19 @@ const NexuIA = () => {
                       {proposalComparisonResult.evaluation_matrix?.criteria.length ? (
                         <div>
                           <div>
-                            <p className="text-sm font-medium text-foreground">Matriz de evaluaciÃ³n comparativa</p>
+                            <p className="text-sm font-medium text-foreground">Matriz de evaluación comparativa</p>
                             <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
                               {proposalComparisonResult.auto_generated_criteria_note}
                             </p>
                             <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
-                              Escala de valoraciÃ³n: 1 = Muy deficiente | 2 = Deficiente | 3 = Aceptable | 4 = Bueno | 5 = Excelente. Puntaje ponderado = ValoraciÃ³n Ã— Peso.
+                              Escala de valoración: 1 = Muy deficiente | 2 = Deficiente | 3 = Aceptable | 4 = Bueno | 5 = Excelente. Puntaje ponderado = Valoración × Peso.
                             </p>
                           </div>
                           <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
                             <table className="w-full min-w-[760px] text-left text-sm">
                               <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
                                 <tr>
-                                  <th className="px-4 py-3 font-medium">NÂ°</th>
+                                  <th className="px-4 py-3 font-medium">N°</th>
                                   <th className="px-4 py-3 font-medium">Criterio</th>
                                   <th className="px-4 py-3 font-medium">Peso %</th>
                                   {proposalComparisonResult.suppliers.map((supplier) => (
@@ -1607,16 +1607,16 @@ const NexuIA = () => {
 
                       {proposalComparisonResult.criteria_guide?.length ? (
                         <div>
-                          <p className="text-sm font-medium text-foreground">GuÃ­a de criterios</p>
+                          <p className="text-sm font-medium text-foreground">Guía de criterios</p>
                           <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
                             <table className="w-full min-w-[760px] text-left text-sm">
                               <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
                                 <tr>
-                                  <th className="px-4 py-3 font-medium">NÂ°</th>
+                                  <th className="px-4 py-3 font-medium">N°</th>
                                   <th className="px-4 py-3 font-medium">Criterio</th>
                                   <th className="px-4 py-3 font-medium">Peso %</th>
-                                  <th className="px-4 py-3 font-medium">Escala de valoraciÃ³n 1 a 5</th>
-                                  <th className="px-4 py-3 font-medium">Fuente de verificaciÃ³n</th>
+                                  <th className="px-4 py-3 font-medium">Escala de valoración 1 a 5</th>
+                                  <th className="px-4 py-3 font-medium">Fuente de verificación</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1699,7 +1699,7 @@ const NexuIA = () => {
                           </ul>
                         </div>
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">InformaciÃ³n faltante</p>
+                          <p className="text-sm font-medium text-foreground">Información faltante</p>
                           <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
                             {proposalComparisonResult.missing_information.map((item) => (
                               <li key={item}>- {item}</li>
@@ -1717,7 +1717,7 @@ const NexuIA = () => {
                       </div>
 
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                        <p className="text-sm font-medium text-foreground">RecomendaciÃ³n final</p>
+                        <p className="text-sm font-medium text-foreground">Recomendación final</p>
                         <p className="mt-2 text-sm leading-6 text-muted-foreground">
                           {proposalComparisonResult.final_recommendation}
                         </p>
