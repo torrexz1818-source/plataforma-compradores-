@@ -454,6 +454,48 @@ export class AdminController {
     return this.agentsService.updateAgentStatus(agentKey, body.status);
   }
 
+  @Get('users/:userId/pdf-branding')
+  getUserPdfBranding(@Param('userId') userId: string) {
+    return this.agentsService.getUserPdfBrandingSettingsForAdmin(userId);
+  }
+
+  @Patch('users/:userId/pdf-branding')
+  updateUserPdfBranding(
+    @Param('userId') userId: string,
+    @Body()
+    body: {
+      standardPdfEnabled?: boolean;
+      whiteLabelPdfEnabled?: boolean;
+      customBrandPdfEnabled?: boolean;
+      customBrandName?: string;
+      customLogoUrl?: string;
+      customPrimaryColor?: string;
+      customFooterText?: string;
+      premiumPdfStatus?: 'active' | 'inactive';
+      adminNotes?: string;
+    },
+  ) {
+    return this.agentsService.updateUserPdfBrandingSettingsForAdmin(userId, body);
+  }
+
+  @Get('ai-agents/:agentKey/pdf-settings')
+  getAgentPdfSettings(@Param('agentKey') agentKey: string) {
+    return this.agentsService.getAgentPdfSettingsForAdmin(agentKey);
+  }
+
+  @Patch('ai-agents/:agentKey/pdf-settings')
+  updateAgentPdfSettings(
+    @Param('agentKey') agentKey: string,
+    @Body()
+    body: {
+      standardPdfEnabled?: boolean;
+      whiteLabelAvailable?: boolean;
+      customBrandAvailable?: boolean;
+    },
+  ) {
+    return this.agentsService.updateAgentPdfSettingsForAdmin(agentKey, body);
+  }
+
   @Patch('agent-feedback/:id')
   updateAgentFeedback(
     @Param('id') id: string,

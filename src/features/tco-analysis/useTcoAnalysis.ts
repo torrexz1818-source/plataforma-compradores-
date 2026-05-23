@@ -15,6 +15,6 @@ export function useTcoAnalysis() {
 
 export function useDownloadTcoPdf() {
   return useMutation({
-    mutationFn: (result: TcoAnalysisResult) => downloadTcoPdf(result),
+    mutationFn: (input: { result: TcoAnalysisResult; pdfMode?: string; branding?: Record<string, unknown> }) => downloadTcoPdf(input),
   });
 }

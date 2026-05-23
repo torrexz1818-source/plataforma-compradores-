@@ -27,13 +27,15 @@ import {
   getAgentDetail,
   getAgents,
   getMyAgentExecutions,
+  getMyAgentPdfOptions,
   recordAgentUsage,
   runAgent,
   submitAgentFeedback,
+  validateAgentPdfMode,
 } from '@/lib/api';
 import { nodusIaAgents } from '../../shared/nodusIaAgents';
 import { useAuth } from '@/lib/auth';
-import type { Agent } from '@/types';
+import type { Agent, AgentPdfMode } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -138,6 +140,7 @@ const NexuIA = () => {
   const [feedbackType, setFeedbackType] = useState('me_sirvio');
   const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackCorrection, setFeedbackCorrection] = useState('');
+  const [selectedPdfMode, setSelectedPdfMode] = useState<AgentPdfMode>('standard_branded');
   const termsFormSchemaMutation = useTermsFormSchema();
   const termsGenerateMutation = useGenerateTermsOfReference();
   const termsPdfMutation = useDownloadTermsPdf();
@@ -239,6 +242,7 @@ const NexuIA = () => {
     setTcoFiles([]);
     setFeedbackComment('');
     setFeedbackCorrection('');
+    setSelectedPdfMode('standard_branded');
     setFeedbackStars(5);
     setFeedbackType('me_sirvio');
   }, [routeAgentId]);
@@ -364,6 +368,20 @@ const NexuIA = () => {
     selectedAgent?.id === 'tco_analysis' ||
     selectedAgent?.agentKey === 'tco_analysis' ||
     selectedAgent?.slug === 'analisis-costo-total-tco';
+  const selectedAgentKey = selectedAgent ? normalizeAgentKey(selectedAgent) : '';
+  const pdfOptionsQuery = useQuery({
+    queryKey: ['agent-pdf-options', selectedAgentKey],
+    queryFn: () => getMyAgentPdfOptions(selectedAgentKey),
+    enabled: Boolean(selectedAgentKey),
+  });
+  const availablePdfModes = useMemo(() => {
+    const modes = pdfOptionsQuery.data?.modes;
+    return [
+      { value: 'standard_branded' as const, label: 'PDF Buyer Nodus', enabled: modes?.standardBranded ?? true },
+      { value: 'white_label' as const, label: 'PDF sin logo', enabled: Boolean(modes?.whiteLabel) },
+      { value: 'custom_brand' as const, label: 'PDF con mi logo', enabled: Boolean(modes?.customBrand) },
+    ].filter((mode) => mode.enabled);
+  }, [pdfOptionsQuery.data]);
   const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
   const currentFeedbackRunId =
     selectedAgent?.id && runMutation.data?.execution.agentId === selectedAgent.id
@@ -583,8 +601,40 @@ const NexuIA = () => {
           variant: 'destructive',
         });
       },
-    });
+      });
   };
+
+  const buildPdfBrandingPayload = () => ({
+    company_name: pdfOptionsQuery.data?.branding.companyName,
+    logo_url: pdfOptionsQuery.data?.branding.logoUrl,
+    primary_color: pdfOptionsQuery.data?.branding.primaryColor,
+    footer_text: pdfOptionsQuery.data?.branding.footerText,
+    user_name: user?.fullName,
+  });
+
+  const ensurePdfModeAllowed = async () => {
+    if (!selectedAgentKey) {
+      throw new Error('Selecciona un agente antes de descargar el PDF.');
+    }
+
+    await validateAgentPdfMode({ agentKey: selectedAgentKey, pdfMode: selectedPdfMode });
+  };
+
+  const renderPdfFormatSelector = () => (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <span>Formato de descarga</span>
+      <select
+        value={selectedPdfMode}
+        onChange={(event) => setSelectedPdfMode(event.target.value as AgentPdfMode)}
+        className="h-9 rounded-full border border-border bg-background px-3 text-xs text-foreground"
+      >
+        {availablePdfModes.map((mode) => (
+          <option key={mode.value} value={mode.value}>{mode.label}</option>
+        ))}
+      </select>
+      {availablePdfModes.length <= 1 ? <span>PDF personalizado disponible en plan premium.</span> : null}
+    </div>
+  );
 
   const handleTermsFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -667,12 +717,23 @@ const NexuIA = () => {
     );
   };
 
-  const handleDownloadTermsPdf = () => {
+  const handleDownloadTermsPdf = async () => {
     if (!termsGenerateMutation.data) {
       return;
     }
 
-    termsPdfMutation.mutate(termsGenerateMutation.data, {
+    try {
+      await ensurePdfModeAllowed();
+    } catch (error) {
+      toast({
+        title: 'Formato PDF no disponible',
+        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    termsPdfMutation.mutate({ result: termsGenerateMutation.data, pdfMode: selectedPdfMode, branding: buildPdfBrandingPayload() }, {
       onError: (error) => {
         toast({
           title: 'No se pudo descargar el PDF.',
@@ -807,12 +868,23 @@ const NexuIA = () => {
     );
   };
 
-  const handleDownloadTcoPdf = () => {
+  const handleDownloadTcoPdf = async () => {
     if (!tcoAnalysisMutation.data) {
       return;
     }
 
-    tcoPdfMutation.mutate(tcoAnalysisMutation.data, {
+    try {
+      await ensurePdfModeAllowed();
+    } catch (error) {
+      toast({
+        title: 'Formato PDF no disponible',
+        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    tcoPdfMutation.mutate({ result: tcoAnalysisMutation.data, pdfMode: selectedPdfMode, branding: buildPdfBrandingPayload() }, {
       onSuccess: () => {
         if (selectedAgent) {
           logAgentUsage(
@@ -833,29 +905,57 @@ const NexuIA = () => {
     });
   };
 
-  const handleDownloadProposalPdf = () => {
+  const handleDownloadProposalPdf = async () => {
     if (!proposalComparisonResult) {
+      return;
+    }
+
+    try {
+      await ensurePdfModeAllowed();
+    } catch (error) {
+      toast({
+        title: 'Formato PDF no disponible',
+        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
+        variant: 'destructive',
+      });
       return;
     }
 
     downloadAgentResultPdf({
       title: 'Comparativos de propuestas de proveedores',
+      agentName: selectedAgent?.name,
       userName: user?.fullName,
       result: proposalComparisonResult,
       fileName: 'comparativo-propuestas-nodus-ia.pdf',
+      pdfMode: selectedPdfMode,
+      pdfOptions: pdfOptionsQuery.data,
     });
   };
 
-  const handleDownloadRunPdf = () => {
+  const handleDownloadRunPdf = async () => {
     if (!runMutation.data) {
+      return;
+    }
+
+    try {
+      await ensurePdfModeAllowed();
+    } catch (error) {
+      toast({
+        title: 'Formato PDF no disponible',
+        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
+        variant: 'destructive',
+      });
       return;
     }
 
     downloadAgentResultPdf({
       title: selectedAgent?.name ?? 'Resultado Nodus IA',
+      agentName: selectedAgent?.name,
       userName: user?.fullName,
       result: runMutation.data.execution.outputData,
       fileName: 'resultado-nodus-ia.pdf',
+      pdfMode: selectedPdfMode,
+      pdfOptions: pdfOptionsQuery.data,
     });
   };
 
@@ -1790,10 +1890,13 @@ const NexuIA = () => {
                     <div className="rounded-[24px] border border-success/15 bg-success/15 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <p className="text-sm font-medium text-success-foreground">Resultado mas reciente</p>
-                        <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadRunPdf}>
-                          <Download className="mr-2 h-4 w-4" />
-                          Descargar PDF
-                        </Button>
+                        <div className="flex flex-col items-start gap-2 sm:items-end">
+                          {renderPdfFormatSelector()}
+                          <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadRunPdf}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Descargar PDF
+                          </Button>
+                        </div>
                       </div>
                       <p className="mt-2 text-sm text-success-foreground">
                         {String(runMutation.data.execution.outputData.summary ?? 'Ejecucion completada')}
@@ -1815,16 +1918,19 @@ const NexuIA = () => {
                             {termsResult.executive_summary}
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="rounded-full"
-                          onClick={handleDownloadTermsPdf}
-                          disabled={termsPdfMutation.isPending}
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          {termsPdfMutation.isPending ? 'Preparando PDF...' : 'Descargar PDF'}
-                        </Button>
+                        <div className="flex flex-col items-start gap-2 sm:items-end">
+                          {renderPdfFormatSelector()}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-full"
+                            onClick={handleDownloadTermsPdf}
+                            disabled={termsPdfMutation.isPending}
+                          >
+                            <Download className="mr-2 h-4 w-4" />
+                            {termsPdfMutation.isPending ? 'Preparando PDF...' : 'Descargar PDF'}
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -1922,10 +2028,13 @@ const NexuIA = () => {
                             {tcoResult.executive_summary.final_recommendation}
                           </p>
                         </div>
-                        <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadTcoPdf} disabled={tcoPdfMutation.isPending}>
-                          <Download className="mr-2 h-4 w-4" />
-                          {tcoPdfMutation.isPending ? 'Generando PDF...' : 'Descargar PDF'}
-                        </Button>
+                        <div className="flex flex-col items-start gap-2 sm:items-end">
+                          {renderPdfFormatSelector()}
+                          <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadTcoPdf} disabled={tcoPdfMutation.isPending}>
+                            <Download className="mr-2 h-4 w-4" />
+                            {tcoPdfMutation.isPending ? 'Generando PDF...' : 'Descargar PDF'}
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
@@ -2064,10 +2173,13 @@ const NexuIA = () => {
                             {proposalComparisonResult.executive_summary}
                           </p>
                         </div>
-                        <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadProposalPdf}>
-                          <Download className="mr-2 h-4 w-4" />
-                          Descargar PDF
-                        </Button>
+                        <div className="flex flex-col items-start gap-2 sm:items-end">
+                          {renderPdfFormatSelector()}
+                          <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadProposalPdf}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Descargar PDF
+                          </Button>
+                        </div>
                       </div>
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">

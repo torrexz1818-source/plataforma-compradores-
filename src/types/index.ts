@@ -796,3 +796,46 @@ export interface AgentFeedback {
   adminStatus: string;
   createdAt: string;
 }
+
+export type AgentPdfMode = 'standard_branded' | 'white_label' | 'custom_brand';
+
+export interface UserPdfBrandingSettings {
+  id: string;
+  userId: string;
+  standardPdfEnabled: boolean;
+  whiteLabelPdfEnabled: boolean;
+  customBrandPdfEnabled: boolean;
+  customBrandName?: string;
+  customLogoUrl?: string;
+  customPrimaryColor?: string;
+  customFooterText?: string;
+  premiumPdfStatus: 'active' | 'inactive';
+  adminNotes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentPdfSettings {
+  id: string;
+  agentKey: string;
+  standardPdfEnabled: boolean;
+  whiteLabelAvailable: boolean;
+  customBrandAvailable: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentPdfOptions {
+  agentKey: string;
+  modes: {
+    standardBranded: boolean;
+    whiteLabel: boolean;
+    customBrand: boolean;
+  };
+  branding: {
+    companyName?: string;
+    logoUrl?: string;
+    primaryColor?: string;
+    footerText?: string;
+  };
+}

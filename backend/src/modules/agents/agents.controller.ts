@@ -45,6 +45,38 @@ export class AgentsController {
     };
   }
 
+  @Get('pdf-options')
+  async getPdfOptions(
+    @Query('agentKey') agentKey: string | undefined,
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    if (!agentKey?.trim()) {
+      throw new BadRequestException('El agente es obligatorio');
+    }
+
+    return this.agentsService.getPdfOptionsForUser(user.sub, agentKey);
+  }
+
+  @Post('pdf-options/validate')
+  async validatePdfMode(
+    @Body() body: { agentKey?: string; pdfMode?: 'standard_branded' | 'white_label' | 'custom_brand' },
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    if (!body.agentKey?.trim() || !body.pdfMode) {
+      throw new BadRequestException('El agente y formato PDF son obligatorios');
+    }
+
+    return this.agentsService.assertPdfModeAllowed(user.sub, body.agentKey, body.pdfMode);
+  }
+
   @Get(':id')
   async getAgentDetail(
     @Param('id') id: string,

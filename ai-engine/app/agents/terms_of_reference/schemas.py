@@ -101,3 +101,5 @@ class TermsOfReferenceResult(BaseModel):
 
 class PdfRequest(BaseModel):
     document: dict[str, Any]
+    pdf_mode: str | None = None
+    branding: dict[str, Any] | None = None

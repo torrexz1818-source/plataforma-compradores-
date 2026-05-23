@@ -397,6 +397,32 @@ type AgentFeedbackClassificationDocument = {
   createdAt: Date;
 };
 
+type UserPdfBrandingSettingsDocument = {
+  id: string;
+  userId: string;
+  standardPdfEnabled: boolean;
+  whiteLabelPdfEnabled: boolean;
+  customBrandPdfEnabled: boolean;
+  customBrandName?: string;
+  customLogoUrl?: string;
+  customPrimaryColor?: string;
+  customFooterText?: string;
+  premiumPdfStatus: 'active' | 'inactive';
+  adminNotes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type AgentPdfSettingsDocument = {
+  id: string;
+  agentKey: string;
+  standardPdfEnabled: boolean;
+  whiteLabelAvailable: boolean;
+  customBrandAvailable: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 type AgentImprovementRuleDocument = {
   id: string;
   agentKey: string;
@@ -621,6 +647,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       this.collection<AgentFeedbackClassificationDocument>(
         'agentFeedbackClassifications',
       );
+    const userPdfBrandingSettings =
+      this.collection<UserPdfBrandingSettingsDocument>(
+        'userPdfBrandingSettings',
+      );
+    const agentPdfSettings =
+      this.collection<AgentPdfSettingsDocument>('agentPdfSettings');
     const agentImprovementRules =
       this.collection<AgentImprovementRuleDocument>('agentImprovementRules');
     const employabilityJobs =
@@ -729,6 +761,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       agentFeedbackClassifications.createIndex({ id: 1 }, { unique: true }),
       agentFeedbackClassifications.createIndex({ feedbackId: 1 }),
       agentFeedbackClassifications.createIndex({ agentKey: 1, severity: 1 }),
+      userPdfBrandingSettings.createIndex({ id: 1 }, { unique: true }),
+      userPdfBrandingSettings.createIndex({ userId: 1 }, { unique: true }),
+      userPdfBrandingSettings.createIndex({ premiumPdfStatus: 1 }),
+      agentPdfSettings.createIndex({ id: 1 }, { unique: true }),
+      agentPdfSettings.createIndex({ agentKey: 1 }, { unique: true }),
       agentImprovementRules.createIndex({ id: 1 }, { unique: true }),
       agentImprovementRules.createIndex({ agentKey: 1, status: 1 }),
       employabilityJobs.createIndex({ id: 1 }, { unique: true }),

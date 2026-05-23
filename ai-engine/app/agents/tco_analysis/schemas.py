@@ -149,3 +149,5 @@ class TcoAnalysisResult(BaseModel):
 
 class TcoPdfRequest(BaseModel):
     result: dict[str, Any]
+    pdf_mode: str | None = None
+    branding: dict[str, Any] | None = None

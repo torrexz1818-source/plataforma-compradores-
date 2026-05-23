@@ -33,12 +33,16 @@ import {
   getAdminAiAgents,
   getAdminAgentFeedback,
   getAdminAgentMetrics,
+  getAdminAgentPdfSettings,
   getAdminDashboard,
+  getAdminUserPdfBranding,
   getPlatformStats,
   uploadFile,
   uploadAdminVideoInChunks,
   updateMembershipByAdmin,
   updateAdminAgentStatus,
+  updateAdminAgentPdfSettings,
+  updateAdminUserPdfBranding,
   updateUserStatus,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -54,7 +58,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Post, PostResource, UserStatus } from '@/types';
+import { AgentPdfSettings, Post, PostResource, UserPdfBrandingSettings, UserStatus } from '@/types';
 
 const SKILL_CATEGORY_SLUG = 'mejorar-skill';
 const PROFESSIONAL_ROUTE_ID: LearningRouteId = 'ruta-5';
@@ -275,6 +279,20 @@ const Admin = () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-agent-metrics'] });
     },
   });
+  const userPdfBrandingMutation = useMutation({
+    mutationFn: ({ userId, payload }: { userId: string; payload: Partial<UserPdfBrandingSettings> }) =>
+      updateAdminUserPdfBranding(userId, payload),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-user-pdf-branding', variables.userId] });
+    },
+  });
+  const agentPdfSettingsMutation = useMutation({
+    mutationFn: ({ agentKey, payload }: { agentKey: string; payload: Partial<AgentPdfSettings> }) =>
+      updateAdminAgentPdfSettings(agentKey, payload),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-agent-pdf-settings', variables.agentKey] });
+    },
+  });
 
   const updatePostMutation = useMutation({
     mutationFn: ({ postId, payload }: { postId: string; payload: FormData }) =>
@@ -429,6 +447,16 @@ const Admin = () => {
     () => (adminAgentsQuery.data ?? []).find((agent) => (agent.agentKey ?? agent.id) === selectedAgentKey) ?? null,
     [adminAgentsQuery.data, selectedAgentKey],
   );
+  const selectedAgentPdfSettingsQuery = useQuery({
+    queryKey: ['admin-agent-pdf-settings', selectedAgent?.agentKey ?? selectedAgent?.id],
+    queryFn: () => getAdminAgentPdfSettings(selectedAgent?.agentKey ?? selectedAgent?.id ?? ''),
+    enabled: user?.role === 'admin' && Boolean(selectedAgent?.agentKey ?? selectedAgent?.id),
+  });
+  const selectedUserPdfBrandingQuery = useQuery({
+    queryKey: ['admin-user-pdf-branding', selectedUserId],
+    queryFn: () => getAdminUserPdfBranding(selectedUserId ?? ''),
+    enabled: user?.role === 'admin' && Boolean(selectedUserId),
+  });
   const agentFeedbackBySelectedAgent = useMemo(
     () => (agentFeedbackQuery.data ?? []).filter((item) => item.agentKey === (selectedAgent?.agentKey ?? selectedAgent?.id)),
     [agentFeedbackQuery.data, selectedAgent],
@@ -812,6 +840,98 @@ const Admin = () => {
                       {renderDetailRow('Usan IA generativa?', formatChoice(managedUser.supplierProfile?.usesGenerativeAI))}
                       {renderDetailRow('Descripcion', managedUser.description)}
                     </>
+                  )}
+
+                  {selectedUserPdfBrandingQuery.data && (
+                    <div className="sm:col-span-2 mt-3 rounded-lg border border-border bg-background p-4">
+                      <div className="mb-3 flex flex-col gap-1">
+                        <p className="text-sm font-medium text-foreground">Permisos PDF de agentes</p>
+                        <p className="text-xs text-muted-foreground">Activa formatos premium por usuario. El PDF estándar queda habilitado por defecto.</p>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <label className="flex items-center gap-2 text-xs text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserPdfBrandingQuery.data.standardPdfEnabled}
+                            onChange={(event) =>
+                              userPdfBrandingMutation.mutate({
+                                userId: managedUser.id,
+                                payload: { standardPdfEnabled: event.target.checked },
+                              })
+                            }
+                          />
+                          PDF estándar
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserPdfBrandingQuery.data.whiteLabelPdfEnabled}
+                            onChange={(event) =>
+                              userPdfBrandingMutation.mutate({
+                                userId: managedUser.id,
+                                payload: { whiteLabelPdfEnabled: event.target.checked, premiumPdfStatus: 'active' },
+                              })
+                            }
+                          />
+                          PDF sin logo
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-foreground">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserPdfBrandingQuery.data.customBrandPdfEnabled}
+                            onChange={(event) =>
+                              userPdfBrandingMutation.mutate({
+                                userId: managedUser.id,
+                                payload: { customBrandPdfEnabled: event.target.checked, premiumPdfStatus: 'active' },
+                              })
+                            }
+                          />
+                          PDF con logo propio
+                        </label>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <Input
+                          defaultValue={selectedUserPdfBrandingQuery.data.customBrandName ?? managedUser.commercialName ?? managedUser.company}
+                          placeholder="Nombre comercial para PDF"
+                          onBlur={(event) =>
+                            userPdfBrandingMutation.mutate({
+                              userId: managedUser.id,
+                              payload: { customBrandName: event.target.value },
+                            })
+                          }
+                        />
+                        <Input
+                          defaultValue={selectedUserPdfBrandingQuery.data.customLogoUrl ?? managedUser.avatarUrl ?? ''}
+                          placeholder="URL de logo personalizado"
+                          onBlur={(event) =>
+                            userPdfBrandingMutation.mutate({
+                              userId: managedUser.id,
+                              payload: { customLogoUrl: event.target.value },
+                            })
+                          }
+                        />
+                        <Input
+                          defaultValue={selectedUserPdfBrandingQuery.data.customPrimaryColor ?? '#1d4ed8'}
+                          placeholder="#1d4ed8"
+                          onBlur={(event) =>
+                            userPdfBrandingMutation.mutate({
+                              userId: managedUser.id,
+                              payload: { customPrimaryColor: event.target.value },
+                            })
+                          }
+                        />
+                        <Input
+                          defaultValue={selectedUserPdfBrandingQuery.data.adminNotes ?? ''}
+                          placeholder="Nota interna"
+                          onBlur={(event) =>
+                            userPdfBrandingMutation.mutate({
+                              userId: managedUser.id,
+                              payload: { adminNotes: event.target.value },
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -2186,6 +2306,52 @@ const Admin = () => {
                   </ul>
                 </div>
               </div>
+              {selectedAgentPdfSettingsQuery.data ? (
+                <div className="mt-4 rounded-lg border border-border bg-card p-4">
+                  <p className="text-xs font-medium uppercase text-muted-foreground">PDF premium</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                    <label className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={selectedAgentPdfSettingsQuery.data.standardPdfEnabled}
+                        onChange={(event) =>
+                          agentPdfSettingsMutation.mutate({
+                            agentKey: selectedAgent.agentKey ?? selectedAgent.id,
+                            payload: { standardPdfEnabled: event.target.checked },
+                          })
+                        }
+                      />
+                      PDF estándar habilitado
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={selectedAgentPdfSettingsQuery.data.whiteLabelAvailable}
+                        onChange={(event) =>
+                          agentPdfSettingsMutation.mutate({
+                            agentKey: selectedAgent.agentKey ?? selectedAgent.id,
+                            payload: { whiteLabelAvailable: event.target.checked },
+                          })
+                        }
+                      />
+                      Permitir PDF sin logo
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={selectedAgentPdfSettingsQuery.data.customBrandAvailable}
+                        onChange={(event) =>
+                          agentPdfSettingsMutation.mutate({
+                            agentKey: selectedAgent.agentKey ?? selectedAgent.id,
+                            payload: { customBrandAvailable: event.target.checked },
+                          })
+                        }
+                      />
+                      Permitir PDF con logo propio
+                    </label>
+                  </div>
+                </div>
+              ) : null}
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <div>
                   <p className="text-xs font-medium uppercase text-muted-foreground">Ejecuciones recientes</p>

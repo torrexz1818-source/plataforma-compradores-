@@ -13,6 +13,8 @@ class GenericAgentRequest(BaseModel):
 
 class GenericPdfRequest(BaseModel):
     result: dict[str, Any]
+    pdf_mode: str | None = None
+    branding: dict[str, Any] | None = None
 
 
 def build_stub_result(agent_name: str, expected_outputs: list[str], payload: GenericAgentRequest) -> dict[str, Any]:

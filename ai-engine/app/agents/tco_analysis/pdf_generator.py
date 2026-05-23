@@ -5,7 +5,7 @@ from typing import Any
 from app.utils.pdf_report import build_agent_pdf
 
 
-def build_tco_pdf(result: dict[str, Any]) -> bytes:
+def build_tco_pdf(result: dict[str, Any], branding: dict[str, Any] | None = None) -> bytes:
     ordered: dict[str, Any] = {
         "Resumen ejecutivo": result.get("executive_summary"),
         "Datos usados": result.get("data_used"),
@@ -23,4 +23,5 @@ def build_tco_pdf(result: dict[str, Any]) -> bytes:
         "Supuestos y límites": result.get("assumptions_and_limits"),
         "Disclaimer": result.get("disclaimer"),
     }
-    return build_agent_pdf("analisis-tco.pdf", "Análisis de Costo Total / TCO", ordered)
+    return build_agent_pdf("analisis-tco.pdf", "Analisis de Costo Total / TCO", ordered, branding)
+

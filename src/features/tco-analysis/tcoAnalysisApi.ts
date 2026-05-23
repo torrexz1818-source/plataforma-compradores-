@@ -166,13 +166,17 @@ export async function analyzeTco(payload: AnalyzeTcoPayload): Promise<TcoAnalysi
   return response.json() as Promise<TcoAnalysisResult>;
 }
 
-export async function downloadTcoPdf(result: TcoAnalysisResult) {
+export async function downloadTcoPdf(input: {
+  result: TcoAnalysisResult;
+  pdfMode?: string;
+  branding?: Record<string, unknown>;
+}) {
   let response: Response;
   try {
     response = await fetch(`${getAiEngineBaseUrl()}/agents/tco-analysis/generate-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ result }),
+      body: JSON.stringify({ result: input.result, pdf_mode: input.pdfMode, branding: input.branding }),
     });
   } catch (error) {
     throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));

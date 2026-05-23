@@ -10,6 +10,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
 
 from app.agents.terms_of_reference.schemas import TermsOfReferenceResult
+from app.utils.pdf_report import build_branding
 
 
 def slugify(value: str) -> str:
@@ -29,7 +30,7 @@ def _add_section(story: list, styles: dict, title: str, content: str) -> None:
     story.append(Spacer(1, 0.25 * cm))
 
 
-def build_pdf(document_payload: dict) -> tuple[bytes, str]:
+def build_pdf(document_payload: dict, branding_payload: dict | None = None) -> tuple[bytes, str]:
     try:
         result = TermsOfReferenceResult.model_validate(document_payload)
     except Exception as exc:
@@ -56,8 +57,15 @@ def build_pdf(document_payload: dict) -> tuple[bytes, str]:
     doc = result.generated_document
     general = doc.general_data
     budget = doc.budget_chain
+    branding = build_branding(branding_payload)
+    brand_label = ""
+    if branding.mode == "standard_branded":
+        brand_label = "Buyer Nodus - Nodus IA"
+    elif branding.mode == "custom_brand":
+        brand_label = branding.company_name or "Documento corporativo"
+
     story: list = [
-        Paragraph("Buyer Nodus", styles["Meta"]),
+        *( [Paragraph(brand_label, styles["Meta"])] if brand_label else [] ),
         Paragraph(result.title, styles["Title"]),
         Paragraph(f"Fecha de generacion: {datetime.now().strftime('%Y-%m-%d %H:%M')}", styles["Meta"]),
         Paragraph(f"Tipo: {result.requirement_type} | Categoria: {result.category}", styles["Meta"]),

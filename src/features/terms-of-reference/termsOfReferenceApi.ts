@@ -201,13 +201,17 @@ export async function generateTermsOfReference(payload: GenerateTermsPayload): P
   return response.json() as Promise<TermsResult>;
 }
 
-export async function downloadTermsPdf(result: TermsResult) {
+export async function downloadTermsPdf(input: {
+  result: TermsResult;
+  pdfMode?: string;
+  branding?: Record<string, unknown>;
+}) {
   let response: Response;
   try {
     response = await fetch(`${getAiEngineBaseUrl()}/agents/terms-of-reference/generate-pdf`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ document: result }),
+      body: JSON.stringify({ document: input.result, pdf_mode: input.pdfMode, branding: input.branding }),
     });
   } catch (error) {
     throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));

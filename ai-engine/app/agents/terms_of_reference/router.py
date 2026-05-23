@@ -62,7 +62,7 @@ async def generate(
 
 @router.post("/generate-pdf")
 async def generate_pdf(payload: PdfRequest):
-    content, filename = build_pdf(payload.document)
+    content, filename = build_pdf(payload.document, {**(payload.branding or {}), "pdf_mode": payload.pdf_mode})
     return Response(
         content=content,
         media_type="application/pdf",

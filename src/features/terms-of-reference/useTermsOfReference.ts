@@ -22,6 +22,6 @@ export function useGenerateTermsOfReference() {
 
 export function useDownloadTermsPdf() {
   return useMutation({
-    mutationFn: (document: TermsResult) => downloadTermsPdf(document),
+    mutationFn: (input: { result: TermsResult; pdfMode?: string; branding?: Record<string, unknown> }) => downloadTermsPdf(input),
   });
 }

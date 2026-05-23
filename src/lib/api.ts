@@ -32,6 +32,9 @@ import {
   ExpertProfile,
   ExpertSummary,
   Agent,
+  AgentPdfMode,
+  AgentPdfOptions,
+  AgentPdfSettings,
   AgentExecution,
   AgentFeedback,
   AdminAgentMetrics,
@@ -40,6 +43,7 @@ import {
   EmployabilityJob,
   EmployabilityTalentProfile,
   User,
+  UserPdfBrandingSettings,
   UserStatus,
 } from '@/types';
 
@@ -849,6 +853,47 @@ export async function updateAdminAgentStatus(
   });
 }
 
+export async function getAdminUserPdfBranding(userId: string) {
+  return apiRequest<UserPdfBrandingSettings>(`/admin/users/${userId}/pdf-branding`, { auth: true });
+}
+
+export async function updateAdminUserPdfBranding(
+  userId: string,
+  payload: Partial<Pick<
+    UserPdfBrandingSettings,
+    | 'standardPdfEnabled'
+    | 'whiteLabelPdfEnabled'
+    | 'customBrandPdfEnabled'
+    | 'customBrandName'
+    | 'customLogoUrl'
+    | 'customPrimaryColor'
+    | 'customFooterText'
+    | 'premiumPdfStatus'
+    | 'adminNotes'
+  >>,
+) {
+  return apiRequest<UserPdfBrandingSettings>(`/admin/users/${userId}/pdf-branding`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getAdminAgentPdfSettings(agentKey: string) {
+  return apiRequest<AgentPdfSettings>(`/admin/ai-agents/${agentKey}/pdf-settings`, { auth: true });
+}
+
+export async function updateAdminAgentPdfSettings(
+  agentKey: string,
+  payload: Partial<Pick<AgentPdfSettings, 'standardPdfEnabled' | 'whiteLabelAvailable' | 'customBrandAvailable'>>,
+) {
+  return apiRequest<AgentPdfSettings>(`/admin/ai-agents/${agentKey}/pdf-settings`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getNewsPosts() {
   const data = await apiRequest<NewsListResponse>('/news', { auth: true });
   return data.items.map(normalizeNewsPostAssetUrls);
@@ -1385,5 +1430,19 @@ export async function getMyAgentExecutions() {
     auth: true,
   });
   return data.items;
+}
+
+export async function getMyAgentPdfOptions(agentKey: string) {
+  return apiRequest<AgentPdfOptions>(`/agents/pdf-options${buildQuery({ agentKey })}`, {
+    auth: true,
+  });
+}
+
+export async function validateAgentPdfMode(payload: { agentKey: string; pdfMode: AgentPdfMode }) {
+  return apiRequest<{ allowed: true; options: AgentPdfOptions }>('/agents/pdf-options/validate', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
 }
 

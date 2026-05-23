@@ -6,6 +6,7 @@ import { UsersService } from '../users/users.service';
 import { UserRole } from '../users/domain/user-role.enum';
 
 export type AgentStatus = 'active' | 'coming_soon' | 'disabled' | 'hidden';
+export type AgentPdfMode = 'standard_branded' | 'white_label' | 'custom_brand';
 type FeedbackAdminStatus =
   | 'pending'
   | 'reviewed'
@@ -90,6 +91,32 @@ type AgentFeedbackRecord = {
   improvementSuggestion?: string;
   adminStatus: FeedbackAdminStatus;
   adminNotes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type UserPdfBrandingSettingsRecord = {
+  id: string;
+  userId: string;
+  standardPdfEnabled: boolean;
+  whiteLabelPdfEnabled: boolean;
+  customBrandPdfEnabled: boolean;
+  customBrandName?: string;
+  customLogoUrl?: string;
+  customPrimaryColor?: string;
+  customFooterText?: string;
+  premiumPdfStatus: 'active' | 'inactive';
+  adminNotes?: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type AgentPdfSettingsRecord = {
+  id: string;
+  agentKey: string;
+  standardPdfEnabled: boolean;
+  whiteLabelAvailable: boolean;
+  customBrandAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -321,6 +348,113 @@ export class AgentsService {
     );
 
     return { agent: await this.getAgentDetail(agent.agentKey, { includeHidden: true }), message: 'Estado actualizado correctamente' };
+  }
+
+  async getUserPdfBrandingSettingsForAdmin(userId: string) {
+    await this.usersService.requireActiveUser(userId);
+    return this.serializeUserPdfBrandingSettings(await this.getOrCreateUserPdfBrandingSettings(userId));
+  }
+
+  async updateUserPdfBrandingSettingsForAdmin(
+    userId: string,
+    payload: Partial<Pick<
+      UserPdfBrandingSettingsRecord,
+      | 'standardPdfEnabled'
+      | 'whiteLabelPdfEnabled'
+      | 'customBrandPdfEnabled'
+      | 'customBrandName'
+      | 'customLogoUrl'
+      | 'customPrimaryColor'
+      | 'customFooterText'
+      | 'premiumPdfStatus'
+      | 'adminNotes'
+    >>,
+  ) {
+    await this.usersService.requireActiveUser(userId);
+    const current = await this.getOrCreateUserPdfBrandingSettings(userId);
+    const now = new Date();
+    const updates: Partial<UserPdfBrandingSettingsRecord> = { updatedAt: now };
+
+    if (typeof payload.standardPdfEnabled === 'boolean') updates.standardPdfEnabled = payload.standardPdfEnabled;
+    if (typeof payload.whiteLabelPdfEnabled === 'boolean') updates.whiteLabelPdfEnabled = payload.whiteLabelPdfEnabled;
+    if (typeof payload.customBrandPdfEnabled === 'boolean') updates.customBrandPdfEnabled = payload.customBrandPdfEnabled;
+    if (typeof payload.customBrandName === 'string') updates.customBrandName = payload.customBrandName.trim();
+    if (typeof payload.customLogoUrl === 'string') updates.customLogoUrl = payload.customLogoUrl.trim();
+    if (typeof payload.customPrimaryColor === 'string') updates.customPrimaryColor = payload.customPrimaryColor.trim();
+    if (typeof payload.customFooterText === 'string') updates.customFooterText = payload.customFooterText.trim();
+    if (typeof payload.adminNotes === 'string') updates.adminNotes = payload.adminNotes.trim();
+    if (payload.premiumPdfStatus === 'active' || payload.premiumPdfStatus === 'inactive') {
+      updates.premiumPdfStatus = payload.premiumPdfStatus;
+    }
+
+    await this.userPdfBrandingSettingsCollection().updateOne({ id: current.id }, { $set: updates });
+    return this.getUserPdfBrandingSettingsForAdmin(userId);
+  }
+
+  async getAgentPdfSettingsForAdmin(agentKey: string) {
+    const agent = await this.findAgent(agentKey);
+    if (!agent) throw new NotFoundException('Agente no encontrado');
+    return this.serializeAgentPdfSettings(await this.getOrCreateAgentPdfSettings(agent.agentKey));
+  }
+
+  async updateAgentPdfSettingsForAdmin(
+    agentKey: string,
+    payload: Partial<Pick<AgentPdfSettingsRecord, 'standardPdfEnabled' | 'whiteLabelAvailable' | 'customBrandAvailable'>>,
+  ) {
+    const agent = await this.findAgent(agentKey);
+    if (!agent) throw new NotFoundException('Agente no encontrado');
+    const current = await this.getOrCreateAgentPdfSettings(agent.agentKey);
+    const updates: Partial<AgentPdfSettingsRecord> = { updatedAt: new Date() };
+
+    if (typeof payload.standardPdfEnabled === 'boolean') updates.standardPdfEnabled = payload.standardPdfEnabled;
+    if (typeof payload.whiteLabelAvailable === 'boolean') updates.whiteLabelAvailable = payload.whiteLabelAvailable;
+    if (typeof payload.customBrandAvailable === 'boolean') updates.customBrandAvailable = payload.customBrandAvailable;
+
+    await this.agentPdfSettingsCollection().updateOne({ id: current.id }, { $set: updates });
+    return this.getAgentPdfSettingsForAdmin(agent.agentKey);
+  }
+
+  async getPdfOptionsForUser(userId: string, agentKey: string) {
+    const agent = await this.findAgent(agentKey);
+    if (!agent) throw new NotFoundException('Agente no encontrado');
+    const [user, userSettings, agentSettings] = await Promise.all([
+      this.usersService.requireActiveUser(userId),
+      this.getOrCreateUserPdfBrandingSettings(userId),
+      this.getOrCreateAgentPdfSettings(agent.agentKey),
+    ]);
+    const premiumActive = userSettings.premiumPdfStatus === 'active';
+    const modes = {
+      standardBranded: userSettings.standardPdfEnabled && agentSettings.standardPdfEnabled,
+      whiteLabel: premiumActive && userSettings.whiteLabelPdfEnabled && agentSettings.whiteLabelAvailable,
+      customBrand: premiumActive && userSettings.customBrandPdfEnabled && agentSettings.customBrandAvailable,
+    };
+
+    return {
+      agentKey: agent.agentKey,
+      modes,
+      branding: {
+        companyName: userSettings.customBrandName || user.commercialName || user.company,
+        logoUrl: userSettings.customLogoUrl || user.avatarUrl,
+        primaryColor: userSettings.customPrimaryColor || agent.accentColor,
+        footerText: userSettings.customFooterText,
+      },
+    };
+  }
+
+  async assertPdfModeAllowed(userId: string, agentKey: string, mode: AgentPdfMode) {
+    const options = await this.getPdfOptionsForUser(userId, agentKey);
+    const allowed =
+      mode === 'standard_branded'
+        ? options.modes.standardBranded
+        : mode === 'white_label'
+          ? options.modes.whiteLabel
+          : options.modes.customBrand;
+
+    if (!allowed) {
+      throw new ForbiddenException('No tienes permiso para descargar este formato de PDF.');
+    }
+
+    return { allowed: true, options };
   }
 
   async activateAgent(agentId: string) {
@@ -605,6 +739,59 @@ export class AgentsService {
     };
   }
 
+  private async getOrCreateUserPdfBrandingSettings(userId: string) {
+    const existing = await this.userPdfBrandingSettingsCollection().findOne({ userId });
+    if (existing) return existing;
+
+    const now = new Date();
+    const settings: UserPdfBrandingSettingsRecord = {
+      id: randomUUID(),
+      userId,
+      standardPdfEnabled: true,
+      whiteLabelPdfEnabled: false,
+      customBrandPdfEnabled: false,
+      premiumPdfStatus: 'inactive',
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.userPdfBrandingSettingsCollection().insertOne(settings);
+    return settings;
+  }
+
+  private async getOrCreateAgentPdfSettings(agentKey: string) {
+    const existing = await this.agentPdfSettingsCollection().findOne({ agentKey });
+    if (existing) return existing;
+
+    const now = new Date();
+    const settings: AgentPdfSettingsRecord = {
+      id: randomUUID(),
+      agentKey,
+      standardPdfEnabled: true,
+      whiteLabelAvailable: false,
+      customBrandAvailable: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    await this.agentPdfSettingsCollection().insertOne(settings);
+    return settings;
+  }
+
+  private serializeUserPdfBrandingSettings(settings: UserPdfBrandingSettingsRecord) {
+    return {
+      ...settings,
+      createdAt: settings.createdAt.toISOString(),
+      updatedAt: settings.updatedAt.toISOString(),
+    };
+  }
+
+  private serializeAgentPdfSettings(settings: AgentPdfSettingsRecord) {
+    return {
+      ...settings,
+      createdAt: settings.createdAt.toISOString(),
+      updatedAt: settings.updatedAt.toISOString(),
+    };
+  }
+
   private normalizeLegacyAgentKey(idOrSlug: string) {
     const legacyMap: Record<string, string> = {
       'agent-quote-comparator': 'proposal_comparison',
@@ -633,5 +820,13 @@ export class AgentsService {
 
   private feedbackCollection() {
     return this.databaseService.collection<AgentFeedbackRecord>('agentFeedback');
+  }
+
+  private userPdfBrandingSettingsCollection() {
+    return this.databaseService.collection<UserPdfBrandingSettingsRecord>('userPdfBrandingSettings');
+  }
+
+  private agentPdfSettingsCollection() {
+    return this.databaseService.collection<AgentPdfSettingsRecord>('agentPdfSettings');
   }
 }
