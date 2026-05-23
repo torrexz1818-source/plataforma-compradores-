@@ -79,8 +79,8 @@ const BuyerLayout = () => {
       };
   const buyerItemsForRole = filterModuleNavItems(buyerModuleNavItems, moduleActivationsQuery.data?.modules, 'buyer');
   const supplierItemsForRole = filterModuleNavItems(supplierModuleNavItems, moduleActivationsQuery.data?.modules, 'supplier');
-  const adminBuyerItems = buyerModuleNavItems;
-  const adminSupplierItems = supplierModuleNavItems;
+  const adminBuyerItems = filterModuleNavItems(buyerModuleNavItems, moduleActivationsQuery.data?.modules, 'buyer');
+  const adminSupplierItems = filterModuleNavItems(supplierModuleNavItems, moduleActivationsQuery.data?.modules, 'supplier');
 
   const navSections = isAdmin
     ? [

@@ -508,6 +508,15 @@ export class AgentsService {
 
   async getModuleActivationSettingsForUser(role: string) {
     const normalizedRole = this.normalizeModuleRole(role);
+    if (role === UserRole.ADMIN) {
+      await this.ensureModuleActivationDefaults();
+      const items = await this.moduleActivationSettingsCollection().find({}).toArray();
+      return {
+        role,
+        modules: items.map((item) => this.serializeModuleActivationSettings(item)),
+      };
+    }
+
     if (!normalizedRole) {
       return { role, modules: [] };
     }

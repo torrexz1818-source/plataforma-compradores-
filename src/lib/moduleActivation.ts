@@ -115,7 +115,7 @@ export function useMyModuleActivations() {
   return useQuery({
     queryKey: ['module-activations', 'mine', user?.role],
     queryFn: getMyModuleActivations,
-    enabled: Boolean(user?.role && user.role !== 'admin'),
+    enabled: Boolean(user?.role),
     staleTime: 0,
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always',
