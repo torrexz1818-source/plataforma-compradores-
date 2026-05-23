@@ -389,11 +389,17 @@ export class AgentsService {
   }
 
   async updateAgentStatus(agentKey: string, status: AgentStatus) {
-    await this.ensureAgentCatalog();
+    try {
+      await this.ensureAgentCatalog();
+    } catch {
+      // Updating a status must not fail because catalog hydration had a production DB issue.
+    }
+
     if (!['active', 'coming_soon', 'disabled', 'hidden'].includes(status)) {
       throw new BadRequestException('Estado de agente invalido');
     }
-    const agent = await this.findAgent(agentKey);
+
+    const agent = (await this.findAgent(agentKey).catch(() => null)) ?? this.findCatalogAgent(agentKey);
     if (!agent) throw new NotFoundException('Agente no encontrado');
 
     const now = new Date();
@@ -1015,6 +1021,22 @@ export class AgentsService {
       'elaboracion-terminos-referencia': 'terms_of_reference',
     };
     return legacyMap[idOrSlug] ?? idOrSlug;
+  }
+
+  private findCatalogAgent(idOrSlug: string): AgentRecord | null {
+    const normalized = this.normalizeLegacyAgentKey(idOrSlug);
+    const catalogAgent = AGENT_CATALOG.find(
+      (agent) => agent.agentKey === normalized || agent.id === normalized || agent.slug === idOrSlug,
+    );
+
+    if (!catalogAgent) return null;
+
+    const now = new Date();
+    return {
+      ...catalogAgent,
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
   private async findAgent(idOrSlug: string) {
