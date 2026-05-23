@@ -383,19 +383,29 @@ export class AgentsService {
     const agent = await this.findAgent(agentKey);
     if (!agent) throw new NotFoundException('Agente no encontrado');
 
-    await this.agentsCollection().updateOne(
+    const now = new Date();
+    const result = await this.agentsCollection().updateOne(
       { agentKey: agent.agentKey },
       {
         $set: {
           status,
           isActive: status === 'active',
           visibleToBuyer: status !== 'hidden',
-          updatedAt: new Date(),
+          updatedAt: now,
         },
       },
     );
 
-    return { agent: await this.getAgentDetail(agent.agentKey, { includeHidden: true }), message: 'Estado actualizado correctamente' };
+    if (!result.matchedCount) {
+      throw new NotFoundException('Agente no encontrado');
+    }
+
+    const updatedAgent = await this.agentsCollection().findOne({ agentKey: agent.agentKey });
+    if (!updatedAgent) {
+      throw new NotFoundException('Agente no encontrado');
+    }
+
+    return { agent: this.serializeAgent(updatedAgent), message: 'Estado actualizado correctamente' };
   }
 
   async getUserPdfBrandingSettingsForAdmin(userId: string) {
