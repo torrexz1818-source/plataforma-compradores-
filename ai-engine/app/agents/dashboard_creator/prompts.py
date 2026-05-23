@@ -5,41 +5,33 @@ from typing import Any
 
 
 SYSTEM_PROMPT = """
-Actua como analista senior de compras, reportería y business intelligence para procurement corporativo.
+Actua como analista senior de compras, reporteria y business intelligence para procurement corporativo.
 
-Recibiras un paquete preparado por Python que puede contener:
-- perfil de datos estructurados,
-- KPIs, rankings, tablas y graficos calculados por Python,
-- resúmenes compactos de documentos,
+Tu trabajo en este agente es LLM-first: extraes la informacion desde documentos y muestras tabulares compactas, la ordenas y la conviertes en un dashboard visual util.
+
+Recibiras:
+- contexto del usuario,
+- perfil tecnico de archivos,
+- muestras compactas de Excel/CSV,
 - fragmentos relevantes de PDFs, Word o imagenes OCR,
-- datos parcialmente estructurados,
-- contexto del usuario.
-
-Tu tarea es ayudar a convertir esa informacion en un dashboard claro, visual y util.
+- limitaciones de extraccion.
 
 Debes:
-- entender que informacion existe,
-- clasificarla,
-- sintetizar datos sueltos,
-- proponer KPIs cuando los documentos lo permitan,
-- proponer graficos adecuados,
-- crear tablas resumen desde documentos cuando el contenido lo permita,
-- generar insights,
-- generar observaciones,
-- generar recomendaciones accionables,
-- indicar calidad de datos,
+- extraer KPIs reales si estan escritos en los documentos o tablas,
+- crear graficos con puntos de datos que existan en el paquete,
+- crear tablas resumen con la misma informacion del documento,
+- redactar resumen ejecutivo,
+- generar insights, observaciones y recomendaciones,
 - indicar informacion faltante y limitaciones.
 
 Reglas obligatorias:
 - No inventes datos.
-- No inventes montos, proveedores, fechas o categorias.
-- Si una cifra no esta explicitamente en el paquete o no fue calculada por Python, no la presentes como dato real.
-- Si organizas datos extraidos de PDFs, marca la confianza.
-- Si el dashboard se basa solo en documentos no tabulares, advierte que la precision cuantitativa es menor.
-- Si faltan columnas o datos clave, reportalo.
-- No modifiques calculos hechos por Python.
-- Puedes transformar informacion suelta en tablas resumen cuando el contenido lo permita.
-- Puedes sugerir graficos aunque los datos sean parciales, pero usa data_source="suggested" y confidence="low".
+- No inventes montos, proveedores, fechas, categorias ni porcentajes.
+- Si una cifra no esta explicitamente en el paquete, no la presentes como dato real.
+- No uses nombres de columnas genericas como "Columna1" para inventar significado financiero.
+- Si un dato viene de PDF o texto extraido, marca la confianza segun claridad de la fuente.
+- Si la informacion es parcial, usa confidence="low" o "medium" y explicalo.
+- El dashboard debe tener formato ejecutivo: KPIs, graficos, tablas, insights y recomendaciones.
 - Devuelve exclusivamente JSON valido.
 - No devuelvas markdown fuera del JSON.
 """
@@ -70,19 +62,12 @@ def build_insight_prompt(
         "analysis_mode": profiled.get("analysis_mode"),
         "confidence_level": profiled.get("confidence_level"),
         "data_profile": profiled.get("profile"),
-        "python_calculated": {
-            "kpis": profiled.get("kpis", [])[:12],
-            "charts": [
-                {
-                    "chart_id": chart.get("chart_id"),
-                    "title": chart.get("title"),
-                    "type": chart.get("type"),
-                    "data_sample": chart.get("data", [])[:10],
-                    "python_insight": chart.get("insight"),
-                }
-                for chart in profiled.get("charts", [])[:8]
-            ],
-            "tables": profiled.get("tables", [])[:4],
+        "python_profile_only": {
+            "detected_columns": profiled.get("profile", {}).get("detected_columns", [])[:80],
+            "date_columns": profiled.get("profile", {}).get("date_columns", []),
+            "numeric_columns": profiled.get("profile", {}).get("numeric_columns", []),
+            "category_columns": profiled.get("profile", {}).get("category_columns", []),
+            "warnings": profiled.get("profile", {}).get("data_quality_warnings", [])[:12],
         },
         "document_sources": [
             {
@@ -92,7 +77,7 @@ def build_insight_prompt(
                 "excerpt": doc.get("llm_excerpt"),
                 "limitations": doc.get("limitations", []),
             }
-            for doc in profiled.get("document_summaries", [])[:8]
+            for doc in profiled.get("document_summaries", [])[:10]
         ],
         "expected_json": {
             "executive_summary": "string",
@@ -106,7 +91,7 @@ def build_insight_prompt(
                     "title": "string",
                     "value": "string",
                     "description": "string",
-                    "calculation_logic": "string",
+                    "calculation_logic": "dato extraido de documento o tabla; indicar fuente breve",
                     "source": "llm_structured_from_documents",
                     "confidence": "low|medium|high",
                 }

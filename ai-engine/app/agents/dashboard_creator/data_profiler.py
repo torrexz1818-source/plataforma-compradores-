@@ -285,6 +285,14 @@ def _detect_document_title(text: str) -> str | None:
     return None
 
 
+def _tabular_excerpt(frame: pd.DataFrame, max_rows: int = 80) -> str:
+    visible_columns = [column for column in frame.columns if not str(column).startswith("__")]
+    if not visible_columns:
+        return ""
+    compact = frame[visible_columns].head(max_rows).copy()
+    return compact.to_csv(index=False)[:9000]
+
+
 def _detect_analysis_type(columns: list[str], document_summaries: list[dict[str, Any]], requested_type: str | None = None) -> str:
     haystack = " ".join(columns + [str(requested_type or "")]).lower()
     for doc in document_summaries:
@@ -422,6 +430,21 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 continue
             frame["__source_file"] = filename
             frames.append(frame)
+            document_summaries.append(
+                {
+                    "file_name": filename,
+                    "detected_type": file_type,
+                    "text_preview": None,
+                    "detected_title": None,
+                    "llm_excerpt": _tabular_excerpt(frame),
+                    "relevant_findings": [
+                        "tabla",
+                        "datos estructurados",
+                        "columnas: " + ", ".join([column for column in frame.columns if not str(column).startswith("__")][:12]),
+                    ],
+                    "limitations": ["Muestra compacta enviada al LLM; validar contra el archivo fuente antes de decidir."],
+                }
+            )
             detected_columns.extend([column for column in frame.columns if not column.startswith("__")])
             n_cols, d_cols, c_cols = _detect_columns(frame)
             numeric_columns.extend(n_cols)
