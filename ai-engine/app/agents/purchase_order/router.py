@@ -2,7 +2,7 @@ from fastapi import APIRouter
 from fastapi.responses import Response
 
 from app.agents.generic_mvp import GenericAgentRequest, GenericPdfRequest, build_stub_result
-from app.utils.pdf_report import build_agent_pdf
+from app.utils.agent_result_pdf import build_platform_result_pdf
 
 router = APIRouter(prefix="/agents/purchase-order", tags=["Purchase order"])
 
@@ -16,5 +16,5 @@ async def generate(payload: GenericAgentRequest):
 
 @router.post("/generate-pdf")
 async def generate_pdf(payload: GenericPdfRequest):
-    content = build_agent_pdf("orden-compra.pdf", "Elaboracion de Orden de Compra", payload.result, {**(payload.branding or {}), "pdf_mode": payload.pdf_mode})
+    content = build_platform_result_pdf(payload.result, "Elaboracion de Orden de Compra", {**(payload.branding or {}), "pdf_mode": payload.pdf_mode}, "Elaboracion de Orden de Compra")
     return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": 'attachment; filename="orden-compra.pdf"'})

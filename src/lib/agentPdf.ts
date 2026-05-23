@@ -25,9 +25,39 @@ type PdfContext = {
 
 const labelMap: Record<string, string> = {
   analysis_title: 'Titulo del analisis',
+  dashboard_title: 'Titulo del dashboard',
+  title: 'Titulo',
   service: 'Servicio evaluado',
   objective: 'Objetivo del analisis',
+  audience: 'Audiencia',
+  period: 'Periodo',
+  data_type: 'Tipo de datos',
+  analysis_type: 'Tipo de analisis',
+  analysis_mode: 'Modo de analisis',
+  confidence_level: 'Nivel de confianza',
+  data_understanding: 'Entendimiento de datos',
+  data_profile: 'Perfil y calidad de datos',
   executive_summary: 'Resumen ejecutivo',
+  summary: 'Resumen',
+  generated_document: 'Documento generado',
+  detected_alternatives: 'Alternativas detectadas',
+  source_files: 'Archivos procesados',
+  document_summaries: 'Resumen de documentos procesados',
+  supporting_documents_summary: 'Resumen de documentos procesados',
+  extracted_data_quality: 'Calidad de extraccion',
+  data_used: 'Datos usados',
+  kpis: 'KPIs principales',
+  charts: 'Graficos',
+  tables: 'Tablas',
+  tco_matrix: 'Matriz TCO comparativa',
+  tco_totals: 'Totales TCO',
+  ranking: 'Ranking',
+  interpretation: 'Interpretacion',
+  risk_analysis: 'Analisis de riesgos',
+  sensitivity_analysis: 'Analisis de sensibilidad',
+  strategic_recommendation: 'Recomendacion estrategica',
+  insights: 'Insights',
+  recommendations: 'Recomendaciones',
   recommended_supplier: 'Proveedor recomendado',
   supplier_name: 'Proveedor',
   weighted_score: 'Puntaje ponderado',
@@ -54,6 +84,64 @@ const labelMap: Record<string, string> = {
   ruc: 'RUC',
 };
 
+const sectionOrder = [
+  'dashboard_title',
+  'analysis_title',
+  'title',
+  'objective',
+  'audience',
+  'period',
+  'data_type',
+  'analysis_type',
+  'analysis_mode',
+  'confidence_level',
+  'data_understanding',
+  'data_profile',
+  'executive_summary',
+  'summary',
+  'generated_document',
+  'detected_alternatives',
+  'source_files',
+  'document_summaries',
+  'supporting_documents_summary',
+  'extracted_data_quality',
+  'data_used',
+  'kpis',
+  'charts',
+  'tables',
+  'tco_matrix',
+  'tco_totals',
+  'ranking',
+  'interpretation',
+  'risk_analysis',
+  'sensitivity_analysis',
+  'strategic_recommendation',
+  'observations',
+  'insights',
+  'recommendations',
+  'missing_information',
+  'questions_for_user_or_suppliers',
+  'questions_for_suppliers',
+  'final_recommendation',
+  'assumptions_and_limits',
+  'suggested_filters',
+  'layout_suggestion',
+  'disclaimer',
+];
+
+const technicalKeys = new Set([
+  'pdf_available',
+  'llm_used',
+  'model_provider',
+  'model_name',
+  'tokens_input',
+  'tokens_output',
+  'cost_input',
+  'cost_output',
+  'cost_total',
+  'latency_ms',
+]);
+
 function formatLabel(value: string) {
   return labelMap[value] ?? value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -71,6 +159,10 @@ function asText(value: unknown, fallback = 'No especificado') {
   if (Array.isArray(value)) return value.map((item) => asText(item, '')).filter(Boolean).join(', ') || fallback;
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
+}
+
+function isEmptyValue(value: unknown) {
+  return value === null || value === undefined || value === '' || (Array.isArray(value) && !value.length);
 }
 
 function shortText(value: unknown, max = 180) {
@@ -238,6 +330,45 @@ function addTable(ctx: PdfContext, headers: string[], rows: unknown[][], widths?
   ctx.y += 4;
 }
 
+function orderedResultEntries(result: Record<string, unknown>) {
+  const used = new Set<string>();
+  const ordered: [string, unknown][] = [];
+  sectionOrder.forEach((key) => {
+    if (key in result && !technicalKeys.has(key) && !isEmptyValue(result[key])) {
+      ordered.push([key, result[key]]);
+      used.add(key);
+    }
+  });
+  Object.entries(result).forEach(([key, value]) => {
+    if (!used.has(key) && !technicalKeys.has(key) && !isEmptyValue(value)) ordered.push([key, value]);
+  });
+  return ordered;
+}
+
+function chartRows(value: unknown) {
+  return asArray(value).map((chart) => {
+    const record = asRecord(chart);
+    const points = asArray(record.data)
+      .map((item) => {
+        const point = asRecord(item);
+        if (!Object.keys(point).length) return asText(item, '');
+        const label = point.label ?? point.x ?? point.name ?? 'Dato';
+        const amount = point.value ?? point.y ?? point.amount ?? 'No especificado';
+        return `${asText(label)}: ${asText(amount)}`;
+      })
+      .filter(Boolean)
+      .join('; ');
+    return {
+      chart: record.title,
+      type: record.type,
+      source: record.data_source ?? record.source,
+      confidence: record.confidence,
+      data: points || 'Sin datos tabulares',
+      insight: record.insight ?? record.description,
+    };
+  });
+}
+
 function getRecommendedRanking(result: Record<string, unknown>) {
   const recommended = asText(result.recommended_supplier, '');
   const ranking = asArray(result.ranking).map(asRecord);
@@ -375,6 +506,20 @@ function addProposalComparisonPdf(input: PdfInput) {
   );
 
   addCard(ctx, 'Recomendacion final', asText(result.final_recommendation), 'green');
+  addAdditionalResultSections(ctx, result, [
+    'recommended_supplier',
+    'executive_summary',
+    'suppliers',
+    'ranking',
+    'evaluation_matrix',
+    'criteria_guide',
+    'executive_comparison_table',
+    'global_risks',
+    'missing_information',
+    'questions_for_suppliers',
+    'final_recommendation',
+    'disclaimer',
+  ]);
   addSection(ctx, 'Disclaimer');
   addText(ctx, asText(result.disclaimer, 'Documento generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos antes de tomar decisiones finales.'), {
     size: 8.5,
@@ -382,6 +527,15 @@ function addProposalComparisonPdf(input: PdfInput) {
   });
   addFooter(ctx);
   ctx.doc.save(input.fileName ?? 'comparativo-propuestas-nodus-ia.pdf');
+}
+
+function addAdditionalResultSections(ctx: PdfContext, result: Record<string, unknown>, coveredKeys: string[]) {
+  const covered = new Set(coveredKeys);
+  orderedResultEntries(result).forEach(([key, value]) => {
+    if (covered.has(key) || key === 'disclaimer') return;
+    addSection(ctx, formatLabel(key));
+    addValueBlock(ctx, key, value);
+  });
 }
 
 function isProposalComparison(result: unknown) {
@@ -405,6 +559,34 @@ function formatValue(value: unknown, depth = 0): string[] {
   return [`${prefix}${String(value)}`];
 }
 
+function addValueBlock(ctx: PdfContext, key: string, value: unknown) {
+  if (key === 'charts') {
+    const rows = chartRows(value);
+    if (rows.length) {
+      addTable(
+        ctx,
+        ['Grafico', 'Tipo', 'Fuente', 'Confianza', 'Datos mostrados', 'Insight'],
+        rows.map((row) => [row.chart, row.type, row.source, row.confidence, row.data, row.insight]),
+        [28, 20, 24, 20, 55, ctx.maxWidth - 147],
+      );
+      addText(ctx, 'Los graficos del PDF usan la misma data generada para la plataforma; si no se puede dibujar el grafico exacto, se muestra una tabla equivalente.', {
+        size: 8.2,
+        color: '#64748b',
+      });
+      return;
+    }
+  }
+  if (Array.isArray(value) && value.every((item) => item && typeof item === 'object' && !Array.isArray(item))) {
+    const records = value.map(asRecord);
+    const keys = Object.keys(records[0] ?? {});
+    if (keys.length > 0 && keys.length <= 5) {
+      addTable(ctx, keys.map(formatLabel), records.map((record) => keys.map((item) => record[item])));
+      return;
+    }
+  }
+  formatValue(value).forEach((line) => addText(ctx, line, { size: 8.7, color: '#334155' }));
+}
+
 function addGenericPdf(input: PdfInput) {
   const ctx = createContext(input);
   addHeader(ctx, input);
@@ -412,16 +594,10 @@ function addGenericPdf(input: PdfInput) {
   const summary = result?.executive_summary ?? result?.summary ?? result?.final_recommendation;
   if (summary) addCard(ctx, 'Resumen ejecutivo', formatValue(summary).slice(0, 5));
 
-  Object.entries(result ?? {}).forEach(([key, value]) => {
+  orderedResultEntries(result ?? {}).forEach(([key, value]) => {
     if (['executive_summary', 'summary', 'disclaimer'].includes(key)) return;
     addSection(ctx, formatLabel(key));
-    if (Array.isArray(value) && value.every((item) => item && typeof item === 'object' && !Array.isArray(item))) {
-      const records = value.map(asRecord);
-      const keys = Object.keys(records[0] ?? {}).slice(0, 5);
-      addTable(ctx, keys.map(formatLabel), records.slice(0, 18).map((record) => keys.map((item) => record[item])));
-    } else {
-      formatValue(value).slice(0, 35).forEach((line) => addText(ctx, line, { size: 8.7, color: '#334155' }));
-    }
+    addValueBlock(ctx, key, value);
   });
 
   addSection(ctx, 'Disclaimer');

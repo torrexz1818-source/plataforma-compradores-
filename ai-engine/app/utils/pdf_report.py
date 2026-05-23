@@ -146,13 +146,15 @@ def _build_table_from_list(items: list[Any], styles: dict[str, ParagraphStyle]) 
     if not dict_items:
         return None
 
-    keys = list(dict_items[0].keys())[:5]
+    keys = list(dict_items[0].keys())
     if not keys:
+        return None
+    if len(keys) > 5:
         return None
 
     data = [[_label(key) for key in keys]]
-    for item in dict_items[:18]:
-        data.append([_flatten_value(item.get(key, "No especificado"))[:260] for key in keys])
+    for item in dict_items:
+        data.append([_flatten_value(item.get(key, "No especificado")) for key in keys])
 
     return _build_table(data, styles)
 
