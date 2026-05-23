@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { CheckCircle2, CreditCard, Sparkles, Upload } from 'lucide-react';
+import { CheckCircle2, CreditCard, Upload } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { additionalServices, aiCreditPacks, buyerMembershipPlans, supplierMembershipPlans, type MembershipAudience } from '../../shared/monetization';
+import { aiCreditPacks, buyerMembershipPlans, supplierMembershipPlans, type MembershipAudience } from '../../shared/monetization';
 import { createCheckout, confirmCheckout, getMyMonetization, updateCompanyLogo } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -114,26 +114,6 @@ export default function MonetizationPanel({ mode = 'full', reason, focus = 'plan
                 <p className="text-sm text-muted-foreground">{pack.unitPriceLabel}</p>
                 <Button className="mt-auto" variant="outline" disabled={checkoutMutation.isPending} onClick={() => buy('credits', pack.key)}>
                   Comprar créditos
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-lg font-semibold text-foreground">Servicios adicionales</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          {additionalServices.map((service) => (
-            <Card key={service.key} className="rounded-xl shadow-[var(--shadow-card)]">
-              <CardContent className="flex h-full flex-col gap-3 p-5">
-                <Sparkles className="h-6 w-6 text-primary" />
-                <h3 className="text-lg font-semibold text-foreground">{service.name}</h3>
-                <p className="text-xl font-bold text-foreground">{service.priceLabel}</p>
-                <p className="text-sm text-muted-foreground">{service.frequency}</p>
-                <p className="text-sm text-muted-foreground">{service.description}</p>
-                <Button className="mt-auto" variant="outline" disabled={checkoutMutation.isPending} onClick={() => buy('service', service.key)}>
-                  Comprar servicio
                 </Button>
               </CardContent>
             </Card>

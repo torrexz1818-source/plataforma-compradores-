@@ -16,7 +16,9 @@ import {
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   cancelExpertAppointment,
+  confirmCheckout,
   createExpertAppointment,
+  createCheckout,
   getExpertAvailability,
   getExpertProfile,
   getExperts,
@@ -27,6 +29,7 @@ import {
   updateMyExpertAvailabilitySettings,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { additionalServices } from '../../shared/monetization';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -197,6 +200,25 @@ const NexuExperts = () => {
       toast({
         title: 'No se pudo agendar',
         description: error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
+        variant: 'destructive',
+      });
+    },
+  });
+  const serviceCheckoutMutation = useMutation({
+    mutationFn: async (serviceKey: string) => {
+      const created = await createCheckout({ itemType: 'service', itemKey: serviceKey });
+      return confirmCheckout(created.checkout.id);
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Servicio comprado',
+        description: 'El servicio adicional quedo registrado para coordinarlo con Nexu Experts.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'No se pudo comprar el servicio',
+        description: error instanceof Error ? error.message : 'Intenta nuevamente.',
         variant: 'destructive',
       });
     },
@@ -1000,6 +1022,29 @@ const NexuExperts = () => {
                       >
                         {createAppointmentMutation.isPending ? 'Confirmando cita...' : 'Confirmar cita'}
                       </Button>
+
+                      <div className="rounded-2xl border border-primary/10 bg-primary/5 p-4">
+                        <h3 className="text-base font-semibold text-foreground">Servicios adicionales</h3>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          {additionalServices.map((service) => (
+                            <div key={service.key} className="flex h-full flex-col gap-2 rounded-xl border border-border bg-white p-4">
+                              <Sparkles className="h-5 w-5 text-primary" />
+                              <p className="text-sm font-semibold text-foreground">{service.name}</p>
+                              <p className="text-lg font-bold text-foreground">{service.priceLabel}</p>
+                              <p className="text-xs text-muted-foreground">{service.frequency}</p>
+                              <p className="text-sm leading-5 text-muted-foreground">{service.description}</p>
+                              <Button
+                                className="mt-auto"
+                                variant="outline"
+                                disabled={serviceCheckoutMutation.isPending}
+                                onClick={() => serviceCheckoutMutation.mutate(service.key)}
+                              >
+                                Comprar servicio
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ) : null}
                 </div>
