@@ -336,7 +336,7 @@ const NexuIA = () => {
           updatedAt: apiAgent?.updatedAt ?? baseAgent.updatedAt,
         } satisfies Agent;
       })
-      .filter((agent) => agent.status !== 'hidden')
+      .filter((agent) => agent.visibleToBuyer !== false)
       .sort((a, b) => (a.sortOrder ?? 99) - (b.sortOrder ?? 99));
   }, [agentsQuery.data]);
 

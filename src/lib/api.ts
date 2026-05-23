@@ -1473,13 +1473,13 @@ export async function getAgents(params?: {
     return buildCatalogFallbackAgents(data.items, true).filter((agent) => {
       const matchesCategory = !params?.category || agent.category === params.category;
       const matchesAutomation = !params?.automationType || agent.automationType === params.automationType;
-      return matchesCategory && matchesAutomation && agent.status !== 'hidden';
+      return matchesCategory && matchesAutomation && agent.visibleToBuyer !== false;
     });
   } catch {
     return buildCatalogFallbackAgents([], true).filter((agent) => {
       const matchesCategory = !params?.category || agent.category === params.category;
       const matchesAutomation = !params?.automationType || agent.automationType === params.automationType;
-      return matchesCategory && matchesAutomation && agent.status !== 'hidden';
+      return matchesCategory && matchesAutomation && agent.visibleToBuyer !== false;
     });
   }
 }
