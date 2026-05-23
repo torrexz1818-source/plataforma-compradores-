@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -29,11 +29,15 @@ import {
   adminUpdatePost,
   getAdminMemberships,
   getAdminAgentUsage,
+  getAdminAiAgents,
+  getAdminAgentFeedback,
+  getAdminAgentMetrics,
   getAdminDashboard,
   getPlatformStats,
   uploadFile,
   uploadAdminVideoInChunks,
   updateMembershipByAdmin,
+  updateAdminAgentStatus,
   updateUserStatus,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -70,12 +74,12 @@ const membershipPlans: Array<{
   {
     id: 'free',
     label: 'Plan gratuito',
-    description: '1 agente y 1 publicación por día. Información limitada.',
+    description: '1 agente y 1 publicaciÃ³n por dÃ­a. InformaciÃ³n limitada.',
   },
   {
     id: 'professional',
     label: 'Plan profesional',
-    description: '3 automatizaciones por día, notificaciones sectoriales y reuniones grupales.',
+    description: '3 automatizaciones por dÃ­a, notificaciones sectoriales y reuniones grupales.',
   },
   {
     id: 'premium',
@@ -181,6 +185,7 @@ const Admin = () => {
   const [resourceUploadError, setResourceUploadError] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedAgentKey, setSelectedAgentKey] = useState<string | null>(null);
   const [videoUploadProgress, setVideoUploadProgress] = useState<number>(0);
   const [isPublishingContent, setIsPublishingContent] = useState(false);
   const [publishError, setPublishError] = useState('');
@@ -244,6 +249,29 @@ const Admin = () => {
     queryKey: ['admin-agent-usage'],
     queryFn: getAdminAgentUsage,
     enabled: user?.role === 'admin',
+  });
+  const adminAgentsQuery = useQuery({
+    queryKey: ['admin-ai-agents'],
+    queryFn: getAdminAiAgents,
+    enabled: user?.role === 'admin',
+  });
+  const agentMetricsQuery = useQuery({
+    queryKey: ['admin-agent-metrics'],
+    queryFn: getAdminAgentMetrics,
+    enabled: user?.role === 'admin',
+  });
+  const agentFeedbackQuery = useQuery({
+    queryKey: ['admin-agent-feedback'],
+    queryFn: getAdminAgentFeedback,
+    enabled: user?.role === 'admin',
+  });
+  const agentStatusMutation = useMutation({
+    mutationFn: ({ agentKey, status }: { agentKey: string; status: 'active' | 'coming_soon' | 'disabled' | 'hidden' }) =>
+      updateAdminAgentStatus(agentKey, status),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-ai-agents'] });
+      void queryClient.invalidateQueries({ queryKey: ['admin-agent-metrics'] });
+    },
   });
 
   const updatePostMutation = useMutation({
@@ -411,6 +439,14 @@ const Admin = () => {
       ).length,
     }));
   }, [categories, data?.comments, postsById]);
+  const selectedAgent = useMemo(
+    () => (adminAgentsQuery.data ?? []).find((agent) => (agent.agentKey ?? agent.id) === selectedAgentKey) ?? null,
+    [adminAgentsQuery.data, selectedAgentKey],
+  );
+  const agentFeedbackBySelectedAgent = useMemo(
+    () => (agentFeedbackQuery.data ?? []).filter((item) => item.agentKey === (selectedAgent?.agentKey ?? selectedAgent?.id)),
+    [agentFeedbackQuery.data, selectedAgent],
+  );
 
   useEffect(() => {
     if (!categories.length) return;
@@ -499,6 +535,14 @@ const Admin = () => {
     return 'Gratuito';
   };
 
+  const getAgentStatusLabel = (status?: string) => {
+    if (status === 'active') return 'Activo';
+    if (status === 'coming_soon') return 'Proximamente';
+    if (status === 'disabled') return 'Desactivado';
+    if (status === 'hidden') return 'Oculto';
+    return 'Proximamente';
+  };
+
   const isVideoPost = (post: Pick<Post, 'mediaType' | 'videoUrl'>) => post.mediaType === 'video' || Boolean(post.videoUrl);
 
   const getMediaTypeLabel = (post: Pick<Post, 'mediaType' | 'videoUrl'>) => (isVideoPost(post) ? 'Video' : 'Articulo');
@@ -520,7 +564,7 @@ const Admin = () => {
 
     if (
       hasRequiredLearningRoute &&
-      /selecciona una ruta|ruta tematica|ruta temática/i.test(rawMessage)
+      /selecciona una ruta|ruta tematica|ruta temÃ¡tica/i.test(rawMessage)
     ) {
       return '';
     }
@@ -1746,7 +1790,7 @@ const Admin = () => {
         <section className="bg-card rounded-lg border border-border p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-medium text-foreground">Verificación de proveedores</h2>
+              <h2 className="text-lg font-medium text-foreground">VerificaciÃ³n de proveedores</h2>
               <p className="text-sm text-muted-foreground">
                 Solicitudes pendientes antes de habilitar acceso al ecosistema.
               </p>
@@ -1801,29 +1845,204 @@ const Admin = () => {
               </table>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No hay proveedores pendientes de aprobación.</p>
+            <p className="text-sm text-muted-foreground">No hay proveedores pendientes de aprobaciÃ³n.</p>
           )}
         </section>
 
         <section className="bg-card rounded-lg border border-border p-5">
           <div className="mb-4">
-            <h2 className="text-lg font-medium text-foreground">Administración de agentes IA</h2>
+            <h2 className="text-lg font-medium text-foreground">Gestion de agentes IA</h2>
             <p className="text-sm text-muted-foreground">
-              Uso por usuario, tokens consumidos y costo estimado por operación.
+              Disponibilidad, uso, costos, tokens, feedback y recomendaciones de mejora.
             </p>
           </div>
+
+          {agentMetricsQuery.data ? (
+            <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                ['Agentes activos', agentMetricsQuery.data.activeAgents],
+                ['Proximamente', agentMetricsQuery.data.comingSoonAgents],
+                ['Ejecuciones totales', agentMetricsQuery.data.totalExecutions],
+                ['Costo total tokens', `US$ ${agentMetricsQuery.data.totalTokenCost.toFixed(6)}`],
+                ['Tokens input', agentMetricsQuery.data.tokensInputTotal],
+                ['Tokens output', agentMetricsQuery.data.tokensOutputTotal],
+                ['Costo input', `US$ ${agentMetricsQuery.data.costInputTotal.toFixed(6)}`],
+                ['Costo output', `US$ ${agentMetricsQuery.data.costOutputTotal.toFixed(6)}`],
+                ['Tiempo promedio', `${agentMetricsQuery.data.averageLatencyMs} ms`],
+                ['Calificacion promedio', agentMetricsQuery.data.averageStars || 'Sin datos'],
+                ['Feedback negativo pendiente', agentMetricsQuery.data.pendingNegativeFeedback],
+                ['Agente mas usado', agentMetricsQuery.data.mostUsedAgent],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-lg border border-border bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="mb-5 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[1320px] text-left text-sm">
+              <thead className="bg-muted/60 text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Agente</th>
+                  <th className="px-4 py-3 font-medium">Estado</th>
+                  <th className="px-4 py-3 font-medium">Disponible comprador</th>
+                  <th className="px-4 py-3 font-medium">Ejecuciones</th>
+                  <th className="px-4 py-3 font-medium">Tokens input</th>
+                  <th className="px-4 py-3 font-medium">Tokens output</th>
+                  <th className="px-4 py-3 font-medium">Costo input</th>
+                  <th className="px-4 py-3 font-medium">Costo output</th>
+                  <th className="px-4 py-3 font-medium">Costo total</th>
+                  <th className="px-4 py-3 font-medium">Tiempo promedio</th>
+                  <th className="px-4 py-3 font-medium">Calificacion</th>
+                  <th className="px-4 py-3 font-medium">Feedbacks pendientes</th>
+                  <th className="px-4 py-3 font-medium">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(adminAgentsQuery.data ?? []).map((agent) => {
+                  const agentKey = agent.agentKey ?? agent.id;
+                  const metrics = agent.metrics;
+                  return (
+                    <tr key={agentKey} className="border-t border-border align-top">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{agent.name}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">{agent.category}</p>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{getAgentStatusLabel(agent.status)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{agent.status === 'active' ? 'Si' : 'No'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{metrics?.executions ?? 0}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{metrics?.tokensInput ?? 0}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{metrics?.tokensOutput ?? 0}</td>
+                      <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costInput ?? 0).toFixed(6)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costOutput ?? 0).toFixed(6)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costTotal ?? 0).toFixed(6)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{metrics?.averageLatencyMs ?? 0} ms</td>
+                      <td className="px-4 py-3 text-muted-foreground">{metrics?.averageStars || 'Sin datos'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{metrics?.pendingFeedback ?? 0}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setSelectedAgentKey(agentKey)}>
+                            Ver detalle
+                          </Button>
+                          <select
+                            value={agent.status ?? 'coming_soon'}
+                            onChange={(event) =>
+                              void agentStatusMutation.mutateAsync({
+                                agentKey,
+                                status: event.target.value as 'active' | 'coming_soon' | 'disabled' | 'hidden',
+                              })
+                            }
+                            disabled={agentStatusMutation.isPending}
+                            className="h-9 rounded-md border border-border bg-background px-2 text-xs"
+                          >
+                            <option value="active">Activo</option>
+                            <option value="coming_soon">Proximamente</option>
+                            <option value="disabled">Desactivado</option>
+                            <option value="hidden">Oculto</option>
+                          </select>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {selectedAgent ? (
+            <div className="mb-5 rounded-lg border border-border bg-muted/20 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">{selectedAgent.name}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedAgent.description}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">Estado actual: {getAgentStatusLabel(selectedAgent.status)}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(['active', 'coming_soon', 'disabled', 'hidden'] as const).map((status) => (
+                    <Button
+                      key={status}
+                      size="sm"
+                      variant={selectedAgent.status === status ? 'default' : 'outline'}
+                      onClick={() => void agentStatusMutation.mutateAsync({ agentKey: selectedAgent.agentKey ?? selectedAgent.id, status })}
+                    >
+                      {getAgentStatusLabel(status)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Inputs esperados</p>
+                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    {selectedAgent.inputs.map((item) => <li key={item}>- {item}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Outputs esperados</p>
+                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    {selectedAgent.outputs.map((item) => <li key={item}>- {item}</li>)}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Recomendaciones para mejorar el agente</p>
+                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                    {(selectedAgent.recommendations ?? []).map((item) => <li key={item}>- {item}</li>)}
+                  </ul>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Ejecuciones recientes</p>
+                  <div className="mt-2 space-y-2">
+                    {(agentUsageQuery.data ?? [])
+                      .filter((usage) => usage.agentKey === (selectedAgent.agentKey ?? selectedAgent.id))
+                      .slice(0, 5)
+                      .map((usage) => (
+                        <div key={usage.id} className="rounded-md border border-border bg-card p-3 text-xs text-muted-foreground">
+                          <p className="font-medium text-foreground">{usage.userName} - {formatDateTime(usage.createdAt)}</p>
+                          <p>Tokens: {usage.inputTokens} input / {usage.outputTokens} output - Costo: US$ {(usage.costTotal ?? usage.costAmount).toFixed(6)}</p>
+                          <p>PDF generado: {usage.pdfGenerated ? 'Si' : 'No'} - Estado: {usage.status ?? 'completed'}</p>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium uppercase text-muted-foreground">Feedback de compradores</p>
+                  <div className="mt-2 space-y-2">
+                    {agentFeedbackBySelectedAgent.slice(0, 5).map((feedback) => (
+                      <div key={feedback.id} className="rounded-md border border-border bg-card p-3 text-xs text-muted-foreground">
+                        <p className="font-medium text-foreground">{feedback.userName ?? feedback.userId} - {feedback.stars}/5</p>
+                        <p>{feedback.comment || 'Sin comentario'}</p>
+                        {feedback.correctedVersion ? <p>Correccion sugerida: {feedback.correctedVersion}</p> : null}
+                        <p>Estado admin: {feedback.adminStatus}</p>
+                      </div>
+                    ))}
+                    {!agentFeedbackBySelectedAgent.length ? (
+                      <p className="text-sm text-muted-foreground">Aun no hay feedback para este agente.</p>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <p className="mb-3 text-sm font-medium text-foreground">Detalle de ejecuciones</p>
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[1120px] text-left text-sm">
               <thead className="bg-muted/60 text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Usuario</th>
                   <th className="px-4 py-3 font-medium">Rol</th>
                   <th className="px-4 py-3 font-medium">Agente</th>
-                  <th className="px-4 py-3 font-medium">Operación</th>
+                  <th className="px-4 py-3 font-medium">Operacion</th>
                   <th className="px-4 py-3 font-medium">Fecha/hora</th>
                   <th className="px-4 py-3 font-medium">Modelo</th>
-                  <th className="px-4 py-3 font-medium">Tokens</th>
-                  <th className="px-4 py-3 font-medium">Costo</th>
+                  <th className="px-4 py-3 font-medium">Tokens input</th>
+                  <th className="px-4 py-3 font-medium">Tokens output</th>
+                  <th className="px-4 py-3 font-medium">Costo total</th>
+                  <th className="px-4 py-3 font-medium">PDF</th>
                 </tr>
               </thead>
               <tbody>
@@ -1835,18 +2054,19 @@ const Admin = () => {
                     <td className="px-4 py-3 text-muted-foreground">{usage.operationName}</td>
                     <td className="px-4 py-3 text-muted-foreground">{formatDateTime(usage.createdAt)}</td>
                     <td className="px-4 py-3 text-muted-foreground">{usage.model ?? 'No especificado'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{usage.totalTokens}</td>
-                    <td className="px-4 py-3 text-muted-foreground">US$ {usage.costAmount.toFixed(6)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{usage.inputTokens}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{usage.outputTokens}</td>
+                    <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costTotal ?? usage.costAmount).toFixed(6)}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{usage.pdfGenerated ? 'Si' : 'No'}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           {!agentUsageQuery.isLoading && !(agentUsageQuery.data ?? []).length ? (
-            <p className="mt-3 text-sm text-muted-foreground">Aún no hay operaciones registradas.</p>
+            <p className="mt-3 text-sm text-muted-foreground">Aun no hay operaciones registradas.</p>
           ) : null}
         </section>
-
         <section className="grid lg:grid-cols-2 gap-6">
           {renderManagedUsers(buyerUsers, 'Compradores')}
           {renderManagedUsers(supplierUsers, 'Proveedores')}
@@ -1873,7 +2093,7 @@ const Admin = () => {
                     </p>
                     {managedUser.role !== 'admin' && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        Membresía:{' '}
+                        MembresÃ­a:{' '}
                         {(() => {
                           const membership = membershipsByUserId.get(managedUser.id);
                           if (!membership) return 'No activa';
@@ -1917,7 +2137,7 @@ const Admin = () => {
                           const membership = membershipsByUserId.get(managedUser.id);
                           const isAuthorized =
                             membership?.status === 'active' && membership.adminApproved;
-                          return isAuthorized ? 'Suspender membresía' : 'Autorizar membresía';
+                          return isAuthorized ? 'Suspender membresÃ­a' : 'Autorizar membresÃ­a';
                         })()}
                       </Button>
                     </div>
@@ -1930,9 +2150,9 @@ const Admin = () => {
                     <p><span className="font-medium text-foreground">Empresa:</span> {selectedUser.company}</p>
                     <p><span className="font-medium text-foreground">Cargo:</span> {selectedUser.position}</p>
                     <p><span className="font-medium text-foreground">Sector:</span> {selectedUser.sector ?? 'General'}</p>
-                    <p><span className="font-medium text-foreground">Ubicación:</span> {selectedUser.location ?? 'Sin ubicación'}</p>
+                    <p><span className="font-medium text-foreground">UbicaciÃ³n:</span> {selectedUser.location ?? 'Sin ubicaciÃ³n'}</p>
                     <p><span className="font-medium text-foreground">Puntos:</span> {selectedUser.points}</p>
-                    <p className="sm:col-span-2"><span className="font-medium text-foreground">Descripción:</span> {selectedUser.description ?? 'Sin descripción'}</p>
+                    <p className="sm:col-span-2"><span className="font-medium text-foreground">DescripciÃ³n:</span> {selectedUser.description ?? 'Sin descripciÃ³n'}</p>
                   </div>
                 )}
               </div>
@@ -1945,3 +2165,4 @@ const Admin = () => {
 };
 
 export default Admin;
+

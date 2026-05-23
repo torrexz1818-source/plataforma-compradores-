@@ -422,6 +422,46 @@ export class AdminController {
     return this.agentsService.listUsageForAdmin();
   }
 
+  @Get('ai-agents')
+  listAiAgents() {
+    return this.agentsService.listAgentsForAdmin();
+  }
+
+  @Get('agent-metrics')
+  getAgentMetrics() {
+    return this.agentsService.getAdminMetrics();
+  }
+
+  @Get('agent-runs')
+  listAgentRuns() {
+    return this.agentsService.listUsageForAdmin();
+  }
+
+  @Get('agent-feedback')
+  listAgentFeedback() {
+    return this.agentsService.listFeedbackForAdmin();
+  }
+
+  @Patch('ai-agents/:agentKey/status')
+  updateAgentStatus(
+    @Param('agentKey') agentKey: string,
+    @Body() body: { status?: 'active' | 'coming_soon' | 'disabled' | 'hidden' },
+  ) {
+    if (!body.status) {
+      throw new BadRequestException('El estado es obligatorio');
+    }
+
+    return this.agentsService.updateAgentStatus(agentKey, body.status);
+  }
+
+  @Patch('agent-feedback/:id')
+  updateAgentFeedback(
+    @Param('id') id: string,
+    @Body() body: { adminStatus?: 'pending' | 'reviewed' | 'dismissed' | 'converted_to_rule' | 'needs_prompt_update' | 'needs_template_update' | 'needs_validation_update'; adminNotes?: string },
+  ) {
+    return this.agentsService.updateFeedbackStatus(id, body);
+  }
+
   @Patch('memberships/:userId')
   updateMembership(
     @Param('userId') userId: string,

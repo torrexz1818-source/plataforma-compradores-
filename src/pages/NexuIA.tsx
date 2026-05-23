@@ -24,12 +24,12 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  activateAgent,
   getAgentDetail,
   getAgents,
   getMyAgentExecutions,
   recordAgentUsage,
   runAgent,
+  submitAgentFeedback,
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { Agent } from '@/types';
@@ -280,6 +280,11 @@ const NexuIA = () => {
   const [termsFields, setTermsFields] = useState<Record<string, string>>({});
   const [termsSafetyRequirements, setTermsSafetyRequirements] = useState<string[]>([]);
   const [termsFiles, setTermsFiles] = useState<File[]>([]);
+  const [loggedRunIds, setLoggedRunIds] = useState<Record<string, string>>({});
+  const [feedbackStars, setFeedbackStars] = useState(5);
+  const [feedbackType, setFeedbackType] = useState('me_sirvio');
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackCorrection, setFeedbackCorrection] = useState('');
   const termsFormSchemaMutation = useTermsFormSchema();
   const termsGenerateMutation = useGenerateTermsOfReference();
   const termsPdfMutation = useDownloadTermsPdf();
@@ -346,26 +351,11 @@ const NexuIA = () => {
     termsFormSchemaMutation.reset();
     termsGenerateMutation.reset();
     termsPdfMutation.reset();
+    setFeedbackComment('');
+    setFeedbackCorrection('');
+    setFeedbackStars(5);
+    setFeedbackType('me_sirvio');
   }, [routeAgentId]);
-
-  const activateMutation = useMutation({
-    mutationFn: activateAgent,
-    onSuccess: ({ message }) => {
-      queryClient.invalidateQueries({ queryKey: ['agents'] });
-      queryClient.invalidateQueries({ queryKey: ['agents', selectedAgentId] });
-      toast({
-        title: 'Agente activado',
-        description: message,
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: 'No se pudo activar',
-        description: error instanceof Error ? error.message : 'Ocurrio un error inesperado.',
-        variant: 'destructive',
-      });
-    },
-  });
 
   const runMutation = useMutation({
     mutationFn: runAgent,
@@ -386,8 +376,35 @@ const NexuIA = () => {
     },
   });
 
+  const feedbackMutation = useMutation({
+    mutationFn: submitAgentFeedback,
+    onSuccess: () => {
+      setFeedbackComment('');
+      setFeedbackCorrection('');
+      setFeedbackStars(5);
+      setFeedbackType('me_sirvio');
+      queryClient.invalidateQueries({ queryKey: ['agents', 'executions', 'mine'] });
+      toast({
+        title: 'Feedback enviado',
+        description: 'Gracias. El equipo admin podra revisarlo para mejorar el agente.',
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: 'No se pudo enviar el feedback',
+        description: error instanceof Error ? error.message : 'Intenta nuevamente.',
+        variant: 'destructive',
+      });
+    },
+  });
+
   const catalogAgents = useMemo(() => {
     const agentsFromApi = agentsQuery.data ?? [];
+    if (agentsFromApi.length) {
+      return agentsFromApi
+        .filter((agent) => agent.status !== 'hidden')
+        .sort((a, b) => (a.sortOrder ?? 99) - (b.sortOrder ?? 99));
+    }
     const merged = curatedAgents.map((curatedAgent) => {
       const apiAgent = agentsFromApi.find((agent) => agent.id === curatedAgent.id);
       return apiAgent ? { ...apiAgent, ...curatedAgent } : curatedAgent;
@@ -433,11 +450,22 @@ const NexuIA = () => {
   const isDetailView = Boolean(routeAgentId);
   const isQuoteComparator =
     selectedAgent?.id === 'agent-quote-comparator' ||
+    selectedAgent?.id === 'proposal_comparison' ||
+    selectedAgent?.agentKey === 'proposal_comparison' ||
     selectedAgent?.slug === 'comparador-cotizaciones' ||
     selectedAgent?.slug === 'comparativos-propuestas-proveedores';
   const isTermsReference =
     selectedAgent?.id === 'agent-terms-reference' ||
+    selectedAgent?.id === 'terms_of_reference' ||
+    selectedAgent?.agentKey === 'terms_of_reference' ||
     selectedAgent?.slug === 'elaboracion-terminos-referencia';
+  const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
+  const currentFeedbackRunId =
+    selectedAgent?.id && runMutation.data?.execution.agentId === selectedAgent.id
+      ? runMutation.data.execution.agentRunId
+      : selectedAgent?.id
+        ? loggedRunIds[selectedAgent.id]
+        : undefined;
 
   const marketplaceStats = [
     {
@@ -487,7 +515,7 @@ const NexuIA = () => {
     localStorage.setItem(key, String(used + 1));
   };
 
-  const logAgentUsage = (agentId: string, operationName: string, result: Record<string, unknown>) => {
+  const logAgentUsage = (agentId: string, operationName: string, result: Record<string, unknown>, pdfGenerated = false) => {
     const outputTokens = Math.max(1, Math.round(JSON.stringify(result).length / 4));
     void recordAgentUsage({
       agentId,
@@ -495,11 +523,18 @@ const NexuIA = () => {
       model: 'AI Engine',
       outputTokens,
       totalTokens: outputTokens,
+      pdfGenerated,
       outputData: {
         status: 'completed',
         summary: String(result.executive_summary ?? result.final_recommendation ?? 'Resultado generado'),
       },
-    }).catch(() => undefined);
+    })
+      .then((response) => {
+        if (response.agentRunId) {
+          setLoggedRunIds((current) => ({ ...current, [agentId]: response.agentRunId ?? '' }));
+        }
+      })
+      .catch(() => undefined);
   };
 
   const handleRunAgent = () => {
@@ -508,6 +543,15 @@ const NexuIA = () => {
     }
 
     if (!canRunNodusIa()) {
+      return;
+    }
+
+    if (!isAgentActive) {
+      toast({
+        title: selectedAgent.status === 'coming_soon' ? 'Agente proximamente' : 'Agente no disponible',
+        description: 'El administrador puede cambiar la disponibilidad desde Gestion de agentes IA.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -755,6 +799,27 @@ const NexuIA = () => {
     });
   };
 
+  const handleSubmitFeedback = () => {
+    if (!currentFeedbackRunId) {
+      toast({
+        title: 'Primero ejecuta el agente',
+        description: 'El feedback se asocia al resultado generado.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    feedbackMutation.mutate({
+      agentRunId: currentFeedbackRunId,
+      stars: feedbackStars,
+      feedbackType,
+      comment: feedbackComment,
+      correctedVersion: feedbackCorrection,
+      improvementSuggestion: feedbackType === 'sugerencia' ? feedbackCorrection : undefined,
+      errorCategories: feedbackType === 'tuvo_errores' ? ['buyer_reported_error'] : [],
+    });
+  };
+
   const proposalComparisonResult = proposalComparisonMutation.data;
   const termsFormSchema = termsFormSchemaMutation.data;
   const termsResult = termsGenerateMutation.data;
@@ -873,6 +938,73 @@ const NexuIA = () => {
     );
   };
 
+  const renderAgentFeedbackPanel = () => {
+    if (!currentFeedbackRunId) {
+      return null;
+    }
+
+    return (
+      <div className="rounded-[24px] border border-primary/15 bg-white p-4">
+        <p className="text-sm font-medium text-foreground">¿Cómo fue tu experiencia con este agente?</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[1, 2, 3, 4, 5].map((star) => (
+            <button
+              key={star}
+              type="button"
+              onClick={() => setFeedbackStars(star)}
+              className={`h-9 w-9 rounded-full border text-sm font-semibold ${
+                feedbackStars >= star
+                  ? 'border-primary bg-primary text-white'
+                  : 'border-primary/15 bg-white text-muted-foreground'
+              }`}
+              aria-label={`${star} estrellas`}
+            >
+              ★
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[
+            ['me_sirvio', 'Me sirvió'],
+            ['tuvo_errores', 'Tuvo errores'],
+            ['sugerencia', 'Quiero sugerir una mejora'],
+          ].map(([value, label]) => (
+            <Button
+              key={value}
+              type="button"
+              size="sm"
+              variant={feedbackType === value ? 'default' : 'outline'}
+              className="rounded-full"
+              onClick={() => setFeedbackType(value)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <Textarea
+          value={feedbackComment}
+          onChange={(event) => setFeedbackComment(event.target.value)}
+          placeholder="Cuéntanos qué funcionó, qué falló o qué mejorarías."
+          className="mt-3 min-h-[88px] rounded-2xl border-primary/15"
+        />
+        <Textarea
+          value={feedbackCorrection}
+          onChange={(event) => setFeedbackCorrection(event.target.value)}
+          placeholder="Si deseas, escribe cómo debería corregirse."
+          className="mt-3 min-h-[72px] rounded-2xl border-primary/15"
+        />
+        <Button
+          type="button"
+          className="mt-3 rounded-full bg-primary hover:bg-primary"
+          onClick={handleSubmitFeedback}
+          disabled={feedbackMutation.isPending}
+        >
+          {feedbackMutation.isPending ? 'Enviando feedback...' : 'Enviar feedback'}
+        </Button>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 pb-8">
       <section className="overflow-hidden rounded-[32px] border border-[#2e24ba]/15 bg-[linear-gradient(135deg,#1f1fae_0%,#3325b8_38%,#4f31cb_70%,#6844dc_100%)] shadow-[0_24px_60px_rgba(54,33,170,0.22)]">
@@ -943,6 +1075,15 @@ const NexuIA = () => {
               {filteredAgents.map((agent) => {
                 const Icon = getAgentIcon(agent.icon);
                 const isSelected = selectedAgentId === agent.id;
+                const status = agent.status ?? (agent.isActive ? 'active' : 'coming_soon');
+                const statusLabel =
+                  status === 'active'
+                    ? 'Activo'
+                    : status === 'coming_soon'
+                      ? 'Proximamente'
+                      : status === 'disabled'
+                        ? 'No disponible'
+                        : 'Oculto';
 
                 return (
                   <button
@@ -952,7 +1093,9 @@ const NexuIA = () => {
                     className={`rounded-[26px] border p-5 text-left transition-all ${
                       isSelected
                         ? 'border-primary/25 bg-[var(--gradient-soft)] shadow-md'
-                        : 'border-primary/15 bg-white hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-sm'
+                        : status === 'active'
+                          ? 'border-primary/15 bg-white hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-sm'
+                          : 'border-primary/10 bg-muted/30 opacity-85 hover:border-primary/20'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -963,7 +1106,7 @@ const NexuIA = () => {
                         <Icon className="h-5 w-5" />
                       </div>
                       <Badge variant="outline" className="border-primary/15 text-muted-foreground">
-                        {agent.category}
+                        {statusLabel}
                       </Badge>
                     </div>
 
@@ -982,7 +1125,7 @@ const NexuIA = () => {
                         {agent.automationType}
                       </Badge>
                       <span className="inline-flex items-center gap-1 text-sm font-medium text-foreground/80">
-                        {agent.isActive ? 'Usar agente' : 'Activar'}
+                        {status === 'active' ? 'Usar agente' : statusLabel}
                         <ArrowRight className="h-4 w-4" />
                       </span>
                     </div>
@@ -1032,11 +1175,22 @@ const NexuIA = () => {
                     </Badge>
                     <Badge
                       variant="outline"
-                      className={selectedAgent.isActive ? 'border-success/25 text-success-foreground' : 'border-destructive/20 text-destructive'}
+                      className={isAgentActive ? 'border-success/25 text-success-foreground' : 'border-destructive/20 text-destructive'}
                     >
-                      {selectedAgent.isActive ? 'Activo' : 'Disponible para activar'}
+                      {isAgentActive
+                        ? 'Activo'
+                        : selectedAgent.status === 'coming_soon'
+                          ? 'Proximamente'
+                          : 'No disponible'}
                     </Badge>
                   </div>
+
+                  {!isAgentActive ? (
+                    <div className="rounded-2xl border border-primary/15 bg-muted/40 p-4 text-sm text-muted-foreground">
+                      Este agente esta marcado como {selectedAgent.status === 'coming_soon' ? 'Proximamente' : 'no disponible'}.
+                      La card se mantiene visible y bloqueada hasta que administracion lo active.
+                    </div>
+                  ) : null}
 
                   <p className="text-sm leading-6 text-muted-foreground">{selectedAgent.longDescription}</p>
 
@@ -1301,7 +1455,12 @@ const NexuIA = () => {
                   ) : null}
 
                   <div className="flex flex-wrap gap-3">
-                    {isTermsReference ? (
+                    {!isAgentActive ? (
+                      <Button type="button" className="rounded-full" disabled>
+                        <PlayCircle className="mr-2 h-4 w-4" />
+                        {selectedAgent.status === 'coming_soon' ? 'Proximamente' : 'Agente bloqueado'}
+                      </Button>
+                    ) : isTermsReference ? (
                       <Button
                         type="button"
                         className="rounded-full bg-primary hover:bg-primary"
@@ -1327,15 +1486,6 @@ const NexuIA = () => {
                       </Button>
                     ) : (
                       <>
-                        <Button
-                          type="button"
-                          variant={selectedAgent.isActive ? 'outline' : 'default'}
-                          className={selectedAgent.isActive ? 'rounded-full' : 'rounded-full bg-primary hover:bg-primary'}
-                          onClick={() => activateMutation.mutate(selectedAgent.id)}
-                          disabled={activateMutation.isPending}
-                        >
-                          {activateMutation.isPending ? 'Activando...' : selectedAgent.isActive ? 'Reactivar agente' : 'Activar'}
-                        </Button>
                         <Button
                           type="button"
                           className="rounded-full bg-primary hover:bg-primary"
@@ -1372,6 +1522,8 @@ const NexuIA = () => {
                       </p>
                     </div>
                   ) : null}
+
+                  {runMutation.data?.execution.agentId === selectedAgent.id ? renderAgentFeedbackPanel() : null}
 
                   {isTermsReference && termsResult ? (
                     <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
@@ -1477,6 +1629,8 @@ const NexuIA = () => {
                       <p className="text-xs leading-5 text-muted-foreground/70">{termsResult.disclaimer}</p>
                     </div>
                   ) : null}
+
+                  {isTermsReference && termsResult ? renderAgentFeedbackPanel() : null}
 
                   {isQuoteComparator && proposalComparisonResult ? (
                     <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
@@ -1727,6 +1881,8 @@ const NexuIA = () => {
                       </div>
                     </div>
                   ) : null}
+
+                  {isQuoteComparator && proposalComparisonResult ? renderAgentFeedbackPanel() : null}
                 </>
               ) : (
                 <p className="text-sm text-muted-foreground/70">

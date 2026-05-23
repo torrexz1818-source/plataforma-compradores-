@@ -90,6 +90,23 @@ Los administradores globales del ecosistema pueden:
 - Activar y desactivar usuarios
 - Consultar el panel general de administracion
 
+## Nodus IA - Agentes
+
+La base de Nodus IA usa un catalogo administrable de 8 agentes:
+
+- `terms_of_reference`: active
+- `proposal_comparison`: active
+- `tco_analysis`: coming_soon
+- `purchase_order`: coming_soon
+- `dashboard_creator`: coming_soon
+- `spend_analysis`: coming_soon
+- `contract_risk_analysis`: coming_soon
+- `supplier_evaluation_ranking`: coming_soon
+
+El comprador ve las cards visibles desde Nodus IA. Solo los agentes `active` se pueden ejecutar; `coming_soon` y `disabled` aparecen bloqueados, y `hidden` no se muestra. El administrador cambia estos estados en `Admin -> Gestion de agentes IA`, donde tambien ve ejecuciones, tokens, costos, PDFs generados, feedback y recomendaciones de mejora.
+
+MongoDB guarda el catalogo en `agents`, las ejecuciones en `agentExecutions` y el feedback en `agentFeedback`. No se guardan archivos originales ni texto documental completo: solo resultados finales y metadatos de uso. El `ai-engine` tiene endpoints base para los seis agentes nuevos y PDF compartido en `ai-engine/app/utils/pdf_report.py`.
+
 ## Desarrollo Local
 
 Instala dependencias:

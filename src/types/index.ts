@@ -682,6 +682,7 @@ export interface EmployabilityFeed {
 
 export interface Agent {
   id: string;
+  agentKey?: string;
   slug: string;
   name: string;
   description: string;
@@ -694,15 +695,22 @@ export interface Agent {
   inputs: string[];
   outputs: string[];
   isActive: boolean;
+  status?: 'active' | 'coming_soon' | 'disabled' | 'hidden';
+  visibleToBuyer?: boolean;
   accentColor: string;
   icon: string;
+  sortOrder?: number;
   createdAt: string;
   updatedAt: string;
   executions?: number;
+  averageStars?: number;
+  metrics?: AgentMetrics;
+  recommendations?: string[];
 }
 
 export interface AgentExecution {
   id: string;
+  agentRunId?: string;
   agentId: string;
   userId: string;
   agentName: string;
@@ -710,20 +718,81 @@ export interface AgentExecution {
   outputData: Record<string, unknown>;
   totalTokens?: number;
   costAmount?: number;
+  pdfGenerated?: boolean;
   executedAt: string;
+}
+
+export interface AgentMetrics {
+  executions: number;
+  successfulRuns: number;
+  failedRuns: number;
+  errors: number;
+  tokensInput: number;
+  tokensOutput: number;
+  costInput: number;
+  costOutput: number;
+  costTotal: number;
+  averageLatencyMs: number;
+  averageStars: number;
+  pendingFeedback: number;
+  negativeFeedback: number;
+  pdfGenerated: number;
 }
 
 export interface AdminAgentUsage {
   id: string;
+  agentRunId?: string;
   userId: string;
   userName: string;
   userRole: UserRole;
+  agentKey?: string;
   agentName: string;
   operationName: string;
   model?: string;
+  modelProvider?: string;
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  costInput?: number;
+  costOutput?: number;
+  costTotal?: number;
   costAmount: number;
+  latencyMs?: number | null;
+  status?: string;
+  errorMessage?: string;
+  pdfGenerated?: boolean;
+  createdAt: string;
+}
+
+export interface AdminAgentMetrics {
+  activeAgents: number;
+  comingSoonAgents: number;
+  totalExecutions: number;
+  totalTokenCost: number;
+  tokensInputTotal: number;
+  tokensOutputTotal: number;
+  costInputTotal: number;
+  costOutputTotal: number;
+  averageLatencyMs: number;
+  averageStars: number;
+  pendingNegativeFeedback: number;
+  mostUsedAgent: string;
+  highestCostAgent: string;
+  worstRatedAgent: string;
+}
+
+export interface AgentFeedback {
+  id: string;
+  agentRunId: string;
+  userId: string;
+  userName?: string;
+  agentKey: string;
+  stars: number;
+  rating: 'positive' | 'negative' | 'suggestion';
+  feedbackType: string;
+  comment?: string;
+  correctedVersion?: string;
+  improvementSuggestion?: string;
+  adminStatus: string;
   createdAt: string;
 }

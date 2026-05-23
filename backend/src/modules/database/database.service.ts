@@ -331,6 +331,7 @@ type UserCalendarConnectionDocument = {
 
 type AgentDocument = {
   id: string;
+  agentKey?: string;
   slug: string;
   name: string;
   description: string;
@@ -343,6 +344,9 @@ type AgentDocument = {
   inputs: string[];
   outputs: string[];
   isActive: boolean;
+  status?: 'active' | 'coming_soon' | 'disabled' | 'hidden';
+  visibleToBuyer?: boolean;
+  sortOrder?: number;
   accentColor: string;
   icon: string;
   createdAt: Date;
@@ -351,11 +355,56 @@ type AgentDocument = {
 
 type AgentExecutionDocument = {
   id: string;
+  agentRunId?: string;
   agentId: string;
+  agentKey?: string;
+  agentName?: string;
   userId: string;
+  userRole?: string;
   inputData: Record<string, unknown>;
   outputData: Record<string, unknown>;
+  status?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  costInput?: number;
+  costOutput?: number;
+  costTotal?: number;
+  latencyMs?: number;
+  pdfGenerated?: boolean;
   executedAt: Date;
+};
+
+type AgentFeedbackDocument = {
+  id: string;
+  agentRunId: string;
+  userId: string;
+  agentKey: string;
+  stars: number;
+  rating: string;
+  feedbackType: string;
+  adminStatus: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type AgentFeedbackClassificationDocument = {
+  id: string;
+  feedbackId: string;
+  agentKey: string;
+  detectedErrorType: string;
+  severity: string;
+  suggestedAction: string;
+  createdAt: Date;
+};
+
+type AgentImprovementRuleDocument = {
+  id: string;
+  agentKey: string;
+  ruleTitle: string;
+  ruleText: string;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 type EmployabilityJobDocument = {
@@ -566,6 +615,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const agents = this.collection<AgentDocument>('agents');
     const agentExecutions =
       this.collection<AgentExecutionDocument>('agentExecutions');
+    const agentFeedback =
+      this.collection<AgentFeedbackDocument>('agentFeedback');
+    const agentFeedbackClassifications =
+      this.collection<AgentFeedbackClassificationDocument>(
+        'agentFeedbackClassifications',
+      );
+    const agentImprovementRules =
+      this.collection<AgentImprovementRuleDocument>('agentImprovementRules');
     const employabilityJobs =
       this.collection<EmployabilityJobDocument>('employabilityJobs');
     const employabilityTalentProfiles =
@@ -658,11 +715,22 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       userCalendarConnections.createIndex({ role: 1, updatedAt: -1 }),
       userCalendarConnections.createIndex({ googleEmail: 1 }),
       agents.createIndex({ id: 1 }, { unique: true }),
+      agents.createIndex({ agentKey: 1 }, { unique: true, sparse: true }),
       agents.createIndex({ slug: 1 }, { unique: true }),
-      agents.createIndex({ category: 1, automationType: 1, isActive: 1 }),
+      agents.createIndex({ category: 1, automationType: 1, status: 1 }),
       agentExecutions.createIndex({ id: 1 }, { unique: true }),
+      agentExecutions.createIndex({ agentRunId: 1 }, { unique: true, sparse: true }),
       agentExecutions.createIndex({ userId: 1, executedAt: -1 }),
-      agentExecutions.createIndex({ agentId: 1, executedAt: -1 }),
+      agentExecutions.createIndex({ agentKey: 1, executedAt: -1 }),
+      agentFeedback.createIndex({ id: 1 }, { unique: true }),
+      agentFeedback.createIndex({ agentRunId: 1 }),
+      agentFeedback.createIndex({ agentKey: 1, createdAt: -1 }),
+      agentFeedback.createIndex({ adminStatus: 1, rating: 1 }),
+      agentFeedbackClassifications.createIndex({ id: 1 }, { unique: true }),
+      agentFeedbackClassifications.createIndex({ feedbackId: 1 }),
+      agentFeedbackClassifications.createIndex({ agentKey: 1, severity: 1 }),
+      agentImprovementRules.createIndex({ id: 1 }, { unique: true }),
+      agentImprovementRules.createIndex({ agentKey: 1, status: 1 }),
       employabilityJobs.createIndex({ id: 1 }, { unique: true }),
       employabilityJobs.createIndex({ authorId: 1, createdAt: -1 }),
       employabilityTalentProfiles.createIndex({ id: 1 }, { unique: true }),

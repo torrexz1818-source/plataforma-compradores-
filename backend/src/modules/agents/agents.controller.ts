@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Patch,
   Param,
   Post,
   Query,
@@ -11,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
 import { AuthenticatedGuard } from '../../common/auth/authenticated.guard';
-import { AgentsService } from './agents.service';
+import { AgentsService, AgentStatus } from './agents.service';
 
 @Controller('agents')
 @UseGuards(AuthenticatedGuard)
@@ -59,7 +60,7 @@ export class AgentsController {
   @Post('run')
   async runAgent(
     @Body() body: { agentId?: string; inputData?: Record<string, unknown> },
-    @CurrentUser() user: { sub: string } | undefined,
+    @CurrentUser() user: { sub: string; role: string } | undefined,
   ) {
     if (!user?.sub) {
       throw new ForbiddenException('Authentication required');
@@ -72,6 +73,7 @@ export class AgentsController {
     return this.agentsService.runAgent({
       agentId: body.agentId,
       userId: user.sub,
+      userRole: user.role,
       inputData: body.inputData ?? {},
     });
   }
@@ -87,6 +89,8 @@ export class AgentsController {
       totalTokens?: number;
       costAmount?: number;
       outputData?: Record<string, unknown>;
+      latencyMs?: number;
+      pdfGenerated?: boolean;
     },
     @CurrentUser() user: { sub: string } | undefined,
   ) {
@@ -108,6 +112,42 @@ export class AgentsController {
       totalTokens: body.totalTokens,
       costAmount: body.costAmount,
       outputData: body.outputData,
+      latencyMs: body.latencyMs,
+      pdfGenerated: body.pdfGenerated,
+    });
+  }
+
+  @Post('feedback')
+  async submitFeedback(
+    @Body()
+    body: {
+      agentRunId?: string;
+      stars?: number;
+      feedbackType?: string;
+      comment?: string;
+      correctedVersion?: string;
+      improvementSuggestion?: string;
+      errorCategories?: string[];
+    },
+    @CurrentUser() user: { sub: string } | undefined,
+  ) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    if (!body.agentRunId?.trim()) {
+      throw new BadRequestException('La ejecucion es obligatoria');
+    }
+
+    return this.agentsService.submitFeedback({
+      agentRunId: body.agentRunId,
+      userId: user.sub,
+      stars: body.stars ?? 5,
+      feedbackType: body.feedbackType ?? 'me_sirvio',
+      comment: body.comment,
+      correctedVersion: body.correctedVersion,
+      improvementSuggestion: body.improvementSuggestion,
+      errorCategories: body.errorCategories,
     });
   }
 
@@ -125,5 +165,22 @@ export class AgentsController {
     }
 
     return this.agentsService.activateAgent(body.agentId);
+  }
+
+  @Patch(':agentKey/status')
+  async updateAgentStatus(
+    @Param('agentKey') agentKey: string,
+    @Body() body: { status?: AgentStatus },
+    @CurrentUser() user: { sub: string; role: string } | undefined,
+  ) {
+    if (!user?.sub || user.role !== 'admin') {
+      throw new ForbiddenException('Administrator permissions required');
+    }
+
+    if (!body.status) {
+      throw new BadRequestException('El estado es obligatorio');
+    }
+
+    return this.agentsService.updateAgentStatus(agentKey, body.status);
   }
 }

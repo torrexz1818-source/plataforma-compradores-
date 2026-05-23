@@ -2,6 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agents.proposal_comparison.router import router as proposal_comparison_router
+from app.agents.tco_analysis.router import router as tco_analysis_router
+from app.agents.purchase_order.router import router as purchase_order_router
+from app.agents.dashboard_creator.router import router as dashboard_creator_router
+from app.agents.spend_analysis.router import router as spend_analysis_router
+from app.agents.contract_risk_analysis.router import router as contract_risk_analysis_router
+from app.agents.supplier_evaluation_ranking.router import router as supplier_evaluation_ranking_router
 from app.config import get_settings
 
 settings = get_settings()
@@ -29,3 +35,9 @@ def health_check():
 
 app.include_router(proposal_comparison_router)
 app.include_router(terms_of_reference_router)
+app.include_router(tco_analysis_router)
+app.include_router(purchase_order_router)
+app.include_router(dashboard_creator_router)
+app.include_router(spend_analysis_router)
+app.include_router(contract_risk_analysis_router)
+app.include_router(supplier_evaluation_ranking_router)

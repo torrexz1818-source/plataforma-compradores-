@@ -33,6 +33,8 @@ import {
   ExpertSummary,
   Agent,
   AgentExecution,
+  AgentFeedback,
+  AdminAgentMetrics,
   AdminAgentUsage,
   EmployabilityFeed,
   EmployabilityJob,
@@ -824,6 +826,29 @@ export async function getAdminAgentUsage() {
   return apiRequest<AdminAgentUsage[]>('/admin/agent-usage', { auth: true });
 }
 
+export async function getAdminAiAgents() {
+  return apiRequest<Agent[]>('/admin/ai-agents', { auth: true });
+}
+
+export async function getAdminAgentMetrics() {
+  return apiRequest<AdminAgentMetrics>('/admin/agent-metrics', { auth: true });
+}
+
+export async function getAdminAgentFeedback() {
+  return apiRequest<AgentFeedback[]>('/admin/agent-feedback', { auth: true });
+}
+
+export async function updateAdminAgentStatus(
+  agentKey: string,
+  status: 'active' | 'coming_soon' | 'disabled' | 'hidden',
+) {
+  return apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ status }),
+  });
+}
+
 export async function getNewsPosts() {
   const data = await apiRequest<NewsListResponse>('/news', { auth: true });
   return data.items.map(normalizeNewsPostAssetUrls);
@@ -1309,6 +1334,22 @@ export async function activateAgent(agentId: string) {
   });
 }
 
+export async function submitAgentFeedback(payload: {
+  agentRunId: string;
+  stars: number;
+  feedbackType: string;
+  comment?: string;
+  correctedVersion?: string;
+  improvementSuggestion?: string;
+  errorCategories?: string[];
+}) {
+  return apiRequest<{ success: true; feedbackId: string }>('/agents/feedback', {
+    method: 'POST',
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function runAgent(payload: {
   agentId: string;
   inputData: Record<string, unknown>;
@@ -1329,8 +1370,10 @@ export async function recordAgentUsage(payload: {
   totalTokens?: number;
   costAmount?: number;
   outputData?: Record<string, unknown>;
+  latencyMs?: number;
+  pdfGenerated?: boolean;
 }) {
-  return apiRequest<{ success: true; id: string }>('/agents/usage', {
+  return apiRequest<{ success: true; id: string; agentRunId?: string }>('/agents/usage', {
     method: 'POST',
     auth: true,
     body: JSON.stringify(payload),
@@ -1344,83 +1387,3 @@ export async function getMyAgentExecutions() {
   return data.items;
 }
 
-export async function runN8nComparativeWebhook(payload: {
-  agentId: string;
-  agentName: string;
-  files: File[];
-}) {
-  const webhookUrl = import.meta.env.VITE_N8N_COMPARATIVE_WEBHOOK?.trim();
-  const webhookToken = import.meta.env.VITE_N8N_COMPARATIVE_TOKEN?.trim();
-
-  if (!webhookUrl) {
-    throw new Error(
-      'Falta configurar VITE_N8N_COMPARATIVE_WEBHOOK en el frontend para conectar el flujo de n8n.',
-    );
-  }
-
-  const formData = new FormData();
-  formData.append('agentId', payload.agentId);
-  formData.append('agentName', payload.agentName);
-
-  payload.files.forEach((file, index) => {
-    formData.append(`file_${index + 1}`, file, file.name);
-    formData.append('files', file, file.name);
-  });
-
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: {
-      ...(webhookToken ? { 'x-n8n-token': webhookToken } : {}),
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    let message = 'No se pudo ejecutar el flujo de n8n.';
-
-    try {
-      const data = (await response.json()) as { message?: string };
-      if (data.message) {
-        message = data.message;
-      }
-    } catch {
-      message = response.statusText || message;
-    }
-
-    throw new Error(message);
-  }
-
-  const contentType = response.headers.get('content-type')?.toLowerCase() || '';
-
-  if (contentType.includes('application/pdf')) {
-    const blob = await response.blob();
-
-    return {
-      pdfUrl: URL.createObjectURL(blob),
-      fileName: 'comparativo-cotizaciones.pdf',
-    } as Record<string, unknown>;
-  }
-
-  const raw = await response.text();
-
-  if (!raw.trim()) {
-    return {};
-  }
-
-  const parsed = JSON.parse(raw) as Record<string, unknown>;
-  const pdfUrl =
-    typeof parsed.pdfUrl === 'string'
-      ? parsed.pdfUrl
-      : typeof parsed.downloadUrl === 'string'
-        ? parsed.downloadUrl
-        : typeof parsed.fileUrl === 'string'
-          ? parsed.fileUrl
-          : typeof parsed.url === 'string'
-            ? parsed.url
-            : undefined;
-
-  return {
-    ...parsed,
-    ...(pdfUrl ? { pdfUrl } : {}),
-  };
-}
