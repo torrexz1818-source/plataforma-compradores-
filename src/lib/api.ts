@@ -152,8 +152,8 @@ function setAgentStatusOverride(agentKey: string, status: AgentStatus) {
   }
 }
 
-function buildCatalogFallbackAgents(apiAgents: Agent[] = []): Agent[] {
-  const overrides = getAgentStatusOverrides();
+function buildCatalogFallbackAgents(apiAgents: Agent[] = [], useLocalOverrides = false): Agent[] {
+  const overrides = useLocalOverrides ? getAgentStatusOverrides() : {};
   const apiByKey = new Map(apiAgents.map((agent) => [agent.agentKey ?? agent.id, agent]));
 
   return nodusIaAgents.map((baseAgent) => {
@@ -884,7 +884,7 @@ export async function getAdminAgentUsage() {
 
 export async function getAdminAiAgents() {
   try {
-    const agents = await apiRequest<Agent[]>('/admin/ai-agents', { auth: true });
+    const agents = await apiRequest<Agent[]>('/admin/ai-agents', { auth: true, cache: 'no-store' });
     return buildCatalogFallbackAgents(agents);
   } catch {
     return buildCatalogFallbackAgents();
@@ -903,27 +903,20 @@ export async function updateAdminAgentStatus(
   agentKey: string,
   status: AgentStatus,
 ) {
-  setAgentStatusOverride(agentKey, status);
-  try {
-    const response = await apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
-      method: 'PATCH',
-      auth: true,
-      body: JSON.stringify({ status }),
-    });
-    return {
-      ...response,
-      agent: {
-        ...response.agent,
-        status,
-        isActive: status === 'active',
-        visibleToBuyer: status !== 'hidden',
-      },
-    };
-  } catch {
-    const agent = buildCatalogFallbackAgents().find((item) => (item.agentKey ?? item.id) === agentKey);
-    if (!agent) throw new Error('Agente no encontrado');
-    return { agent, message: 'Estado actualizado localmente. El backend de produccion aun requiere redeploy.' };
-  }
+  const response = await apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ status }),
+  });
+  return {
+    ...response,
+    agent: {
+      ...response.agent,
+      status,
+      isActive: status === 'active',
+      visibleToBuyer: status !== 'hidden',
+    },
+  };
 }
 
 export async function getAdminUserPdfBranding(userId: string) {
@@ -1448,7 +1441,7 @@ export async function getAgents(params?: {
         category: params?.category,
         automationType: params?.automationType,
       })}`,
-      { auth: true },
+      { auth: true, cache: 'no-store' },
     );
     return buildCatalogFallbackAgents(data.items).filter((agent) => {
       const matchesCategory = !params?.category || agent.category === params.category;
@@ -1465,7 +1458,7 @@ export async function getAgents(params?: {
 }
 
 export async function getAgentDetail(id: string) {
-  return apiRequest<Agent>(`/agents/${id}`, { auth: true });
+  return apiRequest<Agent>(`/agents/${id}`, { auth: true, cache: 'no-store' });
 }
 
 export async function activateAgent(agentId: string) {

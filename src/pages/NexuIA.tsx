@@ -172,6 +172,9 @@ const NexuIA = () => {
   const agentsQuery = useQuery({
     queryKey: ['agents'],
     queryFn: () => getAgents(),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
 
   const curatedAgentsById = useMemo(
@@ -192,6 +195,9 @@ const NexuIA = () => {
     queryKey: ['agents', selectedAgentId],
     queryFn: () => getAgentDetail(selectedAgentId),
     enabled: Boolean(selectedAgentId && !routeCuratedAgent),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
 
   const executionsQuery = useQuery({
