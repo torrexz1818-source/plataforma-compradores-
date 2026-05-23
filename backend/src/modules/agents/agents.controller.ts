@@ -61,6 +61,17 @@ export class AgentsController {
     return this.agentsService.getPdfOptionsForUser(user.sub, agentKey);
   }
 
+  @Get('module-activations/mine')
+  async getMyModuleActivations(
+    @CurrentUser() user: { sub: string; role: string } | undefined,
+  ) {
+    if (!user?.sub) {
+      throw new ForbiddenException('Authentication required');
+    }
+
+    return this.agentsService.getModuleActivationSettingsForUser(user.role);
+  }
+
   @Post('pdf-options/validate')
   async validatePdfMode(
     @Body() body: { agentKey?: string; pdfMode?: 'standard_branded' | 'white_label' | 'custom_brand' },

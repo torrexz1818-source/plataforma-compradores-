@@ -35,6 +35,7 @@ import {
   getAdminAgentMetrics,
   getAdminAgentPdfSettings,
   getAdminDashboard,
+  getAdminModuleActivations,
   getAdminUserPdfBranding,
   getPlatformStats,
   uploadFile,
@@ -42,9 +43,11 @@ import {
   updateMembershipByAdmin,
   updateAdminAgentStatus,
   updateAdminAgentPdfSettings,
+  updateAdminModuleActivation,
   updateAdminUserPdfBranding,
   updateUserStatus,
 } from '@/lib/api';
+import { moduleActivationCatalog } from '@/lib/moduleActivation';
 import { useAuth } from '@/lib/auth';
 import {
   DEFAULT_LEARNING_ROUTE_ID,
@@ -271,6 +274,11 @@ const Admin = () => {
     queryFn: getAdminAgentFeedback,
     enabled: user?.role === 'admin',
   });
+  const moduleActivationsQuery = useQuery({
+    queryKey: ['admin-module-activations'],
+    queryFn: getAdminModuleActivations,
+    enabled: user?.role === 'admin',
+  });
   const agentStatusMutation = useMutation({
     mutationFn: ({ agentKey, status }: { agentKey: string; status: 'active' | 'coming_soon' | 'disabled' | 'hidden' }) =>
       updateAdminAgentStatus(agentKey, status),
@@ -291,6 +299,14 @@ const Admin = () => {
       updateAdminAgentPdfSettings(agentKey, payload),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['admin-agent-pdf-settings', variables.agentKey] });
+    },
+  });
+  const moduleActivationMutation = useMutation({
+    mutationFn: ({ role, moduleKey, enabled }: { role: string; moduleKey: string; enabled: boolean }) =>
+      updateAdminModuleActivation(role, moduleKey, enabled),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin-module-activations'] });
+      void queryClient.invalidateQueries({ queryKey: ['module-activations'] });
     },
   });
 
@@ -481,7 +497,8 @@ const Admin = () => {
   const isUsersAdminView = location.pathname === '/admin/users';
   const isContentAdminView = location.pathname === '/admin/content';
   const isAgentsAdminView = location.pathname === '/admin/agents';
-  const isDedicatedAdminView = isContentAdminView || isAgentsAdminView;
+  const isModulesAdminView = location.pathname === '/admin/modules';
+  const isDedicatedAdminView = isContentAdminView || isAgentsAdminView || isModulesAdminView;
 
   if (!isAuthLoading && !user) {
     return <Navigate to="/login" replace />;
@@ -1353,6 +1370,8 @@ const Admin = () => {
               ? 'Administrador de contenido educativo'
               : isAgentsAdminView
                 ? 'Administrador de agentes IA'
+                : isModulesAdminView
+                  ? 'Activador de módulos'
                 : 'Panel administrativo'}
           </h1>
           <p className="mt-1 text-muted-foreground">
@@ -1360,6 +1379,8 @@ const Admin = () => {
               ? 'Gestiona, crea y organiza los contenidos educativos publicados dentro de la plataforma.'
               : isAgentsAdminView
                 ? 'Gestiona, configura y supervisa los agentes de inteligencia artificial disponibles en la plataforma.'
+                : isModulesAdminView
+                  ? 'Activa o desactiva los módulos disponibles para cada tipo de usuario durante el lanzamiento de la plataforma.'
               : 'Resumen general del ecosistema'}
           </p>
         </motion.div>
@@ -2127,6 +2148,62 @@ const Admin = () => {
 
         </section>
           </>
+        )}
+
+        {isModulesAdminView && (
+          <section className="grid gap-6 lg:grid-cols-2">
+            {(['buyer', 'supplier', 'expert'] as const).map((role) => {
+              const modules = moduleActivationCatalog[role];
+              if (!modules.length) return null;
+              const title = role === 'buyer' ? 'Comprador' : role === 'supplier' ? 'Proveedor' : 'Experto';
+
+              return (
+                <Card key={role} className="rounded-xl shadow-[var(--shadow-card)]">
+                  <CardHeader>
+                    <CardTitle className="text-lg">{title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {modules.map((module) => {
+                      const setting = moduleActivationsQuery.data?.find(
+                        (item) => item.role === role && item.moduleKey === module.key,
+                      );
+                      const enabled = setting?.enabled ?? module.defaultEnabled;
+
+                      return (
+                        <div key={module.key} className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background p-3">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">{module.label}</p>
+                            <p className="text-xs text-muted-foreground">{enabled ? 'Activo' : 'Inactivo'}</p>
+                          </div>
+                          <button
+                            type="button"
+                            aria-pressed={enabled}
+                            disabled={moduleActivationMutation.isPending}
+                            onClick={() =>
+                              moduleActivationMutation.mutate({
+                                role,
+                                moduleKey: module.key,
+                                enabled: !enabled,
+                              })
+                            }
+                            className={`relative h-7 w-12 rounded-full transition-colors ${
+                              enabled ? 'bg-primary' : 'bg-muted'
+                            }`}
+                          >
+                            <span
+                              className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                                enabled ? 'translate-x-5' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </section>
         )}
 
         {isAgentsAdminView && (

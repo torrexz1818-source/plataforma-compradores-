@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, Bot, BriefcaseBusiness, Building2, ChevronRight, FileText, Home, LogOut, Newspaper, Shield, Store, Users } from 'lucide-react';
+import { BookOpen, Bot, BriefcaseBusiness, Building2, ChevronRight, FileText, Home, LogOut, Newspaper, Shield, SlidersHorizontal, Store, Users } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/lib/auth';
 import { useLocation } from 'react-router-dom';
@@ -52,6 +52,7 @@ export function AppSidebar() {
             { title: 'Administrador de usuarios', url: '/admin/users', icon: Users },
             { title: 'Administrador de contenido educativo', url: '/admin/content', icon: BookOpen },
             { title: 'Administrador de agentes IA', url: '/admin/agents', icon: Bot },
+            { title: 'Activador de módulos', url: '/admin/modules', icon: SlidersHorizontal },
             { title: 'Novedades', url: '/novedades', icon: Newspaper },
           ],
         },

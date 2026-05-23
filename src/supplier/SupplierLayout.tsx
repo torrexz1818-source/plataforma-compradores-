@@ -1,5 +1,5 @@
 import { ElementType, useEffect, useState } from 'react';
-import { BookOpen, Bot, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, FileText, LayoutDashboard, LogOut, Menu, MessageCircle, Newspaper, Shield, Store, Users } from 'lucide-react';
+import { BookOpen, Bot, BriefcaseBusiness, Building2, ChevronLeft, ChevronRight, FileText, LayoutDashboard, LogOut, Menu, MessageCircle, Newspaper, Shield, SlidersHorizontal, Store, Users } from 'lucide-react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import NotificationBell from '@/components/NotificationBell';
@@ -8,6 +8,7 @@ import UserMenu from '@/components/UserMenu';
 import { BuyerNodusBrand } from '@/components/BuyerNodusBrand';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { buyerModuleNavItems, filterModuleNavItems, supplierModuleNavItems, useMyModuleActivations } from '@/lib/moduleActivation';
 
 const supplierNavItems = [
   { to: '/supplier/inicio', label: 'Inicio', icon: LayoutDashboard },
@@ -56,6 +57,7 @@ const SupplierLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const isAdmin = user?.role === 'admin';
+  const moduleActivationsQuery = useMyModuleActivations();
   const shouldShowTopbar = location.pathname !== '/inicio' && location.pathname !== '/supplier/inicio';
   const roleBadge = isAdmin
     ? {
@@ -68,8 +70,9 @@ const SupplierLayout = () => {
         icon: Store,
         className: 'bg-[#B2EB4A]/10 border border-[#B2EB4A] text-[#B2EB4A]',
       };
-  const adminBuyerItems = buyerNavItems;
-  const adminSupplierItems = supplierNavItems.filter((item) => item.to !== '/novedades');
+  const supplierItemsForRole = filterModuleNavItems(supplierModuleNavItems, moduleActivationsQuery.data?.modules, 'supplier');
+  const adminBuyerItems = buyerModuleNavItems;
+  const adminSupplierItems = supplierModuleNavItems;
 
   const navSections = isAdmin
     ? [
@@ -80,13 +83,14 @@ const SupplierLayout = () => {
             { to: '/admin/users', label: 'Administrador de usuarios', icon: Users },
             { to: '/admin/content', label: 'Administrador de contenido educativo', icon: BookOpen },
             { to: '/admin/agents', label: 'Administrador de agentes IA', icon: Bot },
+            { to: '/admin/modules', label: 'Activador de módulos', icon: SlidersHorizontal },
             { to: '/novedades', label: 'Novedades', icon: Newspaper },
           ],
         },
         { title: 'Comprador', items: adminBuyerItems },
         { title: 'Proveedor', items: adminSupplierItems },
       ]
-    : [{ title: '', items: supplierNavItems }];
+    : [{ title: '', items: supplierItemsForRole }];
 
   const isActive = (path: string) => {
     if (path === '/supplier/directory') {

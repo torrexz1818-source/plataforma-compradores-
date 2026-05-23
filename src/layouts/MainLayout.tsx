@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Newspaper,
   Shield,
+  SlidersHorizontal,
   Store,
   Users,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ import { BuyerNodusBrand } from '@/components/BuyerNodusBrand';
 import { isBuyerLikeRole } from '@/lib/roles';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { buyerModuleNavItems, filterModuleNavItems, supplierModuleNavItems, useMyModuleActivations } from '@/lib/moduleActivation';
 
 interface MainLayoutProps {
   children: ReactNode;
@@ -53,6 +55,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
   const navigate = useNavigate();
   const isSupplier = user?.role === 'supplier';
   const isAdmin = user?.role === 'admin';
+  const moduleActivationsQuery = useMyModuleActivations();
   const shouldShowTopbar = location.pathname !== '/inicio' && location.pathname !== '/supplier/inicio';
   const roleBadge = isAdmin
     ? {
@@ -102,8 +105,10 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     { to: '/nexu-ia', label: 'Nodus IA', icon: Bot },
     { to: '/buyer/directory', label: 'Directorio de proveedores', icon: Building2 },
   ];
-  const adminBuyerItems = buyerItems;
-  const adminSupplierItems = supplierItems.filter((item) => item.to !== '/novedades');
+  const buyerItemsForRole = filterModuleNavItems(buyerModuleNavItems, moduleActivationsQuery.data?.modules, 'buyer');
+  const supplierItemsForRole = filterModuleNavItems(supplierModuleNavItems, moduleActivationsQuery.data?.modules, 'supplier');
+  const adminBuyerItems = buyerModuleNavItems;
+  const adminSupplierItems = supplierModuleNavItems;
 
   const navSections = isAdmin
     ? [
@@ -114,6 +119,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
             { to: '/admin/users', label: 'Administrador de usuarios', icon: Users },
             { to: '/admin/content', label: 'Administrador de contenido educativo', icon: BookOpen },
             { to: '/admin/agents', label: 'Administrador de agentes IA', icon: Bot },
+            { to: '/admin/modules', label: 'Activador de módulos', icon: SlidersHorizontal },
             { to: '/novedades', label: 'Novedades', icon: Newspaper },
           ],
         },
@@ -123,7 +129,7 @@ const MainLayout = ({ children }: MainLayoutProps) => {
     : [
         {
           title: '',
-          items: isSupplier ? supplierItems : (isBuyerLikeRole(user?.role) ? buyerItems : buyerItems),
+          items: isSupplier ? supplierItemsForRole : (isBuyerLikeRole(user?.role) ? buyerItemsForRole : buyerItemsForRole),
         },
       ];
 

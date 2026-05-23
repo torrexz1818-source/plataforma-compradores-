@@ -423,6 +423,15 @@ type AgentPdfSettingsDocument = {
   updatedAt: Date;
 };
 
+type ModuleActivationSettingsDocument = {
+  id: string;
+  role: 'buyer' | 'supplier' | 'expert';
+  moduleKey: string;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 type AgentImprovementRuleDocument = {
   id: string;
   agentKey: string;
@@ -653,6 +662,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       );
     const agentPdfSettings =
       this.collection<AgentPdfSettingsDocument>('agentPdfSettings');
+    const moduleActivationSettings =
+      this.collection<ModuleActivationSettingsDocument>(
+        'moduleActivationSettings',
+      );
     const agentImprovementRules =
       this.collection<AgentImprovementRuleDocument>('agentImprovementRules');
     const employabilityJobs =
@@ -766,6 +779,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       userPdfBrandingSettings.createIndex({ premiumPdfStatus: 1 }),
       agentPdfSettings.createIndex({ id: 1 }, { unique: true }),
       agentPdfSettings.createIndex({ agentKey: 1 }, { unique: true }),
+      moduleActivationSettings.createIndex({ id: 1 }, { unique: true }),
+      moduleActivationSettings.createIndex(
+        { role: 1, moduleKey: 1 },
+        { unique: true },
+      ),
       agentImprovementRules.createIndex({ id: 1 }, { unique: true }),
       agentImprovementRules.createIndex({ agentKey: 1, status: 1 }),
       employabilityJobs.createIndex({ id: 1 }, { unique: true }),

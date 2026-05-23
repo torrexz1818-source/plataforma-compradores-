@@ -839,3 +839,14 @@ export interface AgentPdfOptions {
     footerText?: string;
   };
 }
+
+export type ModuleActivationRole = 'buyer' | 'supplier' | 'expert';
+
+export interface ModuleActivationSetting {
+  id: string;
+  role: ModuleActivationRole;
+  moduleKey: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}

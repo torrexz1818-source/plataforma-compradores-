@@ -45,6 +45,8 @@ import RegisterExpert from "./expert/RegisterExpert.tsx";
 import MainLayout from "./layouts/MainLayout.tsx";
 import NewsLayout from "./layouts/NewsLayout.tsx";
 import SupplierApprovalStatus from "@/components/SupplierApprovalStatus";
+import ModuleGate from "@/components/ModuleGate";
+import { isModuleEnabled, useMyModuleActivations } from "@/lib/moduleActivation";
 
 const queryClient = new QueryClient();
 
@@ -98,6 +100,7 @@ const PublicHome = () => {
 
 const DashboardRedirect = () => {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const moduleActivationsQuery = useMyModuleActivations();
 
   if (isLoading) {
     return <FullScreenMessage message="Cargando..." />;
@@ -125,6 +128,12 @@ const DashboardRedirect = () => {
         replace
       />
     );
+  }
+
+  if (user.role === 'buyer') {
+    const modules = moduleActivationsQuery.data?.modules;
+    const dashboardEnabled = moduleActivationsQuery.isLoading ? false : isModuleEnabled(modules, 'buyer', 'dashboard');
+    return <Navigate to={dashboardEnabled ? "/inicio" : "/nexu-ia"} replace />;
   }
 
   return <Navigate to="/inicio" replace />;
@@ -250,7 +259,7 @@ const App = () => (
                 </RequireAuth>
               }
             >
-              <Route index element={<EcosystemHome />} />
+              <Route index element={<ModuleGate role="buyer" moduleKey="dashboard"><EcosystemHome /></ModuleGate>} />
             </Route>
             <Route
               path="/novedades"
@@ -260,7 +269,7 @@ const App = () => (
                 </RequireAuth>
               }
             >
-              <Route index element={<News />} />
+              <Route index element={<ModuleGate role="buyer" moduleKey="news"><News /></ModuleGate>} />
             </Route>
             <Route
               path="/buyer"
@@ -270,14 +279,14 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route path="dashboard" element={<BuyerDashboard />} />
-              <Route path="directory" element={<DirectoryPage />} />
-              <Route path="directory/:sector" element={<SectorSuppliers />} />
-              <Route path="supplier/:id" element={<SupplierProfile />} />
+              <Route path="dashboard" element={<ModuleGate role="buyer" moduleKey="dashboard"><BuyerDashboard /></ModuleGate>} />
+              <Route path="directory" element={<ModuleGate role="buyer" moduleKey="supplier_directory"><DirectoryPage /></ModuleGate>} />
+              <Route path="directory/:sector" element={<ModuleGate role="buyer" moduleKey="supplier_directory"><SectorSuppliers /></ModuleGate>} />
+              <Route path="supplier/:id" element={<ModuleGate role="buyer" moduleKey="supplier_directory"><SupplierProfile /></ModuleGate>} />
               <Route path="user/:role/:id" element={<UserProfilePage />} />
               <Route path="sale" element={<SalePage />} />
               <Route path="sale/:id" element={<SaleDetailPage />} />
-              <Route path="community/post/:id" element={<CommunityPostDetail />} />
+              <Route path="community/post/:id" element={<ModuleGate role="buyer" moduleKey="community"><CommunityPostDetail /></ModuleGate>} />
               <Route path="community" element={<Navigate to="/community" replace />} />
             </Route>
             <Route
@@ -288,7 +297,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<SupplierHome />} />
+              <Route index element={<ModuleGate role="supplier" moduleKey="dashboard"><SupplierHome /></ModuleGate>} />
             </Route>
             <Route
               path="/supplier"
@@ -299,11 +308,11 @@ const App = () => (
               }
             >
               <Route index element={<Navigate to="/supplier/inicio" replace />} />
-              <Route path="dashboard" element={<SupplierDashboard />} />
-              <Route path="directory" element={<BuyerDirectoryPage />} />
-              <Route path="directory/:sector" element={<SectorBuyers />} />
-              <Route path="sale" element={<SalePage />} />
-              <Route path="sale/:id" element={<SaleDetailPage />} />
+              <Route path="dashboard" element={<ModuleGate role="supplier" moduleKey="dashboard"><SupplierDashboard /></ModuleGate>} />
+              <Route path="directory" element={<ModuleGate role="supplier" moduleKey="buyer_directory"><BuyerDirectoryPage /></ModuleGate>} />
+              <Route path="directory/:sector" element={<ModuleGate role="supplier" moduleKey="buyer_directory"><SectorBuyers /></ModuleGate>} />
+              <Route path="sale" element={<ModuleGate role="supplier" moduleKey="stock_opportunities"><SalePage /></ModuleGate>} />
+              <Route path="sale/:id" element={<ModuleGate role="supplier" moduleKey="stock_opportunities"><SaleDetailPage /></ModuleGate>} />
               <Route path="posts" element={<Navigate to="/publicaciones" replace />} />
             </Route>
             <Route
@@ -314,8 +323,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<SupplierPosts />} />
-              <Route path="edit/:id" element={<EditSupplierPublication />} />
+              <Route index element={<ModuleGate role="supplier" moduleKey="posts"><SupplierPosts /></ModuleGate>} />
+              <Route path="edit/:id" element={<ModuleGate role="supplier" moduleKey="posts"><EditSupplierPublication /></ModuleGate>} />
             </Route>
             <Route
               path="/community"
@@ -325,8 +334,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Community />} />
-              <Route path="post/:id" element={<CommunityPostDetail />} />
+              <Route index element={<ModuleGate role="buyer" moduleKey="community"><Community /></ModuleGate>} />
+              <Route path="post/:id" element={<ModuleGate role="buyer" moduleKey="community"><CommunityPostDetail /></ModuleGate>} />
             </Route>
             <Route
               path="/contenido-educativo"
@@ -336,7 +345,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<EducationalContent />} />
+              <Route index element={<ModuleGate role="buyer" moduleKey="educational_content"><EducationalContent /></ModuleGate>} />
             </Route>
             <Route
               path="/empleabilidad"
@@ -346,8 +355,8 @@ const App = () => (
                 </RequireAuth>
               }
             >
-              <Route index element={<Employability />} />
-              <Route path="mejorar-skill" element={<EmployabilitySkills />} />
+              <Route index element={<ModuleGate role="buyer" moduleKey="employability"><Employability /></ModuleGate>} />
+              <Route path="mejorar-skill" element={<ModuleGate role="buyer" moduleKey="employability"><EmployabilitySkills /></ModuleGate>} />
             </Route>
             <Route
               path="/nexu-experts"
@@ -357,8 +366,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<NexuExperts />} />
-              <Route path=":id" element={<NexuExperts />} />
+              <Route index element={<ModuleGate role="buyer" moduleKey="nodus_experts"><NexuExperts /></ModuleGate>} />
+              <Route path=":id" element={<ModuleGate role="buyer" moduleKey="nodus_experts"><NexuExperts /></ModuleGate>} />
             </Route>
             <Route
               path="/nexu-ia"
@@ -368,8 +377,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<NexuIA />} />
-              <Route path=":id" element={<NexuIA />} />
+              <Route index element={<ModuleGate role="buyer" moduleKey="nodus_ia"><NexuIA /></ModuleGate>} />
+              <Route path=":id" element={<ModuleGate role="buyer" moduleKey="nodus_ia"><NexuIA /></ModuleGate>} />
             </Route>
             <Route
               path="/notifications"
@@ -419,8 +428,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<DirectoryPage />} />
-              <Route path=":sector" element={<SectorSuppliers />} />
+              <Route index element={<ModuleGate role="buyer" moduleKey="supplier_directory"><DirectoryPage /></ModuleGate>} />
+              <Route path=":sector" element={<ModuleGate role="buyer" moduleKey="supplier_directory"><SectorSuppliers /></ModuleGate>} />
             </Route>
             <Route
               path="/directorio-compradores"
@@ -430,8 +439,8 @@ const App = () => (
                 </ProtectedRoute>
               }
             >
-              <Route index element={<BuyerDirectoryPage />} />
-              <Route path=":sector" element={<SectorBuyers />} />
+              <Route index element={<ModuleGate role="supplier" moduleKey="buyer_directory"><BuyerDirectoryPage /></ModuleGate>} />
+              <Route path=":sector" element={<ModuleGate role="supplier" moduleKey="buyer_directory"><SectorBuyers /></ModuleGate>} />
             </Route>
             <Route
               path="/perfil"
@@ -460,6 +469,7 @@ const App = () => (
             <Route path="/admin/users" element={<RequireAuth><Admin /></RequireAuth>} />
             <Route path="/admin/content" element={<RequireAuth><Admin /></RequireAuth>} />
             <Route path="/admin/agents" element={<RequireAuth><Admin /></RequireAuth>} />
+            <Route path="/admin/modules" element={<RequireAuth><Admin /></RequireAuth>} />
             <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
             <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
             <Route path="/become-expert" element={<GuestOnly><RegisterExpert /></GuestOnly>} />

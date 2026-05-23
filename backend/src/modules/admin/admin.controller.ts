@@ -496,6 +496,24 @@ export class AdminController {
     return this.agentsService.updateAgentPdfSettingsForAdmin(agentKey, body);
   }
 
+  @Get('module-activations')
+  listModuleActivations() {
+    return this.agentsService.listModuleActivationSettingsForAdmin();
+  }
+
+  @Patch('module-activations/:role/:moduleKey')
+  updateModuleActivation(
+    @Param('role') role: string,
+    @Param('moduleKey') moduleKey: string,
+    @Body() body: { enabled?: boolean },
+  ) {
+    if (typeof body.enabled !== 'boolean') {
+      throw new BadRequestException('El estado del modulo es obligatorio');
+    }
+
+    return this.agentsService.updateModuleActivationSettingForAdmin(role, moduleKey, body.enabled);
+  }
+
   @Patch('agent-feedback/:id')
   updateAgentFeedback(
     @Param('id') id: string,

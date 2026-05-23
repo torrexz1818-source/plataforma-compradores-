@@ -19,6 +19,7 @@ import {
   NewsComment,
   NewsPost,
   MonthlyReport,
+  ModuleActivationSetting,
   Post,
   PostCategory,
   PostResource,
@@ -894,6 +895,18 @@ export async function updateAdminAgentPdfSettings(
   });
 }
 
+export async function getAdminModuleActivations() {
+  return apiRequest<ModuleActivationSetting[]>('/admin/module-activations', { auth: true });
+}
+
+export async function updateAdminModuleActivation(role: string, moduleKey: string, enabled: boolean) {
+  return apiRequest<ModuleActivationSetting>(`/admin/module-activations/${role}/${moduleKey}`, {
+    method: 'PATCH',
+    auth: true,
+    body: JSON.stringify({ enabled }),
+  });
+}
+
 export async function getNewsPosts() {
   const data = await apiRequest<NewsListResponse>('/news', { auth: true });
   return data.items.map(normalizeNewsPostAssetUrls);
@@ -1434,6 +1447,12 @@ export async function getMyAgentExecutions() {
 
 export async function getMyAgentPdfOptions(agentKey: string) {
   return apiRequest<AgentPdfOptions>(`/agents/pdf-options${buildQuery({ agentKey })}`, {
+    auth: true,
+  });
+}
+
+export async function getMyModuleActivations() {
+  return apiRequest<{ role: string; modules: ModuleActivationSetting[] }>('/agents/module-activations/mine', {
     auth: true,
   });
 }

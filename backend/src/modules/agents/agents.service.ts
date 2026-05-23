@@ -121,6 +121,16 @@ type AgentPdfSettingsRecord = {
   updatedAt: Date;
 };
 
+type ModuleRole = 'buyer' | 'supplier' | 'expert';
+type ModuleActivationSettingsRecord = {
+  id: string;
+  role: ModuleRole;
+  moduleKey: string;
+  enabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 const TOKEN_PRICING = {
   inputPerMillion: Number(process.env.AI_INPUT_TOKEN_USD_PER_MILLION ?? 0.15),
   outputPerMillion: Number(process.env.AI_OUTPUT_TOKEN_USD_PER_MILLION ?? 0.6),
@@ -129,6 +139,30 @@ const TOKEN_PRICING = {
 const AGENT_CATALOG: Array<Omit<AgentRecord, 'createdAt' | 'updatedAt'>> = nodusIaAgents.map(
   ({ createdAt: _createdAt, updatedAt: _updatedAt, ...agent }) => agent,
 );
+
+const MODULE_DEFAULTS: Record<ModuleRole, Array<{ moduleKey: string; enabled: boolean }>> = {
+  buyer: [
+    { moduleKey: 'dashboard', enabled: false },
+    { moduleKey: 'news', enabled: false },
+    { moduleKey: 'community', enabled: false },
+    { moduleKey: 'educational_content', enabled: false },
+    { moduleKey: 'employability', enabled: false },
+    { moduleKey: 'nodus_experts', enabled: false },
+    { moduleKey: 'offers_requirements', enabled: false },
+    { moduleKey: 'nodus_ia', enabled: true },
+    { moduleKey: 'supplier_directory', enabled: false },
+  ],
+  supplier: [
+    { moduleKey: 'dashboard', enabled: false },
+    { moduleKey: 'buyer_directory', enabled: false },
+    { moduleKey: 'posts', enabled: false },
+    { moduleKey: 'stock_opportunities', enabled: false },
+    { moduleKey: 'messages', enabled: false },
+    { moduleKey: 'notifications', enabled: false },
+    { moduleKey: 'reports', enabled: false },
+  ],
+  expert: [],
+};
 
 @Injectable()
 export class AgentsService {
@@ -457,6 +491,49 @@ export class AgentsService {
     return { allowed: true, options };
   }
 
+  async listModuleActivationSettingsForAdmin() {
+    await this.ensureModuleActivationDefaults();
+    return this.moduleActivationSettingsCollection()
+      .find({})
+      .sort({ role: 1, moduleKey: 1 })
+      .toArray()
+      .then((items) => items.map((item) => this.serializeModuleActivationSettings(item)));
+  }
+
+  async getModuleActivationSettingsForUser(role: string) {
+    const normalizedRole = this.normalizeModuleRole(role);
+    if (!normalizedRole) {
+      return { role, modules: [] };
+    }
+
+    await this.ensureModuleActivationDefaults();
+    const items = await this.moduleActivationSettingsCollection().find({ role: normalizedRole }).toArray();
+    return {
+      role: normalizedRole,
+      modules: items.map((item) => this.serializeModuleActivationSettings(item)),
+    };
+  }
+
+  async updateModuleActivationSettingForAdmin(role: string, moduleKey: string, enabled: boolean) {
+    const normalizedRole = this.normalizeModuleRole(role);
+    if (!normalizedRole) throw new BadRequestException('Rol invalido');
+    await this.ensureModuleActivationDefaults();
+
+    const now = new Date();
+    await this.moduleActivationSettingsCollection().updateOne(
+      { role: normalizedRole, moduleKey },
+      {
+        $set: { enabled, updatedAt: now },
+        $setOnInsert: { id: randomUUID(), role: normalizedRole, moduleKey, createdAt: now },
+      },
+      { upsert: true },
+    );
+
+    return this.moduleActivationSettingsCollection()
+      .findOne({ role: normalizedRole, moduleKey })
+      .then((item) => item ? this.serializeModuleActivationSettings(item) : null);
+  }
+
   async activateAgent(agentId: string) {
     return this.updateAgentStatus(agentId, 'active');
   }
@@ -626,6 +703,30 @@ export class AgentsService {
     );
   }
 
+  private async ensureModuleActivationDefaults() {
+    const now = new Date();
+    await Promise.all(
+      Object.entries(MODULE_DEFAULTS).flatMap(([role, modules]) =>
+        modules.map((module) =>
+          this.moduleActivationSettingsCollection().updateOne(
+            { role: role as ModuleRole, moduleKey: module.moduleKey },
+            {
+              $setOnInsert: {
+                id: randomUUID(),
+                role: role as ModuleRole,
+                moduleKey: module.moduleKey,
+                enabled: module.enabled,
+                createdAt: now,
+                updatedAt: now,
+              },
+            },
+            { upsert: true },
+          ),
+        ),
+      ),
+    );
+  }
+
   private normalizeTokenUsage(input: {
     inputData: Record<string, unknown>;
     outputData: Record<string, unknown>;
@@ -792,6 +893,19 @@ export class AgentsService {
     };
   }
 
+  private serializeModuleActivationSettings(settings: ModuleActivationSettingsRecord) {
+    return {
+      ...settings,
+      createdAt: settings.createdAt.toISOString(),
+      updatedAt: settings.updatedAt.toISOString(),
+    };
+  }
+
+  private normalizeModuleRole(role: string): ModuleRole | null {
+    if (role === 'buyer' || role === 'supplier' || role === 'expert') return role;
+    return null;
+  }
+
   private normalizeLegacyAgentKey(idOrSlug: string) {
     const legacyMap: Record<string, string> = {
       'agent-quote-comparator': 'proposal_comparison',
@@ -828,5 +942,9 @@ export class AgentsService {
 
   private agentPdfSettingsCollection() {
     return this.databaseService.collection<AgentPdfSettingsRecord>('agentPdfSettings');
+  }
+
+  private moduleActivationSettingsCollection() {
+    return this.databaseService.collection<ModuleActivationSettingsRecord>('moduleActivationSettings');
   }
 }
