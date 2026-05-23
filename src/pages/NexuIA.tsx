@@ -42,6 +42,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { useProposalComparison } from '@/features/proposal-comparison/useProposalComparison';
@@ -2049,12 +2050,21 @@ const NexuIA = () => {
                   </div>
 
                   {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || dashboardCreatorMutation.isPending || tcoAnalysisMutation.isPending || runMutation.isPending) ? (
-                    <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
-                      {dashboardCreatorMutation.isPending
-                        ? 'Analizando datos y creando dashboard…'
-                        : tcoAnalysisMutation.isPending
-                          ? 'Analizando documentos y calculando TCO…'
-                          : 'Nodus IA está trabajando en tu solicitud…'}
+                    <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
+                      <div className="flex items-center gap-2 font-medium">
+                        <Sparkles className="h-4 w-4 animate-pulse" />
+                        <span>
+                          {dashboardCreatorMutation.isPending
+                            ? 'Analizando datos y creando dashboard…'
+                            : tcoAnalysisMutation.isPending
+                              ? 'Analizando documentos y calculando TCO…'
+                              : 'Nodus IA está trabajando en tu solicitud…'}
+                        </span>
+                      </div>
+                      <Progress value={72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+                      <p className="text-xs leading-5 text-primary/70">
+                        Mantén esta pantalla abierta mientras el agente procesa la información.
+                      </p>
                     </div>
                   ) : null}
 
