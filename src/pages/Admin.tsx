@@ -32,6 +32,7 @@ import {
   getAdminMemberships,
   getAdminAgentUsage,
   getAdminAiAgents,
+  getAdminAgentFeedback,
   getAdminAgentMetrics,
   getAdminDashboard,
   getAdminModuleActivations,
@@ -270,6 +271,11 @@ const Admin = () => {
   const agentMetricsQuery = useQuery({
     queryKey: ['admin-agent-metrics'],
     queryFn: getAdminAgentMetrics,
+    enabled: user?.role === 'admin',
+  });
+  const agentFeedbackQuery = useQuery({
+    queryKey: ['admin-agent-feedback'],
+    queryFn: getAdminAgentFeedback,
     enabled: user?.role === 'admin',
   });
   const moduleActivationsQuery = useQuery({
@@ -528,6 +534,14 @@ const Admin = () => {
   const postsById = useMemo(
     () => new Map((data?.posts ?? []).map((post) => [post.id, post])),
     [data?.posts],
+  );
+  const feedbackByRunId = useMemo(
+    () => new Map((agentFeedbackQuery.data ?? []).map((feedback) => [feedback.agentRunId, feedback])),
+    [agentFeedbackQuery.data],
+  );
+  const agentNamesByKey = useMemo(
+    () => new Map((adminAgentsQuery.data ?? []).map((agent) => [agent.agentKey ?? agent.id, agent.name])),
+    [adminAgentsQuery.data],
   );
   const commentsBySelectedCategory = useMemo(() => {
     if (!data?.comments) {
@@ -2465,7 +2479,7 @@ const Admin = () => {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full min-w-[1180px] text-left text-sm">
+                <table className="w-full min-w-[1500px] text-left text-sm">
                   <thead className="bg-muted/60 text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3 font-medium">Agente</th>
@@ -2547,34 +2561,102 @@ const Admin = () => {
                       <th className="px-4 py-3 font-medium">Costo total</th>
                       <th className="px-4 py-3 font-medium">Tiempo</th>
                       <th className="px-4 py-3 font-medium">PDF</th>
+                      <th className="px-4 py-3 font-medium">Calificacion</th>
+                      <th className="px-4 py-3 font-medium">Comentario</th>
+                      <th className="px-4 py-3 font-medium">Recomendacion para prompt</th>
                       <th className="px-4 py-3 font-medium">Estado</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(agentUsageQuery.data ?? []).map((usage) => (
-                      <tr key={usage.id} className="border-t border-border">
-                        <td className="px-4 py-3 font-medium text-foreground">{usage.userName}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{getRoleLabel(usage.userRole)}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.agentName}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.operationName}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{formatDateTime(usage.createdAt)}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.model ?? 'No especificado'}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.inputTokens}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.outputTokens}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.totalTokens}</td>
-                        <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costInput ?? 0).toFixed(6)}</td>
-                        <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costOutput ?? 0).toFixed(6)}</td>
-                        <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costTotal ?? usage.costAmount).toFixed(6)}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.latencyMs ?? 0} ms</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.pdfGenerated ? 'Si' : 'No'}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{usage.status ?? 'completed'}</td>
-                      </tr>
-                    ))}
+                    {(agentUsageQuery.data ?? []).map((usage) => {
+                      const feedback = feedbackByRunId.get(usage.agentRunId ?? '');
+                      const promptRecommendation =
+                        feedback?.improvementSuggestion ?? feedback?.correctedVersion ?? 'Sin recomendacion';
+
+                      return (
+                        <tr key={usage.id} className="border-t border-border align-top">
+                          <td className="px-4 py-3 font-medium text-foreground">{usage.userName}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{getRoleLabel(usage.userRole)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.agentName}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.operationName}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{formatDateTime(usage.createdAt)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.model ?? 'No especificado'}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.inputTokens}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.outputTokens}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.totalTokens}</td>
+                          <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costInput ?? 0).toFixed(6)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costOutput ?? 0).toFixed(6)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costTotal ?? usage.costAmount).toFixed(6)}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.latencyMs ?? 0} ms</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.pdfGenerated ? 'Si' : 'No'}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{feedback ? `${feedback.stars}/5` : 'Sin calificar'}</td>
+                          <td className="max-w-[260px] px-4 py-3 text-muted-foreground">{feedback?.comment ?? 'Sin comentario'}</td>
+                          <td className="max-w-[320px] px-4 py-3 text-muted-foreground">{promptRecommendation}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{usage.status ?? 'completed'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
               {!agentUsageQuery.isLoading && !(agentUsageQuery.data ?? []).length ? (
                 <p className="mt-3 text-sm text-muted-foreground">Aun no hay usos registrados. Cuando alguien use un agente, aparecera aqui.</p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-xl shadow-[var(--shadow-card)]">
+            <CardHeader>
+              <CardTitle className="text-lg">Calificaciones y mejoras de prompt</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Comentarios de usuarios y recomendaciones que sirven para ajustar o mejorar el prompt de cada agente.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full min-w-[1120px] text-left text-sm">
+                  <thead className="bg-muted/60 text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">Fecha</th>
+                      <th className="px-4 py-3 font-medium">Usuario</th>
+                      <th className="px-4 py-3 font-medium">Agente</th>
+                      <th className="px-4 py-3 font-medium">Calificacion</th>
+                      <th className="px-4 py-3 font-medium">Tipo</th>
+                      <th className="px-4 py-3 font-medium">Comentario</th>
+                      <th className="px-4 py-3 font-medium">Correccion sugerida</th>
+                      <th className="px-4 py-3 font-medium">Recomendacion para prompt</th>
+                      <th className="px-4 py-3 font-medium">Estado admin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(agentFeedbackQuery.data ?? []).map((feedback) => (
+                      <tr key={feedback.id} className="border-t border-border align-top">
+                        <td className="px-4 py-3 text-muted-foreground">{formatDateTime(feedback.createdAt)}</td>
+                        <td className="px-4 py-3 font-medium text-foreground">{feedback.userName ?? 'Usuario'}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {agentNamesByKey.get(feedback.agentKey) ?? feedback.agentKey}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{feedback.stars}/5</td>
+                        <td className="px-4 py-3 text-muted-foreground">{feedback.feedbackType}</td>
+                        <td className="max-w-[260px] px-4 py-3 text-muted-foreground">
+                          {feedback.comment || 'Sin comentario'}
+                        </td>
+                        <td className="max-w-[280px] px-4 py-3 text-muted-foreground">
+                          {feedback.correctedVersion || 'Sin correccion'}
+                        </td>
+                        <td className="max-w-[320px] px-4 py-3 text-muted-foreground">
+                          {feedback.improvementSuggestion || feedback.correctedVersion || 'Sin recomendacion'}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">{feedback.adminStatus}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {!agentFeedbackQuery.isLoading && !(agentFeedbackQuery.data ?? []).length ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Aun no hay calificaciones ni comentarios. Cuando un usuario califique un agente, aparecera aqui.
+                </p>
               ) : null}
             </CardContent>
           </Card>
