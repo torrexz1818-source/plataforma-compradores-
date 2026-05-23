@@ -61,7 +61,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { ModuleActivationSetting, Post, PostResource, UserPdfBrandingSettings, UserStatus } from '@/types';
+import { Agent, ModuleActivationSetting, Post, PostResource, UserPdfBrandingSettings, UserStatus } from '@/types';
 
 const SKILL_CATEGORY_SLUG = 'mejorar-skill';
 const PROFESSIONAL_ROUTE_ID: LearningRouteId = 'ruta-5';
@@ -289,9 +289,35 @@ const Admin = () => {
   const agentStatusMutation = useMutation({
     mutationFn: ({ agentKey, status }: { agentKey: string; status: 'active' | 'coming_soon' | 'disabled' | 'hidden' }) =>
       updateAdminAgentStatus(agentKey, status),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-ai-agents'] });
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({ queryKey: ['admin-ai-agents'] });
+      const previous = queryClient.getQueryData<Agent[]>(['admin-ai-agents']);
+
+      queryClient.setQueryData<Agent[]>(['admin-ai-agents'], (current = []) =>
+        current.map((agent) =>
+          (agent.agentKey ?? agent.id) === variables.agentKey
+            ? {
+                ...agent,
+                status: variables.status,
+                isActive: variables.status === 'active',
+                visibleToBuyer: variables.status !== 'hidden',
+              }
+            : agent,
+        ),
+      );
+
+      return { previous };
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData<Agent[]>(['admin-ai-agents'], (current = []) =>
+        current.map((agent) => ((agent.agentKey ?? agent.id) === (data.agent.agentKey ?? data.agent.id) ? data.agent : agent)),
+      );
       void queryClient.invalidateQueries({ queryKey: ['admin-agent-metrics'] });
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['admin-ai-agents'], context.previous);
+      }
     },
   });
   const userPdfBrandingMutation = useMutation({
@@ -2422,12 +2448,11 @@ const Admin = () => {
                       id={`agent-status-${agentKey}`}
                       value={agent.status ?? 'coming_soon'}
                       onChange={(event) =>
-                        void agentStatusMutation.mutateAsync({
+                        agentStatusMutation.mutate({
                           agentKey,
                           status: event.target.value as 'active' | 'coming_soon' | 'disabled' | 'hidden',
                         })
                       }
-                      disabled={agentStatusMutation.isPending}
                       className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
                     >
                       <option value="active">Activo</option>
