@@ -224,7 +224,7 @@ export class AgentsService {
   async listAgentsForAdmin() {
     await this.ensureAgentCatalog();
     const [agents, runs, feedback] = await Promise.all([
-      this.agentsCollection().find({}).sort({ sortOrder: 1, name: 1 }).toArray(),
+      this.agentsCollection().find({ agentKey: { $in: AGENT_CATALOG.map((agent) => agent.agentKey) } }).sort({ sortOrder: 1, name: 1 }).toArray(),
       this.executionsCollection().find({}).toArray(),
       this.feedbackCollection().find({}).toArray(),
     ]);
@@ -857,8 +857,8 @@ export class AgentsService {
       accentColor: agent.accentColor,
       icon: agent.icon,
       sortOrder: agent.sortOrder ?? 99,
-      createdAt: agent.createdAt.toISOString(),
-      updatedAt: agent.updatedAt.toISOString(),
+      createdAt: this.serializeDate(agent.createdAt),
+      updatedAt: this.serializeDate(agent.updatedAt),
     };
   }
 
@@ -902,25 +902,31 @@ export class AgentsService {
   private serializeUserPdfBrandingSettings(settings: UserPdfBrandingSettingsRecord) {
     return {
       ...settings,
-      createdAt: settings.createdAt.toISOString(),
-      updatedAt: settings.updatedAt.toISOString(),
+      createdAt: this.serializeDate(settings.createdAt),
+      updatedAt: this.serializeDate(settings.updatedAt),
     };
   }
 
   private serializeAgentPdfSettings(settings: AgentPdfSettingsRecord) {
     return {
       ...settings,
-      createdAt: settings.createdAt.toISOString(),
-      updatedAt: settings.updatedAt.toISOString(),
+      createdAt: this.serializeDate(settings.createdAt),
+      updatedAt: this.serializeDate(settings.updatedAt),
     };
   }
 
   private serializeModuleActivationSettings(settings: ModuleActivationSettingsRecord) {
     return {
       ...settings,
-      createdAt: settings.createdAt.toISOString(),
-      updatedAt: settings.updatedAt.toISOString(),
+      createdAt: this.serializeDate(settings.createdAt),
+      updatedAt: this.serializeDate(settings.updatedAt),
     };
+  }
+
+  private serializeDate(value: Date | string | undefined) {
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'string' && value.trim()) return new Date(value).toISOString();
+    return new Date().toISOString();
   }
 
   private normalizeModuleRole(role: string): ModuleRole | null {
