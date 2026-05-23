@@ -69,6 +69,10 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "moduleNameMapper": {
+      "^\\.\\./\\.\\./\\.\\./\\.\\./shared/nodusIaAgents$": "<rootDir>/test-support/nodusIaAgents.ts",
+      "^\\.\\./\\.\\./\\.\\./\\.\\./shared/monetization$": "<rootDir>/test-support/monetization.ts"
+    },
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],

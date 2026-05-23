@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import {
   ArrowRight,
   Archive,
+  BookOpen,
   Bot,
   Building2,
   Download,
@@ -514,6 +515,15 @@ const Admin = () => {
   const isAgentsAdminView = location.pathname === '/admin/agents';
   const isModulesAdminView = location.pathname === '/admin/modules';
   const isDedicatedAdminView = isContentAdminView || isAgentsAdminView || isModulesAdminView;
+
+  useEffect(() => {
+    if (!isAgentsAdminView || selectedAgentKey || !adminAgentsQuery.data?.length) {
+      return;
+    }
+
+    const firstAgent = adminAgentsQuery.data[0];
+    setSelectedAgentKey(firstAgent.agentKey ?? firstAgent.id);
+  }, [adminAgentsQuery.data, isAgentsAdminView, selectedAgentKey]);
 
   if (!isAuthLoading && !user) {
     return <Navigate to="/login" replace />;
@@ -2232,7 +2242,7 @@ const Admin = () => {
                   <div className="min-w-0">
                     <h2 className="text-base font-semibold text-foreground">Autorizador de agentes IA</h2>
                     <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      Autoriza la visibilidad y funcionamiento de cada agente en la plataforma.
+                      Autoriza la visibilidad, funcionamiento y PDF premium de cada agente en la plataforma.
                     </p>
                   </div>
                 </div>
@@ -2254,7 +2264,7 @@ const Admin = () => {
           <div className="mb-4">
             <h2 className="text-lg font-medium text-foreground">Gestion de agentes IA</h2>
             <p className="text-sm text-muted-foreground">
-              Disponibilidad, uso, costos, tokens, feedback y recomendaciones de mejora.
+              Disponibilidad, autorizacion, PDF premium, uso, costos, tokens, feedback y recomendaciones de mejora.
             </p>
           </div>
 
