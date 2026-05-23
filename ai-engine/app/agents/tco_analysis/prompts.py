@@ -5,20 +5,23 @@ from typing import Any
 
 
 SYSTEM_PROMPT = """
-Eres un Agente Especialista en Análisis TCO — Total Cost of Ownership — para compras estratégicas,
-proveedores, importaciones, servicios, maquinaria, software, vehículos, repuestos, insumos y productos
+Eres un Agente Especialista en Analisis TCO - Total Cost of Ownership - para compras estrategicas,
+proveedores, importaciones, servicios, maquinaria, software, vehiculos, repuestos, insumos y productos
 o servicios empresariales.
 
 Reglas obligatorias:
-- No elijas por precio inicial. Justifica con números, riesgos y lógica de negocio.
+- El usuario ya no llena manualmente todas las alternativas. Debes extraer proveedores y alternativas desde documentos cargados.
+- Analiza cotizaciones, propuestas, imagenes, fichas tecnicas, Excel, CSV o PDFs para identificar proveedores, costos, condiciones, plazos, garantias y riesgos.
+- No elijas por precio inicial. Justifica con numeros, riesgos y logica de negocio.
 - No inventes impuestos, aranceles, tipo de cambio, regulaciones, fletes, seguros ni cargos aduaneros.
-- Separa datos entregados, datos extraídos de documentos, SUPUESTOS e información faltante.
+- Si un dato no aparece, usa "No especificado".
+- Separa datos encontrados en documentos, datos entregados por el comprador, SUPUESTOS e informacion faltante.
 - Todo supuesto debe empezar con la palabra "SUPUESTO".
-- Si falta información, lista preguntas concretas para usuario o proveedor.
+- Si falta informacion, lista preguntas concretas para usuario o proveedor.
 - Si puedes avanzar con advertencias, hazlo sin inventar montos.
-- Devuelve exclusivamente JSON válido. No devuelvas markdown fuera del JSON.
+- Devuelve exclusivamente JSON valido. No devuelvas markdown fuera del JSON.
 - Usa lenguaje ejecutivo, claro y profesional.
-- Mantén el disclaimer indicado.
+- Manten el disclaimer indicado.
 """
 
 
@@ -35,6 +38,21 @@ EXPECTED_JSON_SHAPE = {
         "estimated_saving_or_overcost": "string",
         "main_risk": "string",
         "final_recommendation": "string",
+    },
+    "detected_alternatives": [
+        {
+            "supplier_name": "string",
+            "source_file": "string",
+            "data_detected": ["precio", "garantia", "lead time"],
+            "data_missing": ["mantenimiento", "repuestos", "vida util"],
+            "confidence_level": "low|medium|high",
+        }
+    ],
+    "extracted_data_quality": {
+        "detected_alternatives_count": 0,
+        "documents_processed": 0,
+        "confidence_level": "low|medium|high",
+        "warnings": ["string"],
     },
     "data_used": [],
     "tco_matrix": [],
@@ -56,7 +74,7 @@ EXPECTED_JSON_SHAPE = {
         "most_sensitive_variable": "string",
     },
     "strategic_recommendation": {
-        "recommended_action": "Comprar local / Importar / Negociar / Pedir más información / Hacer piloto / Dividir compra / Usar como BATNA",
+        "recommended_action": "Comprar local / Importar / Negociar / Pedir mas informacion / Hacer piloto / Dividir compra / Usar como BATNA",
         "negotiation_points": [],
         "next_steps": [],
     },
@@ -64,7 +82,7 @@ EXPECTED_JSON_SHAPE = {
     "questions_for_user_or_suppliers": [],
     "assumptions_and_limits": [],
     "supporting_documents_summary": [],
-    "disclaimer": "Este análisis TCO es una recomendación asistida por IA y debe ser validado por el comprador antes de tomar una decisión final.",
+    "disclaimer": "Este analisis TCO es una recomendacion asistida por IA y debe ser validado por el comprador antes de tomar una decision final.",
 }
 
 
@@ -79,6 +97,7 @@ def build_user_prompt(
     purchase_volume: str | None,
     objective: str | None,
     alternatives: list[dict[str, Any]],
+    general_context: str | None,
     additional_instructions: str | None,
     documents: list[dict[str, Any]],
     python_calculations: dict[str, Any],
@@ -93,24 +112,29 @@ def build_user_prompt(
             "currency": currency,
             "purchase_volume": purchase_volume or "No especificado",
             "objective": objective or "No especificado",
+            "general_context": general_context or "No especificado",
             "additional_instructions": additional_instructions or "No especificado",
         },
-        "alternatives_from_user": alternatives,
+        "alternatives_from_user_fallback": alternatives,
         "document_context_compact": documents,
         "python_calculations": python_calculations,
         "methodology": [
+            "Extrae alternativas/proveedores desde documentos. Si alternatives_from_user_fallback tiene datos, usalos solo como fallback.",
+            "Para cada proveedor detecta: proveedor, marca/modelo, producto/servicio, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, costos no incluidos, riesgos y observaciones.",
             "Define alcance, alternativas, origen/destino, horizonte, unidad, moneda, volumen y condiciones.",
-            "Clasifica costos por adquisición, logística, implementación, operación, mantenimiento, financieros, riesgo, administración, salida y valor residual.",
+            "Clasifica costos por adquisicion, logistica, implementacion, operacion, mantenimiento, financieros, riesgo, administracion, salida y valor residual.",
             "Calcula y explica TCO total, por unidad, mensual o anual cuando haya datos suficientes.",
-            "Para importación vs local, compara costo puesto almacén con costo local real y advierte ilusión de precio bajo si aplica.",
-            "Convierte riesgos a costo esperado solo si hay probabilidad e impacto económico entregados.",
+            "Para importacion vs local, compara costo puesto almacen con costo local real y advierte ilusion de precio bajo si aplica.",
+            "Convierte riesgos a costo esperado solo si hay probabilidad e impacto economico entregados.",
             "Incluye escenarios base, optimista, pesimista y punto de equilibrio.",
         ],
         "expected_json_shape": EXPECTED_JSON_SHAPE,
     }
 
     return (
-        "Analiza el siguiente caso TCO. Usa los cálculos Python como fuente de validación numérica "
-        "cuando estén disponibles y completa la interpretación ejecutiva sin inventar datos.\n\n"
+        "Analiza el siguiente caso TCO. Extrae primero las alternativas desde los documentos cargados. "
+        "Usa los calculos Python como fuente de validacion numerica cuando esten disponibles y completa "
+        "la interpretacion ejecutiva sin inventar datos. Separa datos encontrados en documentos, datos "
+        "entregados por el comprador, SUPUESTOS e informacion faltante.\n\n"
         f"{json.dumps(payload, ensure_ascii=False, default=str)}"
     )
