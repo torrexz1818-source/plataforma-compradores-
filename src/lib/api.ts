@@ -884,7 +884,8 @@ export async function getAdminAgentUsage() {
 
 export async function getAdminAiAgents() {
   try {
-    return await apiRequest<Agent[]>('/admin/ai-agents', { auth: true });
+    const agents = await apiRequest<Agent[]>('/admin/ai-agents', { auth: true });
+    return buildCatalogFallbackAgents(agents);
   } catch {
     return buildCatalogFallbackAgents();
   }
@@ -902,14 +903,23 @@ export async function updateAdminAgentStatus(
   agentKey: string,
   status: AgentStatus,
 ) {
+  setAgentStatusOverride(agentKey, status);
   try {
-    return await apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
+    const response = await apiRequest<{ agent: Agent; message: string }>(`/admin/ai-agents/${agentKey}/status`, {
       method: 'PATCH',
       auth: true,
       body: JSON.stringify({ status }),
     });
+    return {
+      ...response,
+      agent: {
+        ...response.agent,
+        status,
+        isActive: status === 'active',
+        visibleToBuyer: status !== 'hidden',
+      },
+    };
   } catch {
-    setAgentStatusOverride(agentKey, status);
     const agent = buildCatalogFallbackAgents().find((item) => (item.agentKey ?? item.id) === agentKey);
     if (!agent) throw new Error('Agente no encontrado');
     return { agent, message: 'Estado actualizado localmente. El backend de produccion aun requiere redeploy.' };
