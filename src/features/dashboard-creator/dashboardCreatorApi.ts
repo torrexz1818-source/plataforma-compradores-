@@ -184,6 +184,16 @@ function addWrappedText(ctx: PdfCtx, text: string, x: number, y: number, width: 
   return lines.length * (options.lineHeight ?? 4.2);
 }
 
+function measureText(ctx: PdfCtx, text: string, width: number, options: { size?: number; bold?: boolean; lineHeight?: number } = {}) {
+  ctx.doc.setFont('helvetica', options.bold ? 'bold' : 'normal');
+  ctx.doc.setFontSize(options.size ?? 8);
+  const lines = ctx.doc.splitTextToSize(text, width);
+  return {
+    lines,
+    height: lines.length * (options.lineHeight ?? 4.2),
+  };
+}
+
 function sectionTitle(ctx: PdfCtx, title: string) {
   addPageIfNeeded(ctx, 14);
   ctx.doc.setFont('helvetica', 'bold');
@@ -225,9 +235,9 @@ function drawKpis(ctx: PdfCtx, kpis: DashboardKpi[]) {
   if (!kpis.length) return;
   sectionTitle(ctx, 'KPIs principales');
   const gap = 4;
-  const columns = 4;
+  const columns = 3;
   const width = (ctx.pageWidth - ctx.margin * 2 - gap * (columns - 1)) / columns;
-  const height = 31;
+  const height = 38;
   kpis.forEach((kpi, index) => {
     const col = index % columns;
     if (col === 0) addPageIfNeeded(ctx, height + 8);
@@ -236,7 +246,7 @@ function drawKpis(ctx: PdfCtx, kpis: DashboardKpi[]) {
     roundedCard(ctx, x, y, width, height);
     addWrappedText(ctx, kpi.title.toUpperCase(), x + 3, y + 6, width - 6, { size: 5.8, bold: true, color: '#6b63d9', lineHeight: 3 });
     addWrappedText(ctx, textValue(kpi.value), x + 3, y + 14, width - 6, { size: 10.5, bold: true, color: '#09008B', lineHeight: 5 });
-    addWrappedText(ctx, kpi.description, x + 3, y + 22, width - 6, { size: 5.6, color: '#6870c5', lineHeight: 3 });
+    addWrappedText(ctx, kpi.description, x + 3, y + 23, width - 6, { size: 5.6, color: '#6870c5', lineHeight: 3 });
     if (col === columns - 1 || index === kpis.length - 1) ctx.y += height + 5;
   });
 }
@@ -308,23 +318,44 @@ function drawTextBlocks(ctx: PdfCtx, title: string, items: Array<{ title?: strin
   if (!items.length) return;
   sectionTitle(ctx, title);
   items.forEach((item) => {
-    addPageIfNeeded(ctx, 22);
     const heading = typeof item === 'string' ? '' : item.title;
-    const body = typeof item === 'string' ? item : [item.description, item.recommended_action ? `Acción: ${item.recommended_action}` : ''].filter(Boolean).join(' ');
-    roundedCard(ctx, ctx.margin, ctx.y, ctx.pageWidth - ctx.margin * 2, 20, '#f8f9ff');
+    const body = typeof item === 'string' ? item : [item.description, item.recommended_action ? `Accion: ${item.recommended_action}` : ''].filter(Boolean).join(' ');
+    const contentWidth = ctx.pageWidth - ctx.margin * 2 - 8;
+    const headingHeight = heading ? measureText(ctx, heading, contentWidth, { size: 7.2, bold: true, lineHeight: 3.8 }).height : 0;
+    const bodyHeight = measureText(ctx, body, contentWidth, { size: 6.4, lineHeight: 3.4 }).height;
+    const cardHeight = Math.max(20, 10 + headingHeight + bodyHeight);
+    addPageIfNeeded(ctx, cardHeight + 4);
+    roundedCard(ctx, ctx.margin, ctx.y, ctx.pageWidth - ctx.margin * 2, cardHeight, '#f8f9ff');
     if (heading) addWrappedText(ctx, heading, ctx.margin + 4, ctx.y + 6, ctx.pageWidth - ctx.margin * 2 - 8, { size: 7.2, bold: true, color: '#09008B' });
     addWrappedText(ctx, body, ctx.margin + 4, ctx.y + (heading ? 12 : 7), ctx.pageWidth - ctx.margin * 2 - 8, { size: 6.4, color: '#475569' });
-    ctx.y += 24;
+    ctx.y += cardHeight + 4;
   });
 }
 
 function drawQuality(ctx: PdfCtx, result: DashboardResult) {
-  sectionTitle(ctx, 'Calidad de datos e información faltante');
-  roundedCard(ctx, ctx.margin, ctx.y, ctx.pageWidth - ctx.margin * 2, 28, '#ffffff');
+  sectionTitle(ctx, 'Calidad de datos e informacion faltante');
   const text = `${result.data_profile.rows_detected} filas, ${result.data_profile.columns_detected} columnas, ${result.data_profile.files_processed} archivo(s).`;
+  const details = [...result.data_profile.data_quality_warnings, ...result.suggested_filters, ...result.missing_information].join(' | ') || 'Sin alertas adicionales.';
+  const contentWidth = ctx.pageWidth - ctx.margin * 2 - 8;
+  const detailsHeight = measureText(ctx, details, contentWidth, { size: 6.2, lineHeight: 3.4 }).height;
+  const cardHeight = Math.max(28, 18 + detailsHeight);
+  addPageIfNeeded(ctx, cardHeight + 4);
+  roundedCard(ctx, ctx.margin, ctx.y, ctx.pageWidth - ctx.margin * 2, cardHeight, '#ffffff');
   addWrappedText(ctx, text, ctx.margin + 4, ctx.y + 7, ctx.pageWidth - ctx.margin * 2 - 8, { size: 7.2, bold: true, color: '#09008B' });
-  addWrappedText(ctx, [...result.data_profile.data_quality_warnings, ...result.suggested_filters, ...result.missing_information].join(' | ') || 'Sin alertas adicionales.', ctx.margin + 4, ctx.y + 15, ctx.pageWidth - ctx.margin * 2 - 8, { size: 6.2, color: '#475569' });
-  ctx.y += 34;
+  addWrappedText(ctx, details, ctx.margin + 4, ctx.y + 15, ctx.pageWidth - ctx.margin * 2 - 8, { size: 6.2, color: '#475569' });
+  ctx.y += cardHeight + 6;
+}
+
+function drawExecutiveSummary(ctx: PdfCtx, summary: string) {
+  const contentWidth = ctx.pageWidth - ctx.margin * 2 - 8;
+  const titleHeight = measureText(ctx, 'Resumen ejecutivo', contentWidth, { size: 8, bold: true, lineHeight: 4.2 }).height;
+  const bodyHeight = measureText(ctx, summary, contentWidth, { size: 6.5, lineHeight: 3.6 }).height;
+  const cardHeight = Math.max(30, 12 + titleHeight + bodyHeight);
+  addPageIfNeeded(ctx, cardHeight + 8);
+  roundedCard(ctx, ctx.margin, ctx.y, ctx.pageWidth - ctx.margin * 2, cardHeight, '#eef2ff');
+  addWrappedText(ctx, 'Resumen ejecutivo', ctx.margin + 4, ctx.y + 7, contentWidth, { size: 8, bold: true, color: '#09008B', lineHeight: 4.2 });
+  addWrappedText(ctx, summary, ctx.margin + 4, ctx.y + 14, contentWidth, { size: 6.5, color: '#334155', lineHeight: 3.6 });
+  ctx.y += cardHeight + 8;
 }
 
 function downloadVisualDashboardPdf(result: DashboardResult, pdfMode?: string, branding?: Record<string, unknown>) {
@@ -340,10 +371,7 @@ function downloadVisualDashboardPdf(result: DashboardResult, pdfMode?: string, b
 
   drawHeader(ctx, result, pdfMode, branding);
   if (result.executive_summary) {
-    roundedCard(ctx, ctx.margin, ctx.y, ctx.pageWidth - ctx.margin * 2, 26, '#eef2ff');
-    addWrappedText(ctx, 'Resumen ejecutivo', ctx.margin + 4, ctx.y + 7, ctx.pageWidth - ctx.margin * 2 - 8, { size: 8, bold: true, color: '#09008B' });
-    addWrappedText(ctx, result.executive_summary, ctx.margin + 4, ctx.y + 14, ctx.pageWidth - ctx.margin * 2 - 8, { size: 6.5, color: '#334155' });
-    ctx.y += 32;
+    drawExecutiveSummary(ctx, result.executive_summary);
   }
   drawKpis(ctx, result.kpis);
   drawCharts(ctx, result.charts);
