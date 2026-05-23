@@ -499,15 +499,8 @@ const Admin = () => {
     [agentFeedbackQuery.data, selectedAgent],
   );
   const handleOpenAgentAuthorizer = () => {
-    const firstAgent = (adminAgentsQuery.data ?? [])[0];
-    const targetAgentKey = selectedAgentKey ?? (firstAgent ? firstAgent.agentKey ?? firstAgent.id : null);
-
-    if (targetAgentKey) {
-      setSelectedAgentKey(targetAgentKey);
-    }
-
     window.setTimeout(() => {
-      document.getElementById(targetAgentKey ? 'admin-ai-agent-authorizer' : 'admin-ai-agents')?.scrollIntoView({
+      document.getElementById('admin-ai-agents')?.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       });
@@ -703,9 +696,16 @@ const Admin = () => {
   const getAgentStatusLabel = (status?: string) => {
     if (status === 'active') return 'Activo';
     if (status === 'coming_soon') return 'Proximamente';
-    if (status === 'disabled') return 'Desactivado';
+    if (status === 'disabled') return 'En mantenimiento';
     if (status === 'hidden') return 'Oculto';
     return 'Proximamente';
+  };
+
+  const getAgentStatusBadgeClass = (status?: string) => {
+    if (status === 'active') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+    if (status === 'disabled') return 'border-amber-200 bg-amber-50 text-amber-700';
+    if (status === 'hidden') return 'border-slate-200 bg-slate-100 text-slate-600';
+    return 'border-primary/20 bg-primary/5 text-primary';
   };
 
   const isVideoPost = (post: Pick<Post, 'mediaType' | 'videoUrl'>) => post.mediaType === 'video' || Boolean(post.videoUrl);
@@ -2278,7 +2278,7 @@ const Admin = () => {
                   className="mt-auto w-fit justify-start"
                   onClick={handleOpenAgentAuthorizer}
                 >
-                  Autorizador
+                  Autorizar
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </CardContent>
@@ -2288,10 +2288,73 @@ const Admin = () => {
 
         {isAgentsAdminView && <section id="admin-ai-agents" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
           <div className="mb-4">
-            <h2 className="text-lg font-medium text-foreground">Gestion de agentes IA</h2>
+            <h2 className="text-lg font-medium text-foreground">Autorizador de agentes IA</h2>
             <p className="text-sm text-muted-foreground">
-              Disponibilidad, autorizacion, PDF premium, uso, costos, tokens, feedback y recomendaciones de mejora.
+              Autoriza si cada agente esta activo, proximamente, en mantenimiento u oculto para compradores.
             </p>
+          </div>
+
+          <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {(adminAgentsQuery.data ?? []).map((agent) => {
+              const agentKey = agent.agentKey ?? agent.id;
+              return (
+                <div key={agentKey} className="rounded-xl border border-border bg-background p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{agent.name}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{agent.category}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium ${getAgentStatusBadgeClass(agent.status)}`}>
+                      {getAgentStatusLabel(agent.status)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">{agent.description}</p>
+                  <div className="mt-4 space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground" htmlFor={`agent-status-${agentKey}`}>
+                      Estado del agente
+                    </label>
+                    <select
+                      id={`agent-status-${agentKey}`}
+                      value={agent.status ?? 'coming_soon'}
+                      onChange={(event) =>
+                        void agentStatusMutation.mutateAsync({
+                          agentKey,
+                          status: event.target.value as 'active' | 'coming_soon' | 'disabled' | 'hidden',
+                        })
+                      }
+                      disabled={agentStatusMutation.isPending}
+                      className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground"
+                    >
+                      <option value="active">Activo</option>
+                      <option value="coming_soon">Proximamente</option>
+                      <option value="disabled">En mantenimiento</option>
+                      <option value="hidden">Oculto</option>
+                    </select>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                    <span>Visible para comprador</span>
+                    <span className="font-medium text-foreground">{agent.status === 'hidden' ? 'No' : 'Si'}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="mt-3 w-full"
+                    onClick={() => {
+                      setSelectedAgentKey(agentKey);
+                      window.setTimeout(() => {
+                        document.getElementById('admin-ai-agent-authorizer')?.scrollIntoView({
+                          behavior: 'smooth',
+                          block: 'start',
+                        });
+                      }, 80);
+                    }}
+                  >
+                    Ver detalle
+                  </Button>
+                </div>
+              );
+            })}
           </div>
 
           {agentMetricsQuery.data ? (
@@ -2376,7 +2439,7 @@ const Admin = () => {
                           >
                             <option value="active">Activo</option>
                             <option value="coming_soon">Proximamente</option>
-                            <option value="disabled">Desactivado</option>
+                            <option value="disabled">En mantenimiento</option>
                             <option value="hidden">Oculto</option>
                           </select>
                         </div>
