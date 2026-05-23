@@ -172,18 +172,24 @@ export class AgentsService {
   ) {}
 
   async listAgents(filters?: { category?: string; automationType?: string; includeHidden?: boolean }) {
-    await this.ensureAgentCatalog();
-    const query: Record<string, unknown> = {};
+    try {
+      await this.ensureAgentCatalog();
+      const query: Record<string, unknown> = {
+        agentKey: { $in: AGENT_CATALOG.map((agent) => agent.agentKey) },
+      };
 
-    if (!filters?.includeHidden) {
-      query.visibleToBuyer = true;
-      query.status = { $ne: 'hidden' };
+      if (!filters?.includeHidden) {
+        query.visibleToBuyer = true;
+        query.status = { $ne: 'hidden' };
+      }
+      if (filters?.category?.trim()) query.category = filters.category.trim();
+      if (filters?.automationType?.trim()) query.automationType = filters.automationType.trim();
+
+      const agents = await this.agentsCollection().find(query).sort({ sortOrder: 1, name: 1 }).toArray();
+      return agents.map((agent) => this.serializeAgent(agent));
+    } catch {
+      return this.getCatalogFallbackAgents(filters);
     }
-    if (filters?.category?.trim()) query.category = filters.category.trim();
-    if (filters?.automationType?.trim()) query.automationType = filters.automationType.trim();
-
-    const agents = await this.agentsCollection().find(query).sort({ sortOrder: 1, name: 1 }).toArray();
-    return agents.map((agent) => this.serializeAgent(agent));
   }
 
   async getAgentDetail(id: string, options?: { includeHidden?: boolean }) {
@@ -222,22 +228,30 @@ export class AgentsService {
   }
 
   async listAgentsForAdmin() {
-    await this.ensureAgentCatalog();
-    const [agents, runs, feedback] = await Promise.all([
-      this.agentsCollection().find({ agentKey: { $in: AGENT_CATALOG.map((agent) => agent.agentKey) } }).sort({ sortOrder: 1, name: 1 }).toArray(),
-      this.executionsCollection().find({}).toArray(),
-      this.feedbackCollection().find({}).toArray(),
-    ]);
+    try {
+      await this.ensureAgentCatalog();
+      const [agents, runs, feedback] = await Promise.all([
+        this.agentsCollection().find({ agentKey: { $in: AGENT_CATALOG.map((agent) => agent.agentKey) } }).sort({ sortOrder: 1, name: 1 }).toArray(),
+        this.executionsCollection().find({}).toArray(),
+        this.feedbackCollection().find({}).toArray(),
+      ]);
 
-    return agents.map((agent) => {
-      const agentRuns = runs.filter((run) => (run.agentKey || run.agentId) === agent.agentKey);
-      const agentFeedback = feedback.filter((item) => item.agentKey === agent.agentKey);
-      return {
-        ...this.serializeAgent(agent),
-        metrics: this.buildMetrics(agentRuns, agentFeedback),
-        recommendations: this.buildRecommendations(agent, agentRuns, agentFeedback),
-      };
-    });
+      return agents.map((agent) => {
+        const agentRuns = runs.filter((run) => (run.agentKey || run.agentId) === agent.agentKey);
+        const agentFeedback = feedback.filter((item) => item.agentKey === agent.agentKey);
+        return {
+          ...this.serializeAgent(agent),
+          metrics: this.buildMetrics(agentRuns, agentFeedback),
+          recommendations: this.buildRecommendations(agent, agentRuns, agentFeedback),
+        };
+      });
+    } catch {
+      return this.getCatalogFallbackAgents({ includeHidden: true }).map((agent) => ({
+        ...agent,
+        metrics: this.buildMetrics([], []),
+        recommendations: [`Mantener monitoreo de feedback para ${agent.name}; aun no hay patrones recurrentes suficientes.`],
+      }));
+    }
   }
 
   async getAdminMetrics() {
@@ -862,6 +876,19 @@ export class AgentsService {
     };
   }
 
+  private getCatalogFallbackAgents(filters?: { category?: string; automationType?: string; includeHidden?: boolean }) {
+    return AGENT_CATALOG.map((agent) => this.serializeAgent({
+      ...agent,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })).filter((agent) => {
+      const visible = filters?.includeHidden || agent.status !== 'hidden';
+      const matchesCategory = !filters?.category?.trim() || agent.category === filters.category.trim();
+      const matchesAutomation = !filters?.automationType?.trim() || agent.automationType === filters.automationType.trim();
+      return visible && matchesCategory && matchesAutomation;
+    });
+  }
+
   private async getOrCreateUserPdfBrandingSettings(userId: string) {
     const existing = await this.userPdfBrandingSettingsCollection().findOne({ userId });
     if (existing) return existing;
@@ -924,8 +951,15 @@ export class AgentsService {
   }
 
   private serializeDate(value: Date | string | undefined) {
-    if (value instanceof Date) return value.toISOString();
-    if (typeof value === 'string' && value.trim()) return new Date(value).toISOString();
+    try {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString();
+      if (typeof value === 'string' && value.trim()) {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+      }
+    } catch {
+      // Fall through to a safe timestamp.
+    }
     return new Date().toISOString();
   }
 
