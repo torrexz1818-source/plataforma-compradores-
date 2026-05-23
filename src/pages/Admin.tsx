@@ -30,11 +30,7 @@ import {
   adminDeletePost,
   adminUpdatePost,
   getAdminMemberships,
-  getAdminAgentUsage,
   getAdminAiAgents,
-  getAdminAgentFeedback,
-  getAdminAgentMetrics,
-  getAdminAgentPdfSettings,
   getAdminDashboard,
   getAdminModuleActivations,
   getAdminUserPdfBranding,
@@ -43,7 +39,6 @@ import {
   uploadAdminVideoInChunks,
   updateMembershipByAdmin,
   updateAdminAgentStatus,
-  updateAdminAgentPdfSettings,
   updateAdminModuleActivation,
   updateAdminUserPdfBranding,
   updateUserStatus,
@@ -61,8 +56,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { AgentPdfSettings, ModuleActivationSetting, Post, PostResource, UserPdfBrandingSettings, UserStatus } from '@/types';
+import { ModuleActivationSetting, Post, PostResource, UserPdfBrandingSettings, UserStatus } from '@/types';
 
 const SKILL_CATEGORY_SLUG = 'mejorar-skill';
 const PROFESSIONAL_ROUTE_ID: LearningRouteId = 'ruta-5';
@@ -195,7 +191,6 @@ const Admin = () => {
   const [resourceUploadError, setResourceUploadError] = useState('');
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedAgentKey, setSelectedAgentKey] = useState<string | null>(null);
   const [agentAuthorizerOpen, setAgentAuthorizerOpen] = useState(false);
   const [moduleActivationNotice, setModuleActivationNotice] = useState<{
     type: 'success' | 'error';
@@ -260,37 +255,24 @@ const Admin = () => {
     },
   });
 
-  const agentUsageQuery = useQuery({
-    queryKey: ['admin-agent-usage'],
-    queryFn: getAdminAgentUsage,
-    enabled: user?.role === 'admin',
-  });
   const adminAgentsQuery = useQuery({
     queryKey: ['admin-ai-agents'],
     queryFn: getAdminAiAgents,
-    enabled: user?.role === 'admin',
-  });
-  const agentMetricsQuery = useQuery({
-    queryKey: ['admin-agent-metrics'],
-    queryFn: getAdminAgentMetrics,
-    enabled: user?.role === 'admin',
-  });
-  const agentFeedbackQuery = useQuery({
-    queryKey: ['admin-agent-feedback'],
-    queryFn: getAdminAgentFeedback,
     enabled: user?.role === 'admin',
   });
   const moduleActivationsQuery = useQuery({
     queryKey: ['admin-module-activations'],
     queryFn: getAdminModuleActivations,
     enabled: user?.role === 'admin',
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
   });
   const agentStatusMutation = useMutation({
     mutationFn: ({ agentKey, status }: { agentKey: string; status: 'active' | 'coming_soon' | 'disabled' | 'hidden' }) =>
       updateAdminAgentStatus(agentKey, status),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-ai-agents'] });
-      void queryClient.invalidateQueries({ queryKey: ['admin-agent-metrics'] });
     },
   });
   const userPdfBrandingMutation = useMutation({
@@ -300,20 +282,17 @@ const Admin = () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-user-pdf-branding', variables.userId] });
     },
   });
-  const agentPdfSettingsMutation = useMutation({
-    mutationFn: ({ agentKey, payload }: { agentKey: string; payload: Partial<AgentPdfSettings> }) =>
-      updateAdminAgentPdfSettings(agentKey, payload),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({ queryKey: ['admin-agent-pdf-settings', variables.agentKey] });
-    },
-  });
   const moduleActivationMutation = useMutation({
     mutationFn: ({ role, moduleKey, enabled }: { role: ModuleActivationSetting['role']; moduleKey: string; enabled: boolean }) =>
       updateAdminModuleActivation(role, moduleKey, enabled),
     onMutate: async (variables) => {
       setModuleActivationNotice(null);
       await queryClient.cancelQueries({ queryKey: ['admin-module-activations'] });
+      await queryClient.cancelQueries({ queryKey: ['module-activations'] });
       const previous = queryClient.getQueryData<ModuleActivationSetting[]>(['admin-module-activations']);
+      const previousUserModules = queryClient.getQueriesData<{ role: string; modules: ModuleActivationSetting[] }>({
+        queryKey: ['module-activations'],
+      });
       const now = new Date().toISOString();
 
       queryClient.setQueryData<ModuleActivationSetting[]>(['admin-module-activations'], (current = []) => {
@@ -337,8 +316,36 @@ const Admin = () => {
             )
           : [...current, nextSetting];
       });
+      queryClient.setQueriesData<{ role: string; modules: ModuleActivationSetting[] }>(
+        { queryKey: ['module-activations'] },
+        (current) => {
+          if (!current?.modules) return current;
+          const exists = current.modules.some(
+            (item) => item.role === variables.role && item.moduleKey === variables.moduleKey,
+          );
+          const modules = exists
+            ? current.modules.map((item) =>
+                item.role === variables.role && item.moduleKey === variables.moduleKey
+                  ? { ...item, enabled: variables.enabled, updatedAt: now }
+                  : item,
+              )
+            : [
+                ...current.modules,
+                {
+                  id: `${variables.role}-${variables.moduleKey}`,
+                  role: variables.role,
+                  moduleKey: variables.moduleKey,
+                  enabled: variables.enabled,
+                  createdAt: now,
+                  updatedAt: now,
+                },
+              ];
 
-      return { previous };
+          return { ...current, modules };
+        },
+      );
+
+      return { previous, previousUserModules };
     },
     onSuccess: (updatedSetting, variables) => {
       queryClient.setQueryData<ModuleActivationSetting[]>(['admin-module-activations'], (current = []) => {
@@ -352,6 +359,22 @@ const Admin = () => {
             )
           : [...current, updatedSetting];
       });
+      queryClient.setQueriesData<{ role: string; modules: ModuleActivationSetting[] }>(
+        { queryKey: ['module-activations'] },
+        (current) => {
+          if (!current?.modules) return current;
+          const exists = current.modules.some(
+            (item) => item.role === updatedSetting.role && item.moduleKey === updatedSetting.moduleKey,
+          );
+          const modules = exists
+            ? current.modules.map((item) =>
+                item.role === updatedSetting.role && item.moduleKey === updatedSetting.moduleKey ? updatedSetting : item,
+              )
+            : [...current.modules, updatedSetting];
+
+          return { ...current, modules };
+        },
+      );
       const roleLabel =
         variables.role === 'buyer' ? 'compradores' : variables.role === 'supplier' ? 'proveedores' : 'expertos';
       setModuleActivationNotice({
@@ -363,6 +386,9 @@ const Admin = () => {
       if (context?.previous) {
         queryClient.setQueryData(['admin-module-activations'], context.previous);
       }
+      context?.previousUserModules?.forEach(([queryKey, value]) => {
+        queryClient.setQueryData(queryKey, value);
+      });
       setModuleActivationNotice({
         type: 'error',
         message: error instanceof Error ? error.message : 'No se pudo guardar el cambio del modulo.',
@@ -524,24 +550,11 @@ const Admin = () => {
       ).length,
     }));
   }, [categories, data?.comments, postsById]);
-  const selectedAgent = useMemo(
-    () => (adminAgentsQuery.data ?? []).find((agent) => (agent.agentKey ?? agent.id) === selectedAgentKey) ?? null,
-    [adminAgentsQuery.data, selectedAgentKey],
-  );
-  const selectedAgentPdfSettingsQuery = useQuery({
-    queryKey: ['admin-agent-pdf-settings', selectedAgent?.agentKey ?? selectedAgent?.id],
-    queryFn: () => getAdminAgentPdfSettings(selectedAgent?.agentKey ?? selectedAgent?.id ?? ''),
-    enabled: user?.role === 'admin' && Boolean(selectedAgent?.agentKey ?? selectedAgent?.id),
-  });
   const selectedUserPdfBrandingQuery = useQuery({
     queryKey: ['admin-user-pdf-branding', selectedUserId],
     queryFn: () => getAdminUserPdfBranding(selectedUserId ?? ''),
     enabled: user?.role === 'admin' && Boolean(selectedUserId),
   });
-  const agentFeedbackBySelectedAgent = useMemo(
-    () => (agentFeedbackQuery.data ?? []).filter((item) => item.agentKey === (selectedAgent?.agentKey ?? selectedAgent?.id)),
-    [agentFeedbackQuery.data, selectedAgent],
-  );
   const handleOpenAgentAuthorizer = () => {
     setAgentAuthorizerOpen((current) => {
       const next = !current;
@@ -580,15 +593,6 @@ const Admin = () => {
   const isAgentsAdminView = location.pathname === '/admin/agents';
   const isModulesAdminView = location.pathname === '/admin/modules';
   const isDedicatedAdminView = isContentAdminView || isAgentsAdminView || isModulesAdminView;
-
-  useEffect(() => {
-    if (!isAgentsAdminView || selectedAgentKey || !adminAgentsQuery.data?.length) {
-      return;
-    }
-
-    const firstAgent = adminAgentsQuery.data[0];
-    setSelectedAgentKey(firstAgent.agentKey ?? firstAgent.id);
-  }, [adminAgentsQuery.data, isAgentsAdminView, selectedAgentKey]);
 
   if (!isAuthLoading && !user) {
     return <Navigate to="/login" replace />;
@@ -2307,28 +2311,18 @@ const Admin = () => {
                                 {enabled ? 'Activo' : 'Inactivo'}
                               </p>
                             </div>
-                            <button
-                              type="button"
-                              aria-pressed={enabled}
-                              aria-label={`${enabled ? 'Desactivar' : 'Activar'} ${module.label}`}
+                            <Switch
+                              checked={enabled}
                               disabled={controlsDisabled}
-                              onClick={() =>
+                              aria-label={`${enabled ? 'Desactivar' : 'Activar'} ${module.label}`}
+                              onCheckedChange={(checked) =>
                                 moduleActivationMutation.mutate({
                                   role,
                                   moduleKey: module.key,
-                                  enabled: !enabled,
+                                  enabled: checked,
                                 })
                               }
-                              className={`relative h-7 w-12 rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                                enabled ? 'border-primary bg-primary' : 'border-slate-300 bg-slate-200'
-                              }`}
-                            >
-                              <span
-                                className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                                  enabled ? 'translate-x-5' : 'translate-x-1'
-                                }`}
-                              />
-                            </button>
+                            />
                           </div>
                         );
                       })}
@@ -2423,15 +2417,7 @@ const Admin = () => {
                     size="sm"
                     variant="outline"
                     className="mt-3 w-full"
-                    onClick={() => {
-                      setSelectedAgentKey(agentKey);
-                      window.setTimeout(() => {
-                        document.getElementById('admin-ai-agent-authorizer')?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'start',
-                        });
-                      }, 80);
-                    }}
+                    disabled
                   >
                     Ver detalle
                   </Button>
@@ -2440,261 +2426,6 @@ const Admin = () => {
             })}
           </div>
 
-          {agentMetricsQuery.data ? (
-            <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                ['Agentes activos', agentMetricsQuery.data.activeAgents],
-                ['Proximamente', agentMetricsQuery.data.comingSoonAgents],
-                ['Ejecuciones totales', agentMetricsQuery.data.totalExecutions],
-                ['Costo total tokens', `US$ ${agentMetricsQuery.data.totalTokenCost.toFixed(6)}`],
-                ['Tokens input', agentMetricsQuery.data.tokensInputTotal],
-                ['Tokens output', agentMetricsQuery.data.tokensOutputTotal],
-                ['Costo input', `US$ ${agentMetricsQuery.data.costInputTotal.toFixed(6)}`],
-                ['Costo output', `US$ ${agentMetricsQuery.data.costOutputTotal.toFixed(6)}`],
-                ['Tiempo promedio', `${agentMetricsQuery.data.averageLatencyMs} ms`],
-                ['Calificacion promedio', agentMetricsQuery.data.averageStars || 'Sin datos'],
-                ['Feedback negativo pendiente', agentMetricsQuery.data.pendingNegativeFeedback],
-                ['Agente mas usado', agentMetricsQuery.data.mostUsedAgent],
-              ].map(([label, value]) => (
-                <div key={String(label)} className="rounded-lg border border-border bg-muted/30 p-3">
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                  <p className="mt-1 text-lg font-semibold text-foreground">{value}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="mb-5 overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1320px] text-left text-sm">
-              <thead className="bg-muted/60 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Agente</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="px-4 py-3 font-medium">Disponible comprador</th>
-                  <th className="px-4 py-3 font-medium">Ejecuciones</th>
-                  <th className="px-4 py-3 font-medium">Tokens input</th>
-                  <th className="px-4 py-3 font-medium">Tokens output</th>
-                  <th className="px-4 py-3 font-medium">Costo input</th>
-                  <th className="px-4 py-3 font-medium">Costo output</th>
-                  <th className="px-4 py-3 font-medium">Costo total</th>
-                  <th className="px-4 py-3 font-medium">Tiempo promedio</th>
-                  <th className="px-4 py-3 font-medium">Calificacion</th>
-                  <th className="px-4 py-3 font-medium">Feedbacks pendientes</th>
-                  <th className="px-4 py-3 font-medium">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(adminAgentsQuery.data ?? []).map((agent) => {
-                  const agentKey = agent.agentKey ?? agent.id;
-                  const metrics = agent.metrics;
-                  return (
-                    <tr key={agentKey} className="border-t border-border align-top">
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-foreground">{agent.name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">{agent.category}</p>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{getAgentStatusLabel(agent.status)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{agent.status === 'active' ? 'Si' : 'No'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{metrics?.executions ?? 0}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{metrics?.tokensInput ?? 0}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{metrics?.tokensOutput ?? 0}</td>
-                      <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costInput ?? 0).toFixed(6)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costOutput ?? 0).toFixed(6)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">US$ {(metrics?.costTotal ?? 0).toFixed(6)}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{metrics?.averageLatencyMs ?? 0} ms</td>
-                      <td className="px-4 py-3 text-muted-foreground">{metrics?.averageStars || 'Sin datos'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{metrics?.pendingFeedback ?? 0}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setSelectedAgentKey(agentKey)}>
-                            Ver detalle
-                          </Button>
-                          <select
-                            value={agent.status ?? 'coming_soon'}
-                            onChange={(event) =>
-                              void agentStatusMutation.mutateAsync({
-                                agentKey,
-                                status: event.target.value as 'active' | 'coming_soon' | 'disabled' | 'hidden',
-                              })
-                            }
-                            disabled={agentStatusMutation.isPending}
-                            className="h-9 rounded-md border border-border bg-background px-2 text-xs"
-                          >
-                            <option value="active">Activo</option>
-                            <option value="coming_soon">Proximamente</option>
-                            <option value="disabled">En mantenimiento</option>
-                            <option value="hidden">Oculto</option>
-                          </select>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {selectedAgent ? (
-            <div id="admin-ai-agent-authorizer" className="mb-5 scroll-mt-6 rounded-lg border border-border bg-muted/20 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h3 className="text-base font-semibold text-foreground">{selectedAgent.name}</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{selectedAgent.description}</p>
-                  <p className="mt-2 text-xs text-muted-foreground">Estado actual: {getAgentStatusLabel(selectedAgent.status)}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {(['active', 'coming_soon', 'disabled', 'hidden'] as const).map((status) => (
-                    <Button
-                      key={status}
-                      size="sm"
-                      variant={selectedAgent.status === status ? 'default' : 'outline'}
-                      onClick={() => void agentStatusMutation.mutateAsync({ agentKey: selectedAgent.agentKey ?? selectedAgent.id, status })}
-                    >
-                      {getAgentStatusLabel(status)}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Inputs esperados</p>
-                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                    {selectedAgent.inputs.map((item) => <li key={item}>- {item}</li>)}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Outputs esperados</p>
-                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                    {selectedAgent.outputs.map((item) => <li key={item}>- {item}</li>)}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Recomendaciones para mejorar el agente</p>
-                  <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                    {(selectedAgent.recommendations ?? []).map((item) => <li key={item}>- {item}</li>)}
-                  </ul>
-                </div>
-              </div>
-              {selectedAgentPdfSettingsQuery.data ? (
-                <div className="mt-4 rounded-lg border border-border bg-card p-4">
-                  <p className="text-xs font-medium uppercase text-muted-foreground">PDF premium</p>
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
-                    <label className="flex items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={selectedAgentPdfSettingsQuery.data.standardPdfEnabled}
-                        onChange={(event) =>
-                          agentPdfSettingsMutation.mutate({
-                            agentKey: selectedAgent.agentKey ?? selectedAgent.id,
-                            payload: { standardPdfEnabled: event.target.checked },
-                          })
-                        }
-                      />
-                      PDF estándar habilitado
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={selectedAgentPdfSettingsQuery.data.whiteLabelAvailable}
-                        onChange={(event) =>
-                          agentPdfSettingsMutation.mutate({
-                            agentKey: selectedAgent.agentKey ?? selectedAgent.id,
-                            payload: { whiteLabelAvailable: event.target.checked },
-                          })
-                        }
-                      />
-                      Permitir PDF sin logo
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-foreground">
-                      <input
-                        type="checkbox"
-                        checked={selectedAgentPdfSettingsQuery.data.customBrandAvailable}
-                        onChange={(event) =>
-                          agentPdfSettingsMutation.mutate({
-                            agentKey: selectedAgent.agentKey ?? selectedAgent.id,
-                            payload: { customBrandAvailable: event.target.checked },
-                          })
-                        }
-                      />
-                      Permitir PDF con logo propio
-                    </label>
-                  </div>
-                </div>
-              ) : null}
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Ejecuciones recientes</p>
-                  <div className="mt-2 space-y-2">
-                    {(agentUsageQuery.data ?? [])
-                      .filter((usage) => usage.agentKey === (selectedAgent.agentKey ?? selectedAgent.id))
-                      .slice(0, 5)
-                      .map((usage) => (
-                        <div key={usage.id} className="rounded-md border border-border bg-card p-3 text-xs text-muted-foreground">
-                          <p className="font-medium text-foreground">{usage.userName} - {formatDateTime(usage.createdAt)}</p>
-                          <p>Tokens: {usage.inputTokens} input / {usage.outputTokens} output - Costo: US$ {(usage.costTotal ?? usage.costAmount).toFixed(6)}</p>
-                          <p>PDF generado: {usage.pdfGenerated ? 'Si' : 'No'} - Estado: {usage.status ?? 'completed'}</p>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-medium uppercase text-muted-foreground">Feedback de compradores</p>
-                  <div className="mt-2 space-y-2">
-                    {agentFeedbackBySelectedAgent.slice(0, 5).map((feedback) => (
-                      <div key={feedback.id} className="rounded-md border border-border bg-card p-3 text-xs text-muted-foreground">
-                        <p className="font-medium text-foreground">{feedback.userName ?? feedback.userId} - {feedback.stars}/5</p>
-                        <p>{feedback.comment || 'Sin comentario'}</p>
-                        {feedback.correctedVersion ? <p>Correccion sugerida: {feedback.correctedVersion}</p> : null}
-                        <p>Estado admin: {feedback.adminStatus}</p>
-                      </div>
-                    ))}
-                    {!agentFeedbackBySelectedAgent.length ? (
-                      <p className="text-sm text-muted-foreground">Aun no hay feedback para este agente.</p>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <p className="mb-3 text-sm font-medium text-foreground">Detalle de ejecuciones</p>
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[1120px] text-left text-sm">
-              <thead className="bg-muted/60 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Usuario</th>
-                  <th className="px-4 py-3 font-medium">Rol</th>
-                  <th className="px-4 py-3 font-medium">Agente</th>
-                  <th className="px-4 py-3 font-medium">Operacion</th>
-                  <th className="px-4 py-3 font-medium">Fecha/hora</th>
-                  <th className="px-4 py-3 font-medium">Modelo</th>
-                  <th className="px-4 py-3 font-medium">Tokens input</th>
-                  <th className="px-4 py-3 font-medium">Tokens output</th>
-                  <th className="px-4 py-3 font-medium">Costo total</th>
-                  <th className="px-4 py-3 font-medium">PDF</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(agentUsageQuery.data ?? []).map((usage) => (
-                  <tr key={usage.id} className="border-t border-border">
-                    <td className="px-4 py-3 font-medium text-foreground">{usage.userName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{getRoleLabel(usage.userRole)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{usage.agentName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{usage.operationName}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{formatDateTime(usage.createdAt)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{usage.model ?? 'No especificado'}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{usage.inputTokens}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{usage.outputTokens}</td>
-                    <td className="px-4 py-3 text-muted-foreground">US$ {(usage.costTotal ?? usage.costAmount).toFixed(6)}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{usage.pdfGenerated ? 'Si' : 'No'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {!agentUsageQuery.isLoading && !(agentUsageQuery.data ?? []).length ? (
-            <p className="mt-3 text-sm text-muted-foreground">Aun no hay operaciones registradas.</p>
-          ) : null}
         </section>}
         {showLegacyUsersSection && <section className="bg-card rounded-lg border border-border p-5">
           <h2 className="text-lg font-medium text-foreground mb-4">Usuarios</h2>
