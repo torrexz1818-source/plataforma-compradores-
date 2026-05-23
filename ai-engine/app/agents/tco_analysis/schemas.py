@@ -1,1 +1,151 @@
-from app.agents.generic_mvp import GenericAgentRequest, GenericPdfRequest
+from __future__ import annotations
+
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+RiskLevel = Literal["low", "medium", "high"]
+
+
+class TcoAlternative(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    supplier_name: str = Field(..., min_length=1)
+    origin_country: str | None = None
+    destination_country: str | None = None
+    brand_model: str | None = None
+    quantity: float | str | None = None
+    currency: str | None = None
+    base_price: float | str | None = None
+    incoterm: str | None = None
+    lead_time: str | None = None
+    payment_terms: str | None = None
+    warranty: str | None = None
+    observations: str | None = None
+
+
+class SupportingDocumentSummary(BaseModel):
+    file_name: str
+    detected_type: str
+    relevant_findings: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class ExecutiveSummary(BaseModel):
+    best_alternative: str
+    why_it_wins: str
+    estimated_saving_or_overcost: str
+    main_risk: str
+    final_recommendation: str
+
+
+class DataUsedItem(BaseModel):
+    alternative: str
+    base_price: str | None = None
+    quantity: str | None = None
+    currency: str | None = None
+    horizon: str | None = None
+    origin: str | None = None
+    destination: str | None = None
+    incoterm: str | None = None
+    lead_time: str | None = None
+    key_assumptions: list[str] = Field(default_factory=list)
+
+
+class TcoMatrixRow(BaseModel):
+    cost_component: str
+    values: dict[str, float | int | str | None] = Field(default_factory=dict)
+    notes: str = ""
+
+
+class TcoTotalItem(BaseModel):
+    alternative: str
+    initial_price: float | None = None
+    total_tco: float | None = None
+    tco_per_unit: float | None = None
+    tco_monthly: float | None = None
+    tco_annual: float | None = None
+    risk_level: RiskLevel = "medium"
+    main_hidden_costs: list[str] = Field(default_factory=list)
+
+
+class RankingItem(BaseModel):
+    position: int
+    alternative: str
+    ranking_type: str
+    total_tco: float | None = None
+    reason: str
+
+
+class Interpretation(BaseModel):
+    why_winner_wins: str
+    hidden_costs: list[str] = Field(default_factory=list)
+    cheap_but_risky_options: list[str] = Field(default_factory=list)
+    expensive_but_convenient_options: list[str] = Field(default_factory=list)
+    conditions_that_change_decision: list[str] = Field(default_factory=list)
+
+
+class RiskAnalysisItem(BaseModel):
+    risk: str
+    alternative: str
+    probability: str | None = None
+    economic_impact: str | None = None
+    expected_risk_cost: str | None = None
+    level: RiskLevel = "medium"
+    mitigation: str
+
+
+class SensitivityAnalysis(BaseModel):
+    base: list[str] = Field(default_factory=list)
+    optimistic: list[str] = Field(default_factory=list)
+    pessimistic: list[str] = Field(default_factory=list)
+    break_even: list[str] = Field(default_factory=list)
+    most_sensitive_variable: str = "No determinado"
+
+
+class StrategicRecommendation(BaseModel):
+    recommended_action: str
+    negotiation_points: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+
+
+class TcoAnalysisResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    analysis_title: str
+    item_name: str
+    analysis_type: str
+    evaluation_horizon: str
+    comparison_unit: str
+    currency: str
+    executive_summary: ExecutiveSummary
+    data_used: list[DataUsedItem] = Field(default_factory=list)
+    tco_matrix: list[TcoMatrixRow] = Field(default_factory=list)
+    tco_totals: list[TcoTotalItem] = Field(default_factory=list)
+    ranking: list[RankingItem] = Field(default_factory=list)
+    interpretation: Interpretation
+    risk_analysis: list[RiskAnalysisItem] = Field(default_factory=list)
+    sensitivity_analysis: SensitivityAnalysis
+    strategic_recommendation: StrategicRecommendation
+    missing_information: list[str] = Field(default_factory=list)
+    questions_for_user_or_suppliers: list[str] = Field(default_factory=list)
+    assumptions_and_limits: list[str] = Field(default_factory=list)
+    supporting_documents_summary: list[SupportingDocumentSummary] = Field(default_factory=list)
+    calculation_warnings: list[str] = Field(default_factory=list)
+    model_provider: str | None = None
+    model_name: str | None = None
+    tokens_input: int | None = None
+    tokens_output: int | None = None
+    cost_input: float | None = None
+    cost_output: float | None = None
+    cost_total: float | None = None
+    latency_ms: int | None = None
+    disclaimer: str = (
+        "Este análisis TCO es una recomendación asistida por IA y debe ser validado "
+        "por el comprador antes de tomar una decisión final."
+    )
+
+
+class TcoPdfRequest(BaseModel):
+    result: dict[str, Any]

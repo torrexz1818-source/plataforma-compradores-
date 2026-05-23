@@ -208,3 +208,59 @@ Limitaciones del MVP/Fase 2:
 - La lectura de imagenes depende de Tesseract instalado en el sistema.
 - Los planos complejos se procesan solo por texto extraible u OCR basico.
 - La IA no debe inventar datos; la informacion faltante queda marcada para validacion del comprador.
+
+## Agente: Análisis de Costo Total / TCO
+
+Este agente compara alternativas de compra por costo total de propiedad, no solo por precio inicial. Evalúa precio base, logística, importación, instalación, operación, mantenimiento, soporte, repuestos, riesgos, valor residual y datos faltantes para generar matriz TCO, ranking, sensibilidad, recomendación estratégica y PDF.
+
+Endpoints:
+
+- `POST /agents/tco-analysis/analyze`
+- `POST /agents/tco-analysis/generate-pdf`
+
+Variables de entorno relevantes:
+
+```bash
+OPENAI_API_KEY=tu_clave
+OPENAI_MODEL=gpt-4.1-mini
+MAX_FILE_SIZE_MB=10
+MAX_FILES_PER_ANALYSIS=5
+DELETE_TEMP_FILES=true
+STORE_UPLOADS=false
+STORE_EXTRACTED_TEXT=false
+```
+
+Formatos soportados: PDF, DOCX, XLSX, CSV, JPG, JPEG y PNG. El flujo documental usa MarkItDown si está disponible y fallback a extractores actuales si falla.
+
+Ejemplo `analyze`:
+
+```bash
+curl -X POST "http://localhost:8000/agents/tco-analysis/analyze" \
+  -F "title=Análisis TCO ManLift PYSMISAC" \
+  -F "item_name=ManLift" \
+  -F "analysis_type=Maquinaria / vehículo / activo" \
+  -F "evaluation_horizon=3 años" \
+  -F "comparison_unit=Por equipo" \
+  -F "currency=PEN" \
+  -F "purchase_volume=1 equipo" \
+  -F "objective=Determinar la alternativa con menor costo total considerando mantenimiento, garantía, soporte y riesgos" \
+  -F "alternatives_json=[{\"supplier_name\":\"Proveedor A\",\"brand_model\":\"Modelo X\",\"quantity\":1,\"base_price\":10000,\"installation_cost\":800,\"transport_cost\":300,\"annual_maintenance_cost\":1500,\"annual_operation_cost\":500,\"annual_energy_cost\":400,\"spare_parts_cost\":1000,\"support_cost\":300,\"training_cost\":0,\"warranty\":\"12 meses\",\"estimated_lifetime\":\"5 años\",\"lead_time\":\"15 días\",\"payment_terms\":\"50% adelanto / 50% entrega\",\"known_risks\":\"Garantía corta\"},{\"supplier_name\":\"Proveedor B\",\"brand_model\":\"Modelo Y\",\"quantity\":1,\"base_price\":12000,\"installation_cost\":0,\"transport_cost\":0,\"annual_maintenance_cost\":800,\"annual_operation_cost\":400,\"annual_energy_cost\":300,\"spare_parts_cost\":500,\"support_cost\":0,\"training_cost\":0,\"warranty\":\"36 meses\",\"estimated_lifetime\":\"5 años\",\"lead_time\":\"20 días\",\"payment_terms\":\"30 días\",\"known_risks\":\"Mayor precio inicial\"}]" \
+  -F "additional_instructions=Considerar garantía y disponibilidad de repuestos como factores críticos"
+```
+
+Ejemplo `generate-pdf`:
+
+```bash
+curl -X POST "http://localhost:8000/agents/tco-analysis/generate-pdf" \
+  -H "Content-Type: application/json" \
+  -d "{\"result\":{\"analysis_title\":\"Análisis TCO ManLift\",\"executive_summary\":{\"best_alternative\":\"Proveedor B\"}}}" \
+  --output analisis_tco.pdf
+```
+
+Privacidad: los archivos se guardan solo como temporales, se eliminan al finalizar el proceso y no se almacenan documentos originales, Markdown completo ni texto extraido completo sensible.
+
+Limitaciones actuales:
+
+- La precisión del análisis depende de los costos entregados por el comprador o extraídos de documentos.
+- Si faltan impuestos, aranceles, tipo de cambio, fletes o seguros, el agente los marca como faltantes y no los inventa.
+- Tokens y costos reales dependen de la respuesta de OpenAI; si el proveedor no devuelve usage al cliente compartido, quedan sin registrar y el frontend registra una métrica aproximada.

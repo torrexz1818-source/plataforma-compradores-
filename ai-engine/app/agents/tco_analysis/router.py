@@ -1,20 +1,47 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import Response
 
-from app.agents.generic_mvp import GenericAgentRequest, GenericPdfRequest, build_stub_result
-from app.utils.pdf_report import build_agent_pdf
+from app.agents.tco_analysis.pdf_generator import build_tco_pdf
+from app.agents.tco_analysis.schemas import TcoAnalysisResult, TcoPdfRequest
+from app.agents.tco_analysis.service import analyze_tco
 
 router = APIRouter(prefix="/agents/tco-analysis", tags=["TCO analysis"])
 
-OUTPUTS = ["Tabla TCO por proveedor", "Costo total proyectado", "Riesgos financieros", "Recomendacion final", "PDF descargable"]
 
-
-@router.post("/analyze")
-async def analyze(payload: GenericAgentRequest):
-    return build_stub_result("Analisis de Costo Total / TCO", OUTPUTS, payload)
+@router.post("/analyze", response_model=TcoAnalysisResult)
+async def analyze(
+    title: str = Form(...),
+    item_name: str = Form(...),
+    analysis_type: str = Form(...),
+    evaluation_horizon: str = Form(...),
+    comparison_unit: str = Form(...),
+    currency: str = Form(...),
+    purchase_volume: str | None = Form(default=None),
+    objective: str | None = Form(default=None),
+    alternatives_json: str = Form(...),
+    additional_instructions: str | None = Form(default=None),
+    files: list[UploadFile] = File(default=[]),
+):
+    return await analyze_tco(
+        title=title,
+        item_name=item_name,
+        analysis_type=analysis_type,
+        evaluation_horizon=evaluation_horizon,
+        comparison_unit=comparison_unit,
+        currency=currency,
+        purchase_volume=purchase_volume,
+        objective=objective,
+        alternatives_json=alternatives_json,
+        additional_instructions=additional_instructions,
+        files=files,
+    )
 
 
 @router.post("/generate-pdf")
-async def generate_pdf(payload: GenericPdfRequest):
-    content = build_agent_pdf("analisis-tco.pdf", "Analisis de Costo Total / TCO", payload.result)
-    return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": 'attachment; filename="analisis-tco.pdf"'})
+async def generate_pdf(payload: TcoPdfRequest):
+    content = build_tco_pdf(payload.result)
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="analisis-tco.pdf"'},
+    )

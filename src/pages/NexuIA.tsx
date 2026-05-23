@@ -50,6 +50,8 @@ import {
   validateTermsFiles,
   type TermsFormField,
 } from '@/features/terms-of-reference/termsOfReferenceApi';
+import { useDownloadTcoPdf, useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
+import type { TcoAlternativeInput } from '@/features/tco-analysis/tcoAnalysisApi';
 import { downloadAgentResultPdf } from '@/lib/agentPdf';
 
 const aiPlanLimits: Record<string, number> = {
@@ -69,6 +71,26 @@ const iconMap = {
   TrendingUp,
   TriangleAlert,
 };
+
+const tcoAnalysisTypes = [
+  'Producto físico / compra local',
+  'Importación vs compra local',
+  'Maquinaria / vehículo / activo',
+  'Software / SaaS',
+  'Servicio recurrente',
+  'Servicio puntual',
+  'Repuestos / insumos',
+  'Otro',
+];
+
+const tcoEvaluationHorizons = ['Por compra', 'Mensual', 'Anual', '3 años', '5 años', 'Vida útil', 'Personalizado'];
+const tcoComparisonUnits = ['Por unidad', 'Por lote', 'Por usuario', 'Por km', 'Por hora', 'Por contrato', 'Por proyecto', 'Por año', 'Por mes'];
+const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
+
+const emptyTcoAlternative = (index: number): TcoAlternativeInput => ({
+  supplier_name: `Proveedor ${index + 1}`,
+  currency: 'PEN',
+});
 
 function getAgentIcon(icon: string) {
   return iconMap[icon as keyof typeof iconMap] ?? Bot;
@@ -119,6 +141,24 @@ const NexuIA = () => {
   const termsFormSchemaMutation = useTermsFormSchema();
   const termsGenerateMutation = useGenerateTermsOfReference();
   const termsPdfMutation = useDownloadTermsPdf();
+  const tcoAnalysisMutation = useTcoAnalysis();
+  const tcoPdfMutation = useDownloadTcoPdf();
+  const [tcoGeneral, setTcoGeneral] = useState({
+    title: '',
+    itemName: '',
+    analysisType: tcoAnalysisTypes[0],
+    evaluationHorizon: '3 años',
+    comparisonUnit: 'Por unidad',
+    currency: 'PEN',
+    purchaseVolume: '',
+    objective: '',
+    additionalInstructions: '',
+  });
+  const [tcoAlternatives, setTcoAlternatives] = useState<TcoAlternativeInput[]>([
+    emptyTcoAlternative(0),
+    emptyTcoAlternative(1),
+  ]);
+  const [tcoFiles, setTcoFiles] = useState<File[]>([]);
   const [limitNotice, setLimitNotice] = useState('');
 
   const agentsQuery = useQuery({
@@ -182,6 +222,21 @@ const NexuIA = () => {
     termsFormSchemaMutation.reset();
     termsGenerateMutation.reset();
     termsPdfMutation.reset();
+    tcoAnalysisMutation.reset();
+    tcoPdfMutation.reset();
+    setTcoGeneral({
+      title: '',
+      itemName: '',
+      analysisType: tcoAnalysisTypes[0],
+      evaluationHorizon: '3 años',
+      comparisonUnit: 'Por unidad',
+      currency: 'PEN',
+      purchaseVolume: '',
+      objective: '',
+      additionalInstructions: '',
+    });
+    setTcoAlternatives([emptyTcoAlternative(0), emptyTcoAlternative(1)]);
+    setTcoFiles([]);
     setFeedbackComment('');
     setFeedbackCorrection('');
     setFeedbackStars(5);
@@ -305,6 +360,10 @@ const NexuIA = () => {
     selectedAgent?.id === 'terms_of_reference' ||
     selectedAgent?.agentKey === 'terms_of_reference' ||
     selectedAgent?.slug === 'elaboracion-terminos-referencia';
+  const isTcoAnalysis =
+    selectedAgent?.id === 'tco_analysis' ||
+    selectedAgent?.agentKey === 'tco_analysis' ||
+    selectedAgent?.slug === 'analisis-costo-total-tco';
   const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
   const currentFeedbackRunId =
     selectedAgent?.id && runMutation.data?.execution.agentId === selectedAgent.id
@@ -363,6 +422,11 @@ const NexuIA = () => {
 
   const logAgentUsage = (agentId: string, operationName: string, result: Record<string, unknown>, pdfGenerated = false) => {
     const outputTokens = Math.max(1, Math.round(JSON.stringify(result).length / 4));
+    const executiveSummary = result.executive_summary;
+    const summaryText =
+      typeof executiveSummary === 'object' && executiveSummary && 'final_recommendation' in executiveSummary
+        ? String((executiveSummary as { final_recommendation?: unknown }).final_recommendation)
+        : String(executiveSummary ?? result.final_recommendation ?? 'Resultado generado');
     void recordAgentUsage({
       agentId,
       operationName,
@@ -372,7 +436,7 @@ const NexuIA = () => {
       pdfGenerated,
       outputData: {
         status: 'completed',
-        summary: String(result.executive_summary ?? result.final_recommendation ?? 'Resultado generado'),
+        summary: summaryText,
       },
     })
       .then((response) => {
@@ -619,6 +683,156 @@ const NexuIA = () => {
     });
   };
 
+  const updateTcoGeneral = (field: keyof typeof tcoGeneral, value: string) => {
+    setTcoGeneral((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateTcoAlternative = (index: number, field: keyof TcoAlternativeInput, value: string) => {
+    setTcoAlternatives((current) =>
+      current.map((alternative, currentIndex) =>
+        currentIndex === index ? { ...alternative, [field]: value } : alternative,
+      ),
+    );
+  };
+
+  const addTcoAlternative = () => {
+    setTcoAlternatives((current) =>
+      current.length >= 5 ? current : [...current, emptyTcoAlternative(current.length)],
+    );
+  };
+
+  const removeTcoAlternative = (index: number) => {
+    setTcoAlternatives((current) =>
+      current.length <= 2 ? current : current.filter((_, currentIndex) => currentIndex !== index),
+    );
+  };
+
+  const handleTcoFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    const validationMessage = validateTermsFiles(files);
+    if (validationMessage) {
+      toast({
+        title: validationMessage,
+        description: 'Formatos soportados: PDF, DOCX, XLSX, CSV, JPG, JPEG y PNG.',
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
+    if (files.length > 8) {
+      toast({
+        title: 'Puedes subir como máximo 8 archivos.',
+        description: 'Reduce la cantidad de documentos de apoyo para este análisis.',
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
+    setTcoFiles(files);
+  };
+
+  const handleAnalyzeTco = () => {
+    if (!selectedAgent) {
+      return;
+    }
+
+    if (!canRunNodusIa()) {
+      return;
+    }
+
+    const requiredGeneral = [
+      tcoGeneral.title,
+      tcoGeneral.itemName,
+      tcoGeneral.analysisType,
+      tcoGeneral.evaluationHorizon,
+      tcoGeneral.comparisonUnit,
+      tcoGeneral.currency,
+    ];
+
+    if (requiredGeneral.some((value) => !value.trim())) {
+      toast({
+        title: 'Completa los campos obligatorios antes de analizar.',
+        description: 'Revisa datos generales, horizonte, unidad y moneda.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const namedAlternatives = tcoAlternatives.filter((alternative) => alternative.supplier_name?.trim());
+    if (namedAlternatives.length < 2) {
+      toast({
+        title: 'Debes ingresar al menos dos alternativas.',
+        description: 'Agrega nombre del proveedor o alternativa para comparar TCO.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    tcoAnalysisMutation.mutate(
+      {
+        title: tcoGeneral.title.trim(),
+        itemName: tcoGeneral.itemName.trim(),
+        analysisType: tcoGeneral.analysisType,
+        evaluationHorizon: tcoGeneral.evaluationHorizon,
+        comparisonUnit: tcoGeneral.comparisonUnit,
+        currency: tcoGeneral.currency,
+        purchaseVolume: tcoGeneral.purchaseVolume,
+        objective: tcoGeneral.objective,
+        alternatives: namedAlternatives,
+        additionalInstructions: tcoGeneral.additionalInstructions,
+        files: tcoFiles,
+      },
+      {
+        onSuccess: (result) => {
+          registerNodusIaUsage();
+          logAgentUsage(
+            selectedAgent.id,
+            'Análisis de Costo Total / TCO',
+            result as unknown as Record<string, unknown>,
+            false,
+          );
+          toast({
+            title: 'Análisis TCO completado',
+            description: 'El análisis de costo total ya está listo para revisar.',
+          });
+        },
+        onError: (error) => {
+          toast({
+            title: 'No se pudo generar el análisis TCO.',
+            description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
+            variant: 'destructive',
+          });
+        },
+      },
+    );
+  };
+
+  const handleDownloadTcoPdf = () => {
+    if (!tcoAnalysisMutation.data) {
+      return;
+    }
+
+    tcoPdfMutation.mutate(tcoAnalysisMutation.data, {
+      onSuccess: () => {
+        if (selectedAgent) {
+          logAgentUsage(
+            selectedAgent.id,
+            'Descarga PDF Análisis de Costo Total / TCO',
+            tcoAnalysisMutation.data as unknown as Record<string, unknown>,
+            true,
+          );
+        }
+      },
+      onError: (error) => {
+        toast({
+          title: 'No se pudo descargar el PDF.',
+          description: error instanceof Error ? error.message : 'Intenta nuevamente.',
+          variant: 'destructive',
+        });
+      },
+    });
+  };
+
   const handleDownloadProposalPdf = () => {
     if (!proposalComparisonResult) {
       return;
@@ -669,6 +883,7 @@ const NexuIA = () => {
   const proposalComparisonResult = proposalComparisonMutation.data;
   const termsFormSchema = termsFormSchemaMutation.data;
   const termsResult = termsGenerateMutation.data;
+  const tcoResult = tcoAnalysisMutation.data;
 
   const renderTermsField = (field: TermsFormField) => {
     if (field.type === 'file') {
@@ -851,6 +1066,36 @@ const NexuIA = () => {
     );
   };
 
+  const renderValueList = (items: unknown) => {
+    const list = Array.isArray(items) ? items : [];
+    if (!list.length) {
+      return <p className="text-sm text-muted-foreground">Sin datos.</p>;
+    }
+
+    return (
+      <ul className="space-y-1 text-sm text-muted-foreground">
+        {list.map((item, index) => (
+          <li key={`${String(item)}-${index}`}>- {String(item)}</li>
+        ))}
+      </ul>
+    );
+  };
+
+  const renderRecordBlock = (record: Record<string, unknown>) => (
+    <div className="space-y-1 text-sm text-muted-foreground">
+      {Object.entries(record).map(([key, value]) => (
+        <p key={key}>
+          <span className="font-medium text-foreground">{key.replace(/_/g, ' ')}:</span>{' '}
+          {Array.isArray(value)
+            ? value.join('; ')
+            : typeof value === 'object' && value !== null
+              ? JSON.stringify(value)
+              : String(value ?? 'No especificado')}
+        </p>
+      ))}
+    </div>
+  );
+
   return (
     <div className="space-y-6 pb-8">
       <section className="overflow-hidden rounded-[32px] border border-[#2e24ba]/15 bg-[linear-gradient(135deg,#1f1fae_0%,#3325b8_38%,#4f31cb_70%,#6844dc_100%)] shadow-[0_24px_60px_rgba(54,33,170,0.22)]">
@@ -863,7 +1108,7 @@ const NexuIA = () => {
               Nodus IA
             </Badge>
             <h1 className="mt-5 max-w-3xl text-4xl font-bold tracking-tight text-white md:text-5xl">
-              Buyer agents
+              Agentes IA y automatizaciones
             </h1>
             <p className="mt-4 max-w-2xl text-base leading-8 text-white/85 md:text-[1.1rem]">
               Explora agentes especializados, activa automatizaciones y ejecuta flujos de compras
@@ -1225,6 +1470,186 @@ const NexuIA = () => {
                               ) : null}
                             </div>
                           </>
+                        ) : isTcoAnalysis ? (
+                          <div className="space-y-5">
+                            <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                              <p className="text-sm font-medium text-foreground">Paso 1 - Datos generales</p>
+                              <div className="grid gap-3 md:grid-cols-2">
+                                <div className="space-y-1.5">
+                                  <label className="text-sm font-medium text-foreground/80">Nombre del análisis *</label>
+                                  <Input
+                                    value={tcoGeneral.title}
+                                    onChange={(event) => updateTcoGeneral('title', event.target.value)}
+                                    placeholder="Ejemplo: Análisis TCO para compra de equipos ManLift"
+                                    className="rounded-xl border-primary/15"
+                                  />
+                                </div>
+                                <div className="space-y-1.5">
+                                  <label className="text-sm font-medium text-foreground/80">Producto, equipo o servicio *</label>
+                                  <Input
+                                    value={tcoGeneral.itemName}
+                                    onChange={(event) => updateTcoGeneral('itemName', event.target.value)}
+                                    placeholder="Ejemplo: ManLift, laptops corporativas, servicio de limpieza"
+                                    className="rounded-xl border-primary/15"
+                                  />
+                                </div>
+                                {[
+                                  ['analysisType', 'Tipo de análisis', tcoAnalysisTypes],
+                                  ['evaluationHorizon', 'Horizonte de evaluación', tcoEvaluationHorizons],
+                                  ['comparisonUnit', 'Unidad de comparación', tcoComparisonUnits],
+                                  ['currency', 'Moneda base', tcoCurrencies],
+                                ].map(([field, label, options]) => (
+                                  <div key={String(field)} className="space-y-1.5">
+                                    <label className="text-sm font-medium text-foreground/80">{String(label)} *</label>
+                                    <select
+                                      value={String(tcoGeneral[field as keyof typeof tcoGeneral])}
+                                      onChange={(event) => updateTcoGeneral(field as keyof typeof tcoGeneral, event.target.value)}
+                                      className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground"
+                                    >
+                                      {(options as string[]).map((option) => (
+                                        <option key={option} value={option}>{option}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                ))}
+                                <div className="space-y-1.5">
+                                  <label className="text-sm font-medium text-foreground/80">Volumen de compra</label>
+                                  <Input
+                                    value={tcoGeneral.purchaseVolume}
+                                    onChange={(event) => updateTcoGeneral('purchaseVolume', event.target.value)}
+                                    placeholder="Ejemplo: 1 equipo, 200 unidades, 50 usuarios"
+                                    className="rounded-xl border-primary/15"
+                                  />
+                                </div>
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-sm font-medium text-foreground/80">Objetivo del análisis</label>
+                                <Textarea
+                                  value={tcoGeneral.objective}
+                                  onChange={(event) => updateTcoGeneral('objective', event.target.value)}
+                                  placeholder="Ejemplo: Determinar qué alternativa tiene menor costo total considerando mantenimiento, garantía, operación y riesgos."
+                                  className="min-h-[88px] rounded-2xl border-primary/15"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-3 rounded-2xl border border-primary/15 bg-white p-4">
+                              <div className="flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-sm font-medium text-foreground">Paso 2 - Alternativas / proveedores</p>
+                                <Button type="button" variant="outline" className="rounded-full" onClick={addTcoAlternative} disabled={tcoAlternatives.length >= 5}>
+                                  Agregar alternativa
+                                </Button>
+                              </div>
+                              {tcoAlternatives.map((alternative, index) => (
+                                <div key={index} className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="text-sm font-medium text-foreground">Alternativa {index + 1}</p>
+                                    <Button type="button" variant="outline" size="sm" className="rounded-full" onClick={() => removeTcoAlternative(index)} disabled={tcoAlternatives.length <= 2}>
+                                      Quitar
+                                    </Button>
+                                  </div>
+                                  <div className="grid gap-3 md:grid-cols-2">
+                                    {[
+                                      ['supplier_name', 'Nombre del proveedor *', 'Proveedor A'],
+                                      ['origin_country', 'País de origen', 'China, Perú, México...'],
+                                      ['destination_country', 'País de destino', 'Perú'],
+                                      ['brand_model', 'Marca/modelo', 'Modelo X'],
+                                      ['quantity', 'Cantidad', '1'],
+                                      ['currency', 'Moneda', 'PEN'],
+                                      ['base_price', 'Precio base', '10000'],
+                                      ['incoterm', 'Incoterm', 'FOB, CIF, EXW...'],
+                                      ['lead_time', 'Lead time / plazo de entrega', '15 días'],
+                                      ['payment_terms', 'Forma de pago', '50% adelanto / 50% entrega'],
+                                      ['warranty', 'Garantía', '12 meses'],
+                                      ['international_freight', 'Flete internacional', ''],
+                                      ['international_insurance', 'Seguro internacional', ''],
+                                      ['customs_taxes', 'Aduanas / impuestos', ''],
+                                      ['tariffs', 'Aranceles', ''],
+                                      ['internal_transport_cost', 'Transporte interno', ''],
+                                      ['installation_cost', 'Instalación / implementación', ''],
+                                      ['training_cost', 'Capacitación', ''],
+                                      ['annual_maintenance_cost', 'Mantenimiento preventivo anual', ''],
+                                      ['corrective_maintenance_cost', 'Mantenimiento correctivo', ''],
+                                      ['annual_operation_cost', 'Operación anual', ''],
+                                      ['annual_energy_cost', 'Energía / combustible anual', ''],
+                                      ['spare_parts_cost', 'Repuestos', ''],
+                                      ['support_cost', 'Soporte', ''],
+                                      ['administrative_cost', 'Costos administrativos', ''],
+                                      ['financial_cost', 'Costos financieros', ''],
+                                      ['exit_cost', 'Costos de salida o reemplazo', ''],
+                                      ['residual_value', 'Valor residual o recuperable', ''],
+                                      ['other_costs', 'Otros costos', ''],
+                                    ].map(([field, label, placeholder]) => (
+                                      <div key={field} className="space-y-1.5">
+                                        <label className="text-sm font-medium text-foreground/80">{label}</label>
+                                        <Input
+                                          value={String(alternative[field as keyof TcoAlternativeInput] ?? '')}
+                                          onChange={(event) => updateTcoAlternative(index, field as keyof TcoAlternativeInput, event.target.value)}
+                                          placeholder={placeholder}
+                                          className="rounded-xl border-primary/15 bg-white"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="grid gap-3 md:grid-cols-2">
+                                    {[
+                                      ['known_risks', 'Riesgos conocidos'],
+                                      ['observations', 'Observaciones'],
+                                    ].map(([field, label]) => (
+                                      <div key={field} className="space-y-1.5">
+                                        <label className="text-sm font-medium text-foreground/80">{label}</label>
+                                        <Textarea
+                                          value={String(alternative[field as keyof TcoAlternativeInput] ?? '')}
+                                          onChange={(event) => updateTcoAlternative(index, field as keyof TcoAlternativeInput, event.target.value)}
+                                          placeholder="Retrasos, calidad, proveedor único, riesgo cambiario, penalidades, riesgo documental..."
+                                          className="min-h-[76px] rounded-2xl border-primary/15 bg-white"
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            <div className="space-y-2 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                              <p className="text-sm font-medium text-foreground">Paso 3 - Documentos de apoyo</p>
+                              <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-white px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
+                                <Upload className="h-5 w-5 text-muted-foreground" />
+                                <div>
+                                  <p className="text-sm font-medium text-foreground">Subir cotizaciones, propuestas, fichas, contratos o Excel</p>
+                                  <p className="mt-1 text-xs text-muted-foreground/70">PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. Máximo 8 archivos.</p>
+                                </div>
+                                <input type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.jpg,.jpeg,.png" onChange={handleTcoFilesChange} className="hidden" />
+                              </label>
+                              {tcoFiles.length ? (
+                                <div className="space-y-2 rounded-2xl border border-primary/15 bg-white p-3">
+                                  {tcoFiles.map((file) => {
+                                    const isSpreadsheet = file.name.endsWith('.xls') || file.name.endsWith('.xlsx') || file.name.endsWith('.csv');
+                                    const FileIcon = isSpreadsheet ? FileSpreadsheet : FileText;
+                                    return (
+                                      <div key={`${file.name}-${file.size}`} className="flex items-center justify-between gap-3 rounded-xl bg-primary/5 px-3 py-2">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                          <FileIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                          <span className="truncate text-sm text-foreground/80">{file.name}</span>
+                                        </div>
+                                        <span className="shrink-0 text-xs text-muted-foreground/70">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
+                              <label className="text-sm font-medium text-foreground/80">Paso 4 - Instrucciones adicionales</label>
+                              <Textarea
+                                value={tcoGeneral.additionalInstructions}
+                                onChange={(event) => updateTcoGeneral('additionalInstructions', event.target.value)}
+                                placeholder="Agrega supuestos, restricciones, costos a considerar, criterios internos, tipo de cambio, condiciones comerciales, información de importación, riesgos conocidos o cualquier detalle que la IA deba tomar en cuenta."
+                                className="min-h-[100px] rounded-2xl border-primary/15"
+                              />
+                            </div>
+                          </div>
                         ) : (
                           selectedAgent.inputs.map((inputLabel) => (
                             <div key={inputLabel} className="space-y-1.5">
@@ -1243,7 +1668,7 @@ const NexuIA = () => {
                             </div>
                           ))
                         )}
-                        {!isQuoteComparator && !isTermsReference ? (
+                        {!isQuoteComparator && !isTermsReference && !isTcoAnalysis ? (
                           <div className="space-y-1.5">
                             <label className="text-sm font-medium text-foreground/80">
                               Contexto adicional
@@ -1330,6 +1755,16 @@ const NexuIA = () => {
                           ? 'Nodus IA está trabajando en tu solicitud…'
                           : 'Analizar propuestas'}
                       </Button>
+                    ) : isTcoAnalysis ? (
+                      <Button
+                        type="button"
+                        className="rounded-full bg-primary hover:bg-primary"
+                        onClick={handleAnalyzeTco}
+                        disabled={tcoAnalysisMutation.isPending}
+                      >
+                        <PlayCircle className="mr-2 h-4 w-4" />
+                        {tcoAnalysisMutation.isPending ? 'Analizando costo total…' : 'Analizar costo total'}
+                      </Button>
                     ) : (
                       <>
                         <Button
@@ -1345,9 +1780,9 @@ const NexuIA = () => {
                     )}
                   </div>
 
-                  {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || runMutation.isPending) ? (
+                  {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || tcoAnalysisMutation.isPending || runMutation.isPending) ? (
                     <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
-                      Nodus IA está trabajando en tu solicitud…
+                      {tcoAnalysisMutation.isPending ? 'Analizando costo total…' : 'Nodus IA está trabajando en tu solicitud…'}
                     </div>
                   ) : null}
 
@@ -1477,6 +1912,148 @@ const NexuIA = () => {
                   ) : null}
 
                   {isTermsReference && termsResult ? renderAgentFeedbackPanel() : null}
+
+                  {isTcoAnalysis && tcoResult ? (
+                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">A. Resumen ejecutivo</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                            {tcoResult.executive_summary.final_recommendation}
+                          </p>
+                        </div>
+                        <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadTcoPdf} disabled={tcoPdfMutation.isPending}>
+                          <Download className="mr-2 h-4 w-4" />
+                          {tcoPdfMutation.isPending ? 'Generando PDF...' : 'Descargar PDF'}
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">Mejor alternativa</p>
+                          <p className="mt-2 text-lg font-semibold text-foreground">{tcoResult.executive_summary.best_alternative}</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{tcoResult.executive_summary.why_it_wins}</p>
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">Ahorro / sobrecosto estimado</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{tcoResult.executive_summary.estimated_saving_or_overcost}</p>
+                          <p className="mt-2 text-sm leading-6 text-muted-foreground">Riesgo principal: {tcoResult.executive_summary.main_risk}</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                        <p className="text-sm font-medium text-foreground">B. Datos usados</p>
+                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          {tcoResult.data_used.map((item, index) => (
+                            <div key={index} className="rounded-xl bg-primary/5 p-3">
+                              {renderRecordBlock(item)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-foreground">C. Matriz TCO comparativa</p>
+                        <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
+                          <table className="w-full min-w-[760px] text-left text-sm">
+                            <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                              <tr>
+                                <th className="px-4 py-3 font-medium">Componente</th>
+                                {tcoResult.tco_totals.map((item) => (
+                                  <th key={String(item.alternative)} className="px-4 py-3 font-medium">{String(item.alternative)}</th>
+                                ))}
+                                <th className="px-4 py-3 font-medium">Notas</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {tcoResult.tco_matrix.map((row) => (
+                                <tr key={row.cost_component} className="border-t border-primary/10">
+                                  <td className="px-4 py-3 font-medium text-foreground">{row.cost_component}</td>
+                                  {tcoResult.tco_totals.map((item) => (
+                                    <td key={`${row.cost_component}-${String(item.alternative)}`} className="px-4 py-3 text-muted-foreground">
+                                      {String(row.values[String(item.alternative)] ?? 'No especificado')}
+                                    </td>
+                                  ))}
+                                  <td className="px-4 py-3 text-muted-foreground">{row.notes || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">D. Ranking</p>
+                          <div className="mt-3 space-y-2">
+                            {tcoResult.ranking.map((item) => (
+                              <div key={`${item.position}-${item.alternative}`} className="rounded-xl bg-primary/5 p-3">
+                                <p className="text-sm font-medium text-foreground">{item.position}. {item.alternative}</p>
+                                <p className="mt-1 text-sm text-muted-foreground">TCO: {item.total_tco ?? 'No especificado'}</p>
+                                <p className="mt-1 text-sm text-muted-foreground">{item.reason}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">E. Interpretación</p>
+                          {renderRecordBlock(tcoResult.interpretation)}
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">F. Análisis de sensibilidad</p>
+                          {renderRecordBlock(tcoResult.sensitivity_analysis)}
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">G. Recomendación estratégica</p>
+                          {renderRecordBlock(tcoResult.strategic_recommendation)}
+                        </div>
+                      </div>
+
+                      {tcoResult.risk_analysis.length ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Análisis de riesgos</p>
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            {tcoResult.risk_analysis.map((item, index) => (
+                              <div key={index} className="rounded-xl bg-primary/5 p-3">
+                                {renderRecordBlock(item)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">H. Preguntas o datos faltantes</p>
+                          {renderValueList([...tcoResult.missing_information, ...tcoResult.questions_for_user_or_suppliers])}
+                        </div>
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">I. Supuestos y límites del análisis</p>
+                          {renderValueList([...(tcoResult.assumptions_and_limits ?? []), ...(tcoResult.calculation_warnings ?? [])])}
+                        </div>
+                      </div>
+
+                      {tcoResult.supporting_documents_summary.length ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Documentos de apoyo leídos</p>
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            {tcoResult.supporting_documents_summary.map((item, index) => (
+                              <div key={index} className="rounded-xl bg-primary/5 p-3">
+                                {renderRecordBlock(item)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <p className="text-xs leading-5 text-muted-foreground/70">{tcoResult.disclaimer}</p>
+                    </div>
+                  ) : null}
+
+                  {isTcoAnalysis && tcoResult ? renderAgentFeedbackPanel() : null}
 
                   {isQuoteComparator && proposalComparisonResult ? (
                     <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
