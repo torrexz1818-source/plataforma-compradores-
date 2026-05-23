@@ -683,6 +683,8 @@ export class AgentsService {
 
   private async ensureAgentCatalog() {
     const now = new Date();
+    const currentAgentKeys = AGENT_CATALOG.map((agent) => agent.agentKey);
+
     await Promise.all(
       AGENT_CATALOG.map((agent) =>
         this.agentsCollection().updateOne(
@@ -713,7 +715,12 @@ export class AgentsService {
     );
 
     await this.agentsCollection().updateMany(
-      { agentKey: { $exists: false } },
+      {
+        $or: [
+          { agentKey: { $exists: false } },
+          { agentKey: { $nin: currentAgentKeys } },
+        ],
+      },
       { $set: { status: 'hidden', visibleToBuyer: false, updatedAt: now } },
     );
   }
