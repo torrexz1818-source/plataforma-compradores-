@@ -40,6 +40,16 @@ type AgentRecord = {
   updatedAt: Date;
 };
 
+type AgentStatusOverrideRecord = {
+  id: string;
+  agentKey: string;
+  status: AgentStatus;
+  visibleToBuyer: boolean;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 type AgentExecutionRecord = {
   id: string;
   agentRunId: string;
@@ -186,7 +196,8 @@ export class AgentsService {
       if (filters?.automationType?.trim()) query.automationType = filters.automationType.trim();
 
       const agents = await this.agentsCollection().find(query).sort({ sortOrder: 1, name: 1 }).toArray();
-      return agents.map((agent) => this.serializeAgent(agent));
+      const agentsWithStatus = await this.applyAgentStatusOverrides(agents);
+      return agentsWithStatus.map((agent) => this.serializeAgent(agent));
     } catch {
       return this.getCatalogFallbackAgents(filters);
     }
@@ -236,7 +247,9 @@ export class AgentsService {
         this.feedbackCollection().find({}).toArray(),
       ]);
 
-      return agents.map((agent) => {
+      const agentsWithStatus = await this.applyAgentStatusOverrides(agents);
+
+      return agentsWithStatus.map((agent) => {
         const agentRuns = runs.filter((run) => (run.agentKey || run.agentId) === agent.agentKey);
         const agentFeedback = feedback.filter((item) => item.agentKey === agent.agentKey);
         return {
@@ -384,9 +397,14 @@ export class AgentsService {
     if (!agent) throw new NotFoundException('Agente no encontrado');
 
     const now = new Date();
-    const result = await this.agentsCollection().updateOne(
+    await this.agentStatusSettingsCollection().updateOne(
       { agentKey: agent.agentKey },
       {
+        $setOnInsert: {
+          id: randomUUID(),
+          agentKey: agent.agentKey,
+          createdAt: now,
+        },
         $set: {
           status,
           isActive: status === 'active',
@@ -394,16 +412,27 @@ export class AgentsService {
           updatedAt: now,
         },
       },
+      { upsert: true },
     );
 
-    if (!result.matchedCount) {
-      throw new NotFoundException('Agente no encontrado');
+    try {
+      await this.agentsCollection().updateOne(
+        { agentKey: agent.agentKey },
+        {
+          $set: {
+            status,
+            isActive: status === 'active',
+            visibleToBuyer: status !== 'hidden',
+            updatedAt: now,
+          },
+        },
+      );
+    } catch {
+      // The override is the source used by admin and buyer reads.
     }
 
-    const updatedAgent = await this.agentsCollection().findOne({ agentKey: agent.agentKey });
-    if (!updatedAgent) {
-      throw new NotFoundException('Agente no encontrado');
-    }
+    const updatedAgent = await this.findAgent(agent.agentKey);
+    if (!updatedAgent) throw new NotFoundException('Agente no encontrado');
 
     return { agent: this.serializeAgent(updatedAgent), message: 'Estado actualizado correctamente' };
   }
@@ -988,15 +1017,46 @@ export class AgentsService {
     return legacyMap[idOrSlug] ?? idOrSlug;
   }
 
-  private findAgent(idOrSlug: string) {
+  private async findAgent(idOrSlug: string) {
     const normalized = this.normalizeLegacyAgentKey(idOrSlug);
-    return this.agentsCollection().findOne({
+    const agent = await this.agentsCollection().findOne({
       $or: [{ id: normalized }, { agentKey: normalized }, { slug: idOrSlug }],
     });
+    if (!agent) return null;
+
+    const override = await this.agentStatusSettingsCollection().findOne({ agentKey: agent.agentKey });
+    return this.applyAgentStatusOverride(agent, override);
+  }
+
+  private async applyAgentStatusOverrides(agents: AgentRecord[]) {
+    if (!agents.length) return agents;
+
+    const overrides = await this.agentStatusSettingsCollection()
+      .find({ agentKey: { $in: agents.map((agent) => agent.agentKey) } })
+      .toArray();
+    const overridesByAgentKey = new Map(overrides.map((override) => [override.agentKey, override]));
+
+    return agents.map((agent) => this.applyAgentStatusOverride(agent, overridesByAgentKey.get(agent.agentKey)));
+  }
+
+  private applyAgentStatusOverride(agent: AgentRecord, override?: AgentStatusOverrideRecord | null): AgentRecord {
+    if (!override) return agent;
+
+    return {
+      ...agent,
+      status: override.status,
+      isActive: override.isActive,
+      visibleToBuyer: override.visibleToBuyer,
+      updatedAt: override.updatedAt ?? agent.updatedAt,
+    };
   }
 
   private agentsCollection() {
     return this.databaseService.collection<AgentRecord>('agents');
+  }
+
+  private agentStatusSettingsCollection() {
+    return this.databaseService.collection<AgentStatusOverrideRecord>('agentStatusSettings');
   }
 
   private executionsCollection() {
