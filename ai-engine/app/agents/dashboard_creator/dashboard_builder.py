@@ -13,6 +13,7 @@ def build_dashboard_result(
     profiled: dict[str, Any],
     executive_summary: str,
     insights: list[dict[str, Any]],
+    observations: list[dict[str, Any]],
     recommendations: list[str],
     missing_information: list[str],
     llm_used: bool,
@@ -27,8 +28,10 @@ def build_dashboard_result(
         {"section": "Gráficos", "component_type": "chart", "title": "Visualizaciones", "priority": 3},
         {"section": "Tablas", "component_type": "table", "title": "Tablas resumen", "priority": 4},
     ]
+    if observations:
+        layout.append({"section": "Observaciones", "component_type": "alert", "title": "Observaciones", "priority": 5})
     if profile["data_quality_warnings"]:
-        layout.append({"section": "Calidad de datos", "component_type": "alert", "title": "Advertencias", "priority": 5})
+        layout.append({"section": "Calidad de datos", "component_type": "alert", "title": "Advertencias", "priority": 6})
 
     return {
         "dashboard_title": title,
@@ -36,13 +39,17 @@ def build_dashboard_result(
         "audience": audience,
         "period": period,
         "data_type": data_type,
+        "analysis_mode": profiled.get("analysis_mode", "structured_data"),
+        "confidence_level": profiled.get("confidence_level", "medium"),
         "executive_summary": executive_summary,
         "llm_used": llm_used,
+        "data_understanding": profiled.get("data_understanding", {}),
         "data_profile": profile,
         "kpis": profiled.get("kpis", []),
         "charts": profiled.get("charts", []),
         "tables": profiled.get("tables", []),
         "insights": insights,
+        "observations": observations,
         "recommendations": recommendations,
         "missing_information": missing_information,
         "document_summaries": profiled.get("document_summaries", []),

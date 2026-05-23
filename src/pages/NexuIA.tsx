@@ -89,6 +89,15 @@ const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
 const dashboardAudiences = ['Gerencia', 'Compras', 'Finanzas', 'Operaciones', 'Proveedores', 'Auditoría', 'Otro'];
 const dashboardDataTypes = ['Gastos', 'Proveedores', 'Compras', 'Contratos', 'Inventario', 'Cotizaciones', 'Indicadores KPI', 'Datos mixtos', 'Otro'];
 const dashboardFocusOptions = ['Automático', 'Ejecutivo', 'Operativo', 'Financiero', 'Proveedores', 'Gastos', 'Compras', 'Auditoría'];
+const dashboardLoadingSteps = [
+  'Leyendo archivos',
+  'Extrayendo información',
+  'Organizando datos',
+  'Generando KPIs',
+  'Creando gráficos',
+  'Preparando dashboard',
+  'Finalizando',
+];
 
 function getAgentIcon(icon: string) {
   return iconMap[icon as keyof typeof iconMap] ?? Bot;
@@ -1330,7 +1339,15 @@ const NexuIA = () => {
             <p className="text-sm font-medium text-foreground">{chart.title}</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground/70">{chart.description}</p>
           </div>
-          <Badge variant="outline" className="border-primary/15 text-muted-foreground">{chart.type}</Badge>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Badge variant="outline" className="border-primary/15 text-muted-foreground">{chart.type}</Badge>
+            {chart.data_source === 'suggested' ? (
+              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700">Gráfico sugerido con información parcial</Badge>
+            ) : null}
+            {chart.confidence === 'low' ? (
+              <Badge variant="outline" className="border-destructive/30 bg-destructive/5 text-destructive">Confianza baja</Badge>
+            ) : null}
+          </div>
         </div>
         <div className="mt-4 space-y-3">
           {chart.data.slice(0, 10).map((item) => {
@@ -2089,10 +2106,20 @@ const NexuIA = () => {
                             ? 'Analizando datos y creando dashboard…'
                             : tcoAnalysisMutation.isPending
                               ? 'Analizando documentos y calculando TCO…'
-                              : 'Nodus IA está trabajando en tu solicitud…'}
+                          : 'Nodus IA está trabajando en tu solicitud…'}
                         </span>
                       </div>
-                      <Progress value={72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+                      <Progress value={dashboardCreatorMutation.isPending ? 68 : 72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+                      {dashboardCreatorMutation.isPending ? (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {dashboardLoadingSteps.map((step, index) => (
+                            <div key={step} className="flex items-center gap-2 rounded-xl bg-white/70 px-3 py-2 text-xs text-primary/75">
+                              <span className={`h-2 w-2 rounded-full ${index <= 4 ? 'animate-pulse bg-primary' : 'bg-primary/25'}`} />
+                              <span>{step}…</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                       <p className="text-xs leading-5 text-primary/70">
                         Mantén esta pantalla abierta mientras el agente procesa la información.
                       </p>
@@ -2238,6 +2265,27 @@ const NexuIA = () => {
                         <div>
                           <p className="text-sm font-medium text-foreground">{dashboardResult.dashboard_title}</p>
                           <p className="mt-2 text-sm leading-6 text-muted-foreground">{dashboardResult.executive_summary}</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <Badge variant="outline" className="border-primary/15 bg-white text-primary">
+                              Análisis: {dashboardResult.data_understanding.detected_analysis_type}
+                            </Badge>
+                            <Badge variant="outline" className="border-primary/15 bg-white text-primary">
+                              Modo: {dashboardResult.analysis_mode}
+                            </Badge>
+                            <Badge
+                              variant="outline"
+                              className={
+                                dashboardResult.confidence_level === 'low'
+                                  ? 'border-destructive/30 bg-destructive/5 text-destructive'
+                                  : 'border-primary/15 bg-white text-primary'
+                              }
+                            >
+                              Confianza: {dashboardResult.confidence_level}
+                            </Badge>
+                            <Badge variant="outline" className="border-primary/15 bg-white text-primary">
+                              Estructura: {dashboardResult.data_understanding.structure_level}
+                            </Badge>
+                          </div>
                         </div>
                         <div className="flex flex-col items-start gap-2 sm:items-end">
                           {renderPdfFormatSelector()}
@@ -2254,9 +2302,25 @@ const NexuIA = () => {
                             <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">{kpi.title}</p>
                             <p className="mt-2 text-2xl font-semibold text-foreground">{kpi.value}</p>
                             <p className="mt-2 text-xs leading-5 text-muted-foreground/70">{kpi.description}</p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <Badge variant="outline" className="border-primary/10 text-[10px] text-muted-foreground">{kpi.source}</Badge>
+                              {kpi.confidence === 'low' ? (
+                                <Badge variant="outline" className="border-destructive/30 bg-destructive/5 text-[10px] text-destructive">Confianza baja</Badge>
+                              ) : null}
+                            </div>
                           </div>
                         ))}
                       </div>
+
+                      {dashboardResult.data_understanding.notes.length ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Entendimiento de datos</p>
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            Fuentes: {dashboardResult.data_understanding.source_types.join(', ') || 'No especificado'}.
+                          </p>
+                          <div className="mt-2">{renderValueList(dashboardResult.data_understanding.notes)}</div>
+                        </div>
+                      ) : null}
 
                       {(dashboardResult.source_files?.length || dashboardResult.document_summaries?.length) ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -2306,6 +2370,23 @@ const NexuIA = () => {
                               </div>
                             </div>
                           ))}
+                        </div>
+                      ) : null}
+
+                      {dashboardResult.observations.length ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Observaciones</p>
+                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                            {dashboardResult.observations.map((observation) => (
+                              <div key={`${observation.type}-${observation.title}`} className="rounded-xl bg-primary/5 p-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="text-sm font-medium text-foreground">{observation.title}</p>
+                                  <Badge variant="outline" className="border-primary/15 text-[10px] text-muted-foreground">{observation.type}</Badge>
+                                </div>
+                                <p className="mt-1 text-sm text-muted-foreground">{observation.description}</p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : null}
 

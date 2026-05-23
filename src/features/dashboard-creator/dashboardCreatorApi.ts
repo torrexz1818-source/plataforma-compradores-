@@ -3,6 +3,7 @@ export type DashboardKpi = {
   value: string;
   description: string;
   calculation_logic: string;
+  source: 'python' | 'llm_structured_from_documents';
   confidence: 'low' | 'medium' | 'high';
 };
 
@@ -14,7 +15,15 @@ export type DashboardChart = {
   x_axis: string | null;
   y_axis: string | null;
   data: Array<{ label: string; value: number; group?: string | null }>;
+  data_source: 'python_calculated' | 'llm_structured' | 'suggested';
+  confidence: 'low' | 'medium' | 'high';
   insight: string;
+};
+
+export type DashboardObservation = {
+  title: string;
+  description: string;
+  type: 'opportunity' | 'risk' | 'warning' | 'trend' | 'data_quality';
 };
 
 export type DashboardResult = {
@@ -23,8 +32,17 @@ export type DashboardResult = {
   audience: string | null;
   period: string | null;
   data_type: string | null;
+  analysis_mode: 'structured_data' | 'document_based' | 'mixed';
+  confidence_level: 'low' | 'medium' | 'high';
   executive_summary: string;
   llm_used: boolean;
+  data_understanding: {
+    files_processed: number;
+    source_types: string[];
+    detected_analysis_type: 'gastos' | 'proveedores' | 'compras' | 'contratos' | 'inventario' | 'cotizaciones' | 'cumplimiento' | 'financiero' | 'mixto';
+    structure_level: 'high' | 'medium' | 'low';
+    notes: string[];
+  };
   data_profile: {
     files_processed: number;
     rows_detected: number;
@@ -37,8 +55,9 @@ export type DashboardResult = {
   };
   kpis: DashboardKpi[];
   charts: DashboardChart[];
-  tables: Array<{ title: string; description: string; columns: string[]; rows: Array<Record<string, unknown>> }>;
+  tables: Array<{ title: string; description: string; source: 'python' | 'llm_structured_from_documents'; columns: string[]; rows: Array<Record<string, unknown>> }>;
   insights: Array<{ title: string; description: string; impact: 'low' | 'medium' | 'high'; recommended_action: string }>;
+  observations: DashboardObservation[];
   recommendations: string[];
   missing_information: string[];
   document_summaries: Array<{

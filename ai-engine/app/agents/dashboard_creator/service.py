@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any
 
 from fastapi import HTTPException, UploadFile
 
@@ -15,6 +16,130 @@ from app.ai.llm_client import analyze_with_openai
 from app.config import get_settings
 from app.document_processing.file_detector import validate_allowed_file
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
+
+
+def _as_list(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _merge_unique(base: list[Any], additions: list[Any]) -> list[Any]:
+    seen = set()
+    merged = []
+    for item in [*base, *additions]:
+        marker = str(item)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        merged.append(item)
+    return merged
+
+
+def _normalize_llm_kpis(items: list[Any]) -> list[dict[str, Any]]:
+    normalized = []
+    for index, item in enumerate(items[:8], start=1):
+        if not isinstance(item, dict):
+            continue
+        normalized.append(
+            {
+                "title": str(item.get("title") or f"KPI documental {index}")[:80],
+                "value": str(item.get("value") or "No especificado")[:120],
+                "description": str(item.get("description") or "KPI estructurado desde documentos.")[:260],
+                "calculation_logic": str(item.get("calculation_logic") or "Extraido/sintetizado desde documentos; validar fuente.")[:220],
+                "source": "llm_structured_from_documents",
+                "confidence": item.get("confidence") if item.get("confidence") in {"low", "medium", "high"} else "low",
+            }
+        )
+    return normalized
+
+
+def _normalize_llm_tables(items: list[Any]) -> list[dict[str, Any]]:
+    normalized = []
+    for index, item in enumerate(items[:4], start=1):
+        if not isinstance(item, dict):
+            continue
+        rows = [row for row in _as_list(item.get("rows")) if isinstance(row, dict)][:12]
+        columns = [str(column) for column in _as_list(item.get("columns"))[:8]]
+        if not columns and rows:
+            columns = list(rows[0].keys())[:8]
+        if not columns:
+            continue
+        normalized.append(
+            {
+                "title": str(item.get("title") or f"Tabla documental {index}")[:90],
+                "description": str(item.get("description") or "Tabla estructurada desde documentos.")[:260],
+                "source": "llm_structured_from_documents",
+                "columns": columns,
+                "rows": rows,
+            }
+        )
+    return normalized
+
+
+def _normalize_llm_charts(items: list[Any]) -> list[dict[str, Any]]:
+    allowed_types = {"bar", "horizontal_bar", "line", "area", "pie", "donut", "stacked_bar", "table", "kpi", "matrix", "alert"}
+    normalized = []
+    for index, item in enumerate(items[:4], start=1):
+        if not isinstance(item, dict):
+            continue
+        points = []
+        for point in _as_list(item.get("data"))[:10]:
+            if not isinstance(point, dict):
+                continue
+            try:
+                value = float(point.get("value") or 0)
+            except (TypeError, ValueError):
+                value = 0
+            points.append({"label": str(point.get("label") or "Sin etiqueta")[:80], "value": value, "group": point.get("group")})
+        data_source = item.get("data_source") if item.get("data_source") in {"llm_structured", "suggested"} else "suggested"
+        if not points and data_source != "suggested":
+            continue
+        normalized.append(
+            {
+                "chart_id": str(item.get("chart_id") or f"llm_chart_{index}")[:60],
+                "title": str(item.get("title") or f"Grafico sugerido {index}")[:90],
+                "type": item.get("type") if item.get("type") in allowed_types else "bar",
+                "description": str(item.get("description") or "Visualizacion sugerida desde documentos.")[:260],
+                "x_axis": item.get("x_axis"),
+                "y_axis": item.get("y_axis"),
+                "data": points,
+                "data_source": data_source,
+                "confidence": item.get("confidence") if item.get("confidence") in {"low", "medium", "high"} else "low",
+                "insight": str(item.get("insight") or "Validar datos fuente antes de presentar.")[:320],
+            }
+        )
+    return normalized
+
+
+def _normalize_observations(items: list[Any]) -> list[dict[str, Any]]:
+    allowed_types = {"opportunity", "risk", "warning", "trend", "data_quality"}
+    normalized = []
+    for index, item in enumerate(items[:8], start=1):
+        if not isinstance(item, dict):
+            continue
+        normalized.append(
+            {
+                "title": str(item.get("title") or f"Observacion {index}")[:90],
+                "description": str(item.get("description") or "Observacion generada desde la informacion disponible.")[:320],
+                "type": item.get("type") if item.get("type") in allowed_types else "warning",
+            }
+        )
+    return normalized
+
+
+def _normalize_insights(items: list[Any]) -> list[dict[str, Any]]:
+    normalized = []
+    for index, item in enumerate(items[:8], start=1):
+        if not isinstance(item, dict):
+            continue
+        normalized.append(
+            {
+                "title": str(item.get("title") or f"Insight {index}")[:90],
+                "description": str(item.get("description") or "Insight generado desde la informacion disponible.")[:360],
+                "impact": item.get("impact") if item.get("impact") in {"low", "medium", "high"} else "medium",
+                "recommended_action": str(item.get("recommended_action") or "Validar con el usuario comprador.")[:260],
+            }
+        )
+    return normalized
 
 
 async def generate_dashboard(
@@ -45,15 +170,28 @@ async def generate_dashboard(
         executive_summary = basic_summary
         insights = basic_insights
         recommendations = basic_recommendations
+        observations = [
+            {
+                "title": "Modo de analisis",
+                "description": f"Se genero en modo {profiled.get('analysis_mode', 'structured_data')} con confianza {profiled.get('confidence_level', 'medium')}.",
+                "type": "data_quality",
+            }
+        ]
         missing_information = []
         llm_used = False
 
         if not profiled["profile"]["numeric_columns"]:
-            missing_information.append("No se detectaron columnas numéricas claras para KPIs financieros.")
+            missing_information.append("No se detectaron columnas numericas claras para KPIs financieros.")
         if not profiled["profile"]["date_columns"]:
-            missing_information.append("No se detectó una columna de fecha o periodo para tendencias.")
+            missing_information.append("No se detecto una columna de fecha o periodo para tendencias.")
 
-        if use_llm_insights:
+        should_use_llm = (
+            use_llm_insights
+            or profiled.get("analysis_mode") in {"document_based", "mixed"}
+            or profiled.get("confidence_level") == "low"
+        )
+
+        if should_use_llm:
             try:
                 llm_result = await analyze_with_openai(
                     build_insight_prompt(
@@ -69,12 +207,31 @@ async def generate_dashboard(
                     SYSTEM_PROMPT,
                 )
                 executive_summary = str(llm_result.get("executive_summary") or executive_summary)
+                if llm_result.get("confidence_level") in {"low", "medium", "high"}:
+                    profiled["confidence_level"] = llm_result["confidence_level"]
+
+                llm_understanding = llm_result.get("data_understanding")
+                if isinstance(llm_understanding, dict):
+                    if llm_understanding.get("detected_analysis_type"):
+                        profiled["data_understanding"]["detected_analysis_type"] = llm_understanding["detected_analysis_type"]
+                    if isinstance(llm_understanding.get("notes"), list):
+                        profiled["data_understanding"]["notes"] = _merge_unique(
+                            profiled["data_understanding"].get("notes", []),
+                            [str(item) for item in llm_understanding["notes"]],
+                        )
+
+                profiled["kpis"] = [*profiled.get("kpis", []), *_normalize_llm_kpis(_as_list(llm_result.get("kpis")))]
+                profiled["charts"] = [*profiled.get("charts", []), *_normalize_llm_charts(_as_list(llm_result.get("charts")))]
+                profiled["tables"] = [*profiled.get("tables", []), *_normalize_llm_tables(_as_list(llm_result.get("tables")))]
+
                 if isinstance(llm_result.get("insights"), list):
-                    insights = llm_result["insights"]
+                    insights = _merge_unique(insights, _normalize_insights(llm_result["insights"]))
+                observations = _merge_unique(observations, _normalize_observations(_as_list(llm_result.get("observations"))))
                 if isinstance(llm_result.get("recommendations"), list):
-                    recommendations = [str(item) for item in llm_result["recommendations"]]
+                    recommendations = _merge_unique(recommendations, [str(item) for item in llm_result["recommendations"]])
                 if isinstance(llm_result.get("missing_information"), list):
-                    missing_information = [*missing_information, *[str(item) for item in llm_result["missing_information"]]]
+                    missing_information = _merge_unique(missing_information, [str(item) for item in llm_result["missing_information"]])
+
                 chart_explanations = llm_result.get("chart_explanations")
                 if isinstance(chart_explanations, dict):
                     for chart in profiled.get("charts", []):
@@ -83,9 +240,7 @@ async def generate_dashboard(
                             chart["insight"] = str(explanation)
                 llm_used = True
             except HTTPException:
-                recommendations.append(
-                    "Insights generados automáticamente por análisis estadístico básico. La interpretación avanzada con IA no está disponible temporalmente."
-                )
+                recommendations.append("El LLM no estuvo disponible; se genero el dashboard con calculos y sintesis basica de Python.")
 
         result = build_dashboard_result(
             title=title,
@@ -96,6 +251,7 @@ async def generate_dashboard(
             profiled=profiled,
             executive_summary=executive_summary,
             insights=insights,
+            observations=observations,
             recommendations=recommendations,
             missing_information=missing_information,
             llm_used=llm_used,

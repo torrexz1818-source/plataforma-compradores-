@@ -6,6 +6,12 @@ from pydantic import BaseModel, Field
 
 
 Confidence = Literal["low", "medium", "high"]
+AnalysisMode = Literal["structured_data", "document_based", "mixed"]
+AnalysisType = Literal["gastos", "proveedores", "compras", "contratos", "inventario", "cotizaciones", "cumplimiento", "financiero", "mixto"]
+StructureLevel = Literal["high", "medium", "low"]
+KpiSource = Literal["python", "llm_structured_from_documents"]
+ChartSource = Literal["python_calculated", "llm_structured", "suggested"]
+ObservationType = Literal["opportunity", "risk", "warning", "trend", "data_quality"]
 ChartType = Literal[
     "bar",
     "horizontal_bar",
@@ -32,11 +38,20 @@ class DataProfile(BaseModel):
     data_quality_warnings: list[str] = Field(default_factory=list)
 
 
+class DataUnderstanding(BaseModel):
+    files_processed: int = 0
+    source_types: list[str] = Field(default_factory=list)
+    detected_analysis_type: AnalysisType = "mixto"
+    structure_level: StructureLevel = "low"
+    notes: list[str] = Field(default_factory=list)
+
+
 class DashboardKpi(BaseModel):
     title: str
     value: str
     description: str
     calculation_logic: str
+    source: KpiSource = "python"
     confidence: Confidence = "medium"
 
 
@@ -54,12 +69,15 @@ class DashboardChart(BaseModel):
     x_axis: str | None = None
     y_axis: str | None = None
     data: list[ChartDataPoint] = Field(default_factory=list)
+    data_source: ChartSource = "python_calculated"
+    confidence: Confidence = "medium"
     insight: str
 
 
 class DashboardTable(BaseModel):
     title: str
     description: str
+    source: KpiSource = "python"
     columns: list[str] = Field(default_factory=list)
     rows: list[dict[str, Any]] = Field(default_factory=list)
 
@@ -79,6 +97,12 @@ class DashboardDocumentSummary(BaseModel):
     limitations: list[str] = Field(default_factory=list)
 
 
+class DashboardObservation(BaseModel):
+    title: str
+    description: str
+    type: ObservationType = "warning"
+
+
 class LayoutSuggestion(BaseModel):
     section: str
     component_type: Literal["kpi", "chart", "table", "insight", "alert"]
@@ -92,13 +116,17 @@ class DashboardResult(BaseModel):
     audience: str | None = None
     period: str | None = None
     data_type: str | None = None
+    analysis_mode: AnalysisMode = "structured_data"
+    confidence_level: Confidence = "medium"
     executive_summary: str
     llm_used: bool = False
+    data_understanding: DataUnderstanding
     data_profile: DataProfile
     kpis: list[DashboardKpi] = Field(default_factory=list)
     charts: list[DashboardChart] = Field(default_factory=list)
     tables: list[DashboardTable] = Field(default_factory=list)
     insights: list[DashboardInsight] = Field(default_factory=list)
+    observations: list[DashboardObservation] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
     missing_information: list[str] = Field(default_factory=list)
     document_summaries: list[DashboardDocumentSummary] = Field(default_factory=list)

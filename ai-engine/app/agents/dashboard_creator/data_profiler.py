@@ -28,6 +28,16 @@ TEXT_KEYWORDS = (
     "cotizacion",
     "contrato",
 )
+ANALYSIS_KEYWORDS = {
+    "gastos": ("gasto", "gastos", "monto", "importe", "categoria", "proveedor", "ahorro"),
+    "proveedores": ("proveedor", "supplier", "vendor", "desempeno", "riesgo", "ranking"),
+    "compras": ("orden", "compra", "oc", "pedido", "requisicion", "cotizacion"),
+    "contratos": ("contrato", "vencimiento", "renovacion", "obligacion", "penalidad"),
+    "inventario": ("stock", "inventario", "almacen", "rotacion", "faltante"),
+    "cotizaciones": ("cotizacion", "propuesta", "precio", "validez", "garantia", "plazo"),
+    "cumplimiento": ("cumplimiento", "certificado", "homologacion", "auditoria"),
+    "financiero": ("financiero", "presupuesto", "costo", "margen", "factura"),
+}
 
 
 def _read_table(path: Path, file_type: str) -> pd.DataFrame | None:
@@ -174,6 +184,74 @@ def _text_relevance(text: str) -> list[str]:
     return findings[:8]
 
 
+def _detect_analysis_type(columns: list[str], document_summaries: list[dict[str, Any]], requested_type: str | None = None) -> str:
+    haystack = " ".join(columns + [str(requested_type or "")]).lower()
+    for doc in document_summaries:
+        haystack += " " + " ".join(doc.get("relevant_findings", []))
+        haystack += " " + str(doc.get("llm_excerpt", ""))
+
+    scores = {
+        analysis_type: sum(1 for keyword in keywords if keyword in haystack)
+        for analysis_type, keywords in ANALYSIS_KEYWORDS.items()
+    }
+    detected, score = max(scores.items(), key=lambda item: item[1])
+    return detected if score else "mixto"
+
+
+def _build_data_understanding(
+    *,
+    source_files: list[dict[str, Any]],
+    rows_detected: int,
+    detected_columns: list[str],
+    numeric_columns: list[str],
+    date_columns: list[str],
+    category_columns: list[str],
+    document_summaries: list[dict[str, Any]],
+) -> dict[str, Any]:
+    source_types = sorted({str(item.get("detected_type") or "unknown") for item in source_files})
+    has_structured = rows_detected > 0
+    has_documents = bool(document_summaries)
+
+    if has_structured and has_documents:
+        analysis_mode = "mixed"
+    elif has_structured:
+        analysis_mode = "structured_data"
+    else:
+        analysis_mode = "document_based"
+
+    if has_structured and numeric_columns and (category_columns or date_columns):
+        structure_level = "high"
+        confidence = "high"
+    elif has_structured or any(item.get("relevant_findings") for item in document_summaries):
+        structure_level = "medium"
+        confidence = "medium"
+    else:
+        structure_level = "low"
+        confidence = "low"
+
+    notes = []
+    if has_structured:
+        notes.append("Se detectaron datos tabulares procesables con Python.")
+    if has_documents:
+        notes.append("Se detectaron documentos o imagenes que requieren sintesis documental.")
+    if not numeric_columns:
+        notes.append("No hay columna numerica clara para calculos financieros precisos.")
+    if not category_columns:
+        notes.append("No hay columna categorica clara para segmentar por proveedor, categoria o area.")
+
+    return {
+        "analysis_mode": analysis_mode,
+        "confidence_level": confidence,
+        "data_understanding": {
+            "files_processed": len(source_files),
+            "source_types": source_types,
+            "detected_analysis_type": _detect_analysis_type(detected_columns, document_summaries),
+            "structure_level": structure_level,
+            "notes": notes,
+        },
+    }
+
+
 def _build_document_only_outputs(document_summaries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     if not document_summaries:
         return [], [], []
@@ -184,6 +262,7 @@ def _build_document_only_outputs(document_summaries: list[dict[str, Any]]) -> tu
             "value": str(len(document_summaries)),
             "description": "Archivos no tabulares procesados con MarkItDown/fallback documental.",
             "calculation_logic": "Conteo de documentos procesados.",
+            "source": "python",
             "confidence": "medium",
         }
     ]
@@ -201,6 +280,7 @@ def _build_document_only_outputs(document_summaries: list[dict[str, Any]]) -> tu
         {
             "title": "Resumen de documentos procesados",
             "description": "Fuentes usadas como soporte cuando no hay Excel/CSV tabular suficiente.",
+            "source": "python",
             "columns": ["Archivo", "Tipo", "Datos detectados", "Limitaciones"],
             "rows": rows,
         }
@@ -254,6 +334,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "file_name": filename,
                     "detected_type": detected_type,
                     "text_preview": None,
+                    "llm_excerpt": compact[:1200],
                     "relevant_findings": findings,
                     "limitations": file_warnings + ["Fuente secundaria: texto extraido, no dataset tabular completo."],
                 }
@@ -289,6 +370,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 "value": f"{total_rows:,}",
                 "description": "Filas validas detectadas en archivos tabulares.",
                 "calculation_logic": "Conteo de filas despues de limpiar filas vacias.",
+                "source": "python",
                 "confidence": "high",
             }
         )
@@ -298,6 +380,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 "value": str(len(detected_columns)),
                 "description": "Campos disponibles para armar filtros, KPIs y graficos.",
                 "calculation_logic": "Conteo de columnas no tecnicas.",
+                "source": "python",
                 "confidence": "high",
             }
         )
@@ -315,6 +398,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "value": _format_number(total_amount),
                     "description": f"Suma de la columna {amount_col}.",
                     "calculation_logic": f"SUM({amount_col})",
+                    "source": "python",
                     "confidence": "high",
                 },
                 {
@@ -322,6 +406,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "value": _format_number(avg_amount),
                     "description": f"Promedio de la columna {amount_col}.",
                     "calculation_logic": f"AVG({amount_col})",
+                    "source": "python",
                     "confidence": "high",
                 },
                 {
@@ -329,6 +414,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "value": _format_number(max_amount),
                     "description": f"Valor maximo detectado en {amount_col}.",
                     "calculation_logic": f"MAX({amount_col})",
+                    "source": "python",
                     "confidence": "high",
                 },
             ]
@@ -342,6 +428,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 "value": str(supplier_count),
                 "description": f"Valores unicos en {supplier_col}.",
                 "calculation_logic": f"COUNT DISTINCT({supplier_col})",
+                "source": "python",
                 "confidence": "medium",
             }
         )
@@ -354,6 +441,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 "value": str(category_count),
                 "description": f"Valores unicos en {category_col}.",
                 "calculation_logic": f"COUNT DISTINCT({category_col})",
+                "source": "python",
                 "confidence": "medium",
             }
         )
@@ -367,6 +455,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "value": _format_number(float(quantity_values.sum())),
                     "description": f"Suma de la columna {quantity_col}.",
                     "calculation_logic": f"SUM({quantity_col})",
+                    "source": "python",
                     "confidence": "medium",
                 }
             )
@@ -380,6 +469,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "value": f"{parsed_dates.min().date()} a {parsed_dates.max().date()}",
                     "description": f"Rango de fechas encontrado en {date_col}.",
                     "calculation_logic": f"MIN/MAX({date_col})",
+                    "source": "python",
                     "confidence": "medium",
                 }
             )
@@ -396,6 +486,8 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 "x_axis": supplier_col,
                 "y_axis": amount_col,
                 "data": top_suppliers,
+                "data_source": "python_calculated",
+                "confidence": "high",
                 "insight": "Permite detectar concentracion de gasto y dependencia por proveedor.",
             }
         )
@@ -403,6 +495,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
             {
                 "title": "Resumen por proveedor",
                 "description": "Top proveedores por monto acumulado y participacion.",
+                "source": "python",
                 "columns": ["Ranking", "Proveedor", "Monto", "Participacion"],
                 "rows": _summary_table(top_suppliers, "Proveedor", "Monto"),
             }
@@ -416,6 +509,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "value": f"{concentration:.1%}",
                     "description": f"Participacion del proveedor {top_suppliers[0]['label']} dentro del top analizado.",
                     "calculation_logic": "Monto proveedor top / monto top proveedores.",
+                    "source": "python",
                     "confidence": "medium",
                 }
             )
@@ -440,6 +534,8 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 "x_axis": category_col,
                 "y_axis": amount_col,
                 "data": top_categories,
+                "data_source": "python_calculated",
+                "confidence": "high",
                 "insight": "Ayuda a priorizar categorias de mayor impacto economico.",
             }
         )
@@ -447,6 +543,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
             {
                 "title": "Resumen por categoria",
                 "description": "Categorias con mayor monto acumulado.",
+                "source": "python",
                 "columns": ["Ranking", "Categoria", "Monto", "Participacion"],
                 "rows": _summary_table(top_categories, "Categoria", "Monto"),
             }
@@ -464,6 +561,8 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "x_axis": date_col,
                     "y_axis": amount_col,
                     "data": trend,
+                    "data_source": "python_calculated",
+                    "confidence": "high",
                     "insight": "Muestra variaciones temporales, picos y posibles estacionalidades.",
                 }
             )
@@ -472,6 +571,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 {
                     "title": "Evolucion por periodo",
                     "description": "Monto agrupado por mes detectado.",
+                    "source": "python",
                     "columns": ["Periodo", "Monto"],
                     "rows": rows,
                 }
@@ -500,6 +600,8 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "x_axis": status_col,
                     "y_axis": amount_col,
                     "data": top_status,
+                    "data_source": "python_calculated",
+                    "confidence": "medium",
                     "insight": "Ayuda a revisar aprobaciones, pendientes o estados operativos.",
                 }
             )
@@ -515,6 +617,8 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 "x_axis": "Registro",
                 "y_axis": amount_col,
                 "data": [{"label": f"Registro {index + 1}", "value": round(float(value), 2)} for index, value in enumerate(amount_values)],
+                "data_source": "python_calculated",
+                "confidence": "medium",
                 "insight": "Vista basica de los mayores valores detectados.",
             }
         )
@@ -546,9 +650,19 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         "category_columns": category_columns,
         "data_quality_warnings": list(dict.fromkeys(warnings))[:24],
     }
+    understanding = _build_data_understanding(
+        source_files=source_files,
+        rows_detected=total_rows,
+        detected_columns=detected_columns,
+        numeric_columns=numeric_columns,
+        date_columns=date_columns,
+        category_columns=category_columns,
+        document_summaries=document_summaries,
+    )
 
     return {
         "profile": profile,
+        **understanding,
         "kpis": kpis[:12],
         "charts": charts[:8],
         "tables": tables[:6],
