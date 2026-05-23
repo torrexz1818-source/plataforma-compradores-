@@ -204,23 +204,23 @@ def _build_template_overlay(title: str, agent_name: str, branding: PdfBranding) 
 
     # The uploaded template contains the placeholder "TITULO DEL TRABAJO" in this zone.
     cover.setFillColor(colors.white)
-    cover.rect(52, page_height - 122, page_width - 104, 84, fill=1, stroke=0)
+    cover.rect(34, page_height - 180, page_width - 68, 152, fill=1, stroke=0)
 
     cover.setFillColor(primary)
-    cover.setFont("Helvetica-Bold", 23)
+    cover.setFont("Helvetica-Bold", 21)
     text = cover.beginText()
-    text.setTextOrigin(72, page_height - 66)
-    text.setLeading(27)
-    for line in _split_cover_title(title)[:2]:
+    text.setTextOrigin(62, page_height - 66)
+    text.setLeading(25)
+    for line in _split_cover_title(title, max_chars=42)[:4]:
         text.textLine(line)
     cover.drawText(text)
 
     cover.setFillColor(colors.HexColor("#4b5563"))
     cover.setFont("Helvetica", 10)
-    cover.drawString(72, page_height - 130, agent_name)
-    cover.drawString(72, page_height - 146, datetime.utcnow().strftime("Generado el %Y-%m-%d %H:%M UTC"))
+    cover.drawString(62, page_height - 154, agent_name)
+    cover.drawString(62, page_height - 170, datetime.utcnow().strftime("Generado el %Y-%m-%d %H:%M UTC"))
     if branding.user_name or branding.company_name:
-        cover.drawString(72, page_height - 162, f"Preparado para: {branding.user_name or branding.company_name}")
+        cover.drawString(62, page_height - 186, f"Preparado para: {branding.user_name or branding.company_name}")
 
     cover.save()
     return buffer.getvalue()

@@ -220,9 +220,17 @@ async def generate_dashboard(
                             [str(item) for item in llm_understanding["notes"]],
                         )
 
-                profiled["kpis"] = [*profiled.get("kpis", []), *_normalize_llm_kpis(_as_list(llm_result.get("kpis")))]
-                profiled["charts"] = [*profiled.get("charts", []), *_normalize_llm_charts(_as_list(llm_result.get("charts")))]
-                profiled["tables"] = [*profiled.get("tables", []), *_normalize_llm_tables(_as_list(llm_result.get("tables")))]
+                llm_kpis = _normalize_llm_kpis(_as_list(llm_result.get("kpis")))
+                llm_charts = _normalize_llm_charts(_as_list(llm_result.get("charts")))
+                llm_tables = _normalize_llm_tables(_as_list(llm_result.get("tables")))
+                if profiled.get("analysis_mode") in {"document_based", "mixed"}:
+                    profiled["kpis"] = [*llm_kpis, *profiled.get("kpis", [])]
+                    profiled["charts"] = [*llm_charts, *profiled.get("charts", [])]
+                    profiled["tables"] = [*llm_tables, *profiled.get("tables", [])]
+                else:
+                    profiled["kpis"] = [*profiled.get("kpis", []), *llm_kpis]
+                    profiled["charts"] = [*profiled.get("charts", []), *llm_charts]
+                    profiled["tables"] = [*profiled.get("tables", []), *llm_tables]
 
                 if isinstance(llm_result.get("insights"), list):
                     insights = _merge_unique(insights, _normalize_insights(llm_result["insights"]))

@@ -9,9 +9,9 @@ from app.agents.dashboard_creator.chart_recommender import recommend_chart_type
 from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type
 
-AMOUNT_HINTS = ("monto", "importe", "total", "precio", "costo", "gasto", "valor", "amount", "price", "cost")
+AMOUNT_HINTS = ("monto", "importe", "total", "precio", "costo", "gasto", "valor", "amount", "price", "cost", "columna1")
 SUPPLIER_HINTS = ("proveedor", "supplier", "vendor", "empresa", "razon", "cliente")
-CATEGORY_HINTS = ("categoria", "category", "rubro", "familia", "tipo", "linea", "producto", "servicio")
+CATEGORY_HINTS = ("categoria", "category", "rubro", "familia", "tipo", "linea", "producto", "servicio", "religion", "religión")
 DATE_HINTS = ("fecha", "date", "periodo", "mes", "month", "year", "ano")
 QUANTITY_HINTS = ("cantidad", "qty", "quantity", "unidades", "items")
 STATUS_HINTS = ("estado", "status", "situacion")
@@ -59,9 +59,64 @@ def _read_table(path: Path, file_type: str) -> pd.DataFrame | None:
     return None
 
 
+def _header_score(row: pd.Series) -> int:
+    text = " ".join(str(value).strip().lower() for value in row.dropna().tolist())
+    hints = (
+        "fecha",
+        "pago",
+        "monto",
+        "nombre",
+        "proveedor",
+        "categoria",
+        "religion",
+        "telefono",
+        "direccion",
+        "edad",
+        "niño",
+        "nino",
+    )
+    non_empty = row.dropna().astype(str).str.strip()
+    return sum(1 for hint in hints if hint in text) + min(len(non_empty), 6)
+
+
+def _dedupe_columns(columns: list[str]) -> list[str]:
+    seen: dict[str, int] = {}
+    clean_columns = []
+    for index, column in enumerate(columns, start=1):
+        base = str(column).strip()
+        if not base or base.lower() in {"nan", "none", "unnamed"}:
+            base = f"Columna {index}"
+        count = seen.get(base, 0)
+        seen[base] = count + 1
+        clean_columns.append(base if count == 0 else f"{base} {count + 1}")
+    return clean_columns
+
+
+def _promote_embedded_header(frame: pd.DataFrame) -> pd.DataFrame:
+    raw_columns = [str(column).lower() for column in frame.columns]
+    unnamed_ratio = sum(column.startswith("unnamed") for column in raw_columns) / max(len(raw_columns), 1)
+    candidate_rows = frame.head(8)
+    best_index = None
+    best_score = 0
+
+    for index, row in candidate_rows.iterrows():
+        score = _header_score(row)
+        if score > best_score:
+            best_score = score
+            best_index = index
+
+    if best_index is None or (unnamed_ratio < 0.45 and best_score < 7):
+        return frame
+
+    promoted = frame.loc[best_index + 1 :].copy()
+    promoted.columns = _dedupe_columns([str(value).strip() for value in frame.loc[best_index].tolist()])
+    return promoted.reset_index(drop=True)
+
+
 def _clean_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    frame = _promote_embedded_header(frame)
     frame = frame.dropna(how="all").dropna(axis=1, how="all")
-    frame.columns = [str(column).strip() for column in frame.columns]
+    frame.columns = _dedupe_columns([str(column).strip() for column in frame.columns])
     return frame
 
 
@@ -89,6 +144,14 @@ def _to_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(series.map(normalize), errors="coerce")
 
 
+def _numeric_likeness(series: pd.Series) -> float:
+    values = series.dropna().astype(str).str.strip()
+    if values.empty:
+        return 0
+    pattern = r"^[S/$€\s-]*\d{1,3}([.,]\d{3})*([.,]\d+)?\s*$|^[S/$€\s-]*\d+([.,]\d+)?\s*$"
+    return float(values.str.match(pattern, case=False).mean())
+
+
 def _detect_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
     numeric_columns: list[str] = []
     date_columns: list[str] = []
@@ -103,10 +166,11 @@ def _detect_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str
         lower = column.lower()
         numeric = _to_numeric(values)
         numeric_ratio = numeric.notna().mean()
+        numeric_likeness = _numeric_likeness(values)
         parsed_dates = pd.to_datetime(values, errors="coerce", dayfirst=True)
         date_ratio = parsed_dates.notna().mean()
 
-        if numeric_ratio >= 0.65 or any(hint in lower for hint in AMOUNT_HINTS + QUANTITY_HINTS):
+        if numeric_likeness >= 0.65 or any(hint in lower for hint in AMOUNT_HINTS + QUANTITY_HINTS):
             numeric_columns.append(column)
         elif date_ratio >= 0.55 or any(hint in lower for hint in DATE_HINTS):
             date_columns.append(column)
@@ -130,6 +194,11 @@ def _hint_column(columns: list[str], hints: tuple[str, ...]) -> str | None:
         if any(hint in lower for hint in hints):
             return column
     return None
+
+
+def _usable_category_columns(columns: list[str]) -> list[str]:
+    noisy_hints = ("direccion", "dirección", "telefono", "teléfono", "nombre", "hoja", "sheet")
+    return [column for column in columns if not any(hint in column.lower() for hint in noisy_hints)]
 
 
 def _format_number(value: float | int | None) -> str:
@@ -182,6 +251,17 @@ def _text_relevance(text: str) -> list[str]:
     lowered = text.lower()
     findings = [keyword for keyword in TEXT_KEYWORDS if keyword in lowered]
     return findings[:8]
+
+
+def _detect_document_title(text: str) -> str | None:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for index, line in enumerate(lines[:35]):
+        upper = line.upper()
+        if "INFORME" in upper and ("ECONOM" in upper or "DASHBOARD" in upper or "REPORTE" in upper):
+            next_line = lines[index + 1].strip() if index + 1 < len(lines) else ""
+            title = f"{line} {next_line}" if next_line and len(line) < 80 and not next_line.lower().startswith(("iasd", "enero", "s/")) else line
+            return " ".join(title.split())[:140]
+    return None
 
 
 def _detect_analysis_type(columns: list[str], document_summaries: list[dict[str, Any]], requested_type: str | None = None) -> str:
@@ -305,6 +385,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
     date_columns: list[str] = []
     category_columns: list[str] = []
     source_files: list[dict[str, Any]] = []
+    suggested_title: str | None = None
 
     for path, filename in files:
         file_type = detect_file_type(filename)
@@ -329,11 +410,15 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
             text, detected_type, file_warnings = read_document_text(path, filename)
             compact = text[:2500]
             findings = _text_relevance(compact)
+            detected_title = _detect_document_title(compact)
+            if detected_title and not suggested_title:
+                suggested_title = detected_title
             document_summaries.append(
                 {
                     "file_name": filename,
                     "detected_type": detected_type,
                     "text_preview": None,
+                    "detected_title": detected_title,
                     "llm_excerpt": compact[:1200],
                     "relevant_findings": findings,
                     "limitations": file_warnings + ["Fuente secundaria: texto extraido, no dataset tabular completo."],
@@ -353,8 +438,9 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
 
     amount_col = _best_column(numeric_columns, AMOUNT_HINTS) if not combined.empty else None
     quantity_col = _best_column(numeric_columns, QUANTITY_HINTS) if not combined.empty else None
-    supplier_col = _best_column(category_columns, SUPPLIER_HINTS) if not combined.empty else None
-    category_col = _best_column(category_columns, CATEGORY_HINTS) if not combined.empty else None
+    usable_category_columns = _usable_category_columns(category_columns)
+    supplier_col = _hint_column(usable_category_columns, SUPPLIER_HINTS) if not combined.empty else None
+    category_col = (_hint_column(usable_category_columns, CATEGORY_HINTS) or _best_column(usable_category_columns, CATEGORY_HINTS)) if not combined.empty else None
     date_col = _best_column(date_columns, DATE_HINTS) if not combined.empty else None
     status_col = _hint_column(category_columns, STATUS_HINTS) if not combined.empty else None
 
@@ -669,5 +755,6 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         "insights": insights[:8],
         "document_summaries": document_summaries,
         "source_files": source_files,
+        "suggested_title": suggested_title,
         "suggested_filters": [column for column in [date_col, supplier_col, category_col, status_col] if column],
     }

@@ -34,7 +34,7 @@ def build_dashboard_result(
         layout.append({"section": "Calidad de datos", "component_type": "alert", "title": "Advertencias", "priority": 6})
 
     return {
-        "dashboard_title": title,
+        "dashboard_title": profiled.get("suggested_title") or title,
         "objective": objective,
         "audience": audience,
         "period": period,
