@@ -197,7 +197,7 @@ export class AgentsService {
         .filter((agent) => filters?.includeHidden || (agent.visibleToBuyer && agent.status !== 'hidden'))
         .map((agent) => this.serializeAgent(agent));
     } catch {
-      return this.getCatalogFallbackAgents(filters);
+      return this.getCatalogFallbackAgentsWithOverrides(filters);
     }
   }
 
@@ -257,7 +257,8 @@ export class AgentsService {
         };
       });
     } catch {
-      return this.getCatalogFallbackAgents({ includeHidden: true }).map((agent) => ({
+      const fallbackAgents = await this.getCatalogFallbackAgentsWithOverrides({ includeHidden: true });
+      return fallbackAgents.map((agent) => ({
         ...agent,
         metrics: this.buildMetrics([], []),
         recommendations: [`Mantener monitoreo de feedback para ${agent.name}; aun no hay patrones recurrentes suficientes.`],
@@ -926,16 +927,31 @@ export class AgentsService {
   }
 
   private getCatalogFallbackAgents(filters?: { category?: string; automationType?: string; includeHidden?: boolean }) {
-    return AGENT_CATALOG.map((agent) => this.serializeAgent({
-      ...agent,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })).filter((agent) => {
+    return this.getCatalogFallbackAgentRecords().map((agent) => this.serializeAgent(agent)).filter((agent) => {
       const visible = filters?.includeHidden || agent.status !== 'hidden';
       const matchesCategory = !filters?.category?.trim() || agent.category === filters.category.trim();
       const matchesAutomation = !filters?.automationType?.trim() || agent.automationType === filters.automationType.trim();
       return visible && matchesCategory && matchesAutomation;
     });
+  }
+
+  private async getCatalogFallbackAgentsWithOverrides(filters?: { category?: string; automationType?: string; includeHidden?: boolean }) {
+    const agentsWithStatus = await this.applyAgentStatusOverrides(this.getCatalogFallbackAgentRecords());
+    return agentsWithStatus.map((agent) => this.serializeAgent(agent)).filter((agent) => {
+      const visible = filters?.includeHidden || agent.status !== 'hidden';
+      const matchesCategory = !filters?.category?.trim() || agent.category === filters.category.trim();
+      const matchesAutomation = !filters?.automationType?.trim() || agent.automationType === filters.automationType.trim();
+      return visible && matchesCategory && matchesAutomation;
+    });
+  }
+
+  private getCatalogFallbackAgentRecords(): AgentRecord[] {
+    const now = new Date();
+    return AGENT_CATALOG.map((agent) => ({
+      ...agent,
+      createdAt: now,
+      updatedAt: now,
+    }));
   }
 
   private async getOrCreateUserPdfBrandingSettings(userId: string) {
