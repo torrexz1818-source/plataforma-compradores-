@@ -457,6 +457,9 @@ const App = () => (
             </Route>
             <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
             <Route path="/admin/dashboard" element={<RequireAuth><Admin /></RequireAuth>} />
+            <Route path="/admin/users" element={<RequireAuth><Admin /></RequireAuth>} />
+            <Route path="/admin/content" element={<RequireAuth><Admin /></RequireAuth>} />
+            <Route path="/admin/agents" element={<RequireAuth><Admin /></RequireAuth>} />
             <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
             <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
             <Route path="/become-expert" element={<GuestOnly><RegisterExpert /></GuestOnly>} />

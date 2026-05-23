@@ -49,6 +49,9 @@ export function AppSidebar() {
           title: 'Administrador',
           grouped: [
             { title: 'Panel administrativo', url: '/admin/dashboard', icon: Shield },
+            { title: 'Administrador de usuarios', url: '/admin/users', icon: Users },
+            { title: 'Administrador de contenido educativo', url: '/admin/content', icon: BookOpen },
+            { title: 'Administrador de agentes IA', url: '/admin/agents', icon: Bot },
             { title: 'Novedades', url: '/novedades', icon: Newspaper },
           ],
         },

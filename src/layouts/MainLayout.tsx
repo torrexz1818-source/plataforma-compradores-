@@ -111,6 +111,9 @@ const MainLayout = ({ children }: MainLayoutProps) => {
           title: 'Administrador',
           items: [
             { to: '/admin/dashboard', label: 'Panel administrativo', icon: LayoutDashboard },
+            { to: '/admin/users', label: 'Administrador de usuarios', icon: Users },
+            { to: '/admin/content', label: 'Administrador de contenido educativo', icon: BookOpen },
+            { to: '/admin/agents', label: 'Administrador de agentes IA', icon: Bot },
             { to: '/novedades', label: 'Novedades', icon: Newspaper },
           ],
         },

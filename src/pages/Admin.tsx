@@ -1,10 +1,11 @@
 ﻿import { useEffect, useMemo, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import {
   ArrowRight,
   Archive,
+  Bot,
   Building2,
   Download,
   Edit,
@@ -157,6 +158,7 @@ function getAvatarClass(role: string) {
 const Admin = () => {
   const queryClient = useQueryClient();
   const { user, isLoading: isAuthLoading } = useAuth();
+  const location = useLocation();
   const [form, setForm] = useState({
     title: '',
     description: '',
@@ -360,25 +362,9 @@ const Admin = () => {
               iconClassName: 'bg-primary/10 text-primary',
               dividerClassName: 'bg-primary',
             },
-            {
-              label: 'Compradores',
-              value: platformStatsQuery.data?.buyers ?? data.users.filter((item) => item.role === 'buyer').length,
-              description: 'Empresas compradoras activas',
-              icon: UserRound,
-              iconClassName: 'bg-destructive/10 text-destructive',
-              dividerClassName: 'bg-destructive',
-            },
-            {
-              label: 'Proveedores',
-              value: platformStatsQuery.data?.suppliers ?? data.users.filter((item) => item.role === 'supplier').length,
-              description: 'Proveedores registrados',
-              icon: Building2,
-              iconClassName: 'bg-success/20 text-success-foreground',
-              dividerClassName: 'bg-success',
-            },
           ]
         : [],
-    [data, platformStatsQuery.data?.buyers, platformStatsQuery.data?.suppliers, platformStatsQuery.data?.totalUsers],
+    [data, platformStatsQuery.data?.totalUsers],
   );
   const membershipsByUserId = useMemo(
     () => new Map((membershipsQuery.data ?? []).map((membership) => [membership.userId, membership])),
@@ -464,6 +450,10 @@ const Admin = () => {
   }, [categories, educationalCategory]);
 
   const showLegacyUsersSection = false;
+  const isUsersAdminView = location.pathname === '/admin/users';
+  const isContentAdminView = location.pathname === '/admin/content';
+  const isAgentsAdminView = location.pathname === '/admin/agents';
+  const isDedicatedAdminView = isContentAdminView || isAgentsAdminView;
 
   if (!isAuthLoading && !user) {
     return <Navigate to="/login" replace />;
@@ -477,6 +467,91 @@ const Admin = () => {
           <p className="text-muted-foreground">
             Solo el administrador superior del ecosistema puede acceder a esta seccion.
           </p>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  if (isUsersAdminView) {
+    const userAdminCards = [
+      {
+        title: 'Comprador',
+        description: 'Administra usuarios compradores registrados en la plataforma.',
+        action: 'Gestionar compradores',
+        icon: UserRound,
+        targetId: 'admin-buyers',
+        iconClassName: 'bg-destructive/10 text-destructive',
+      },
+      {
+        title: 'Proveedor',
+        description: 'Administra usuarios proveedores registrados en la plataforma.',
+        action: 'Gestionar proveedores',
+        icon: Building2,
+        targetId: 'admin-suppliers',
+        iconClassName: 'bg-success/20 text-success-foreground',
+      },
+      {
+        title: 'Verificación de proveedores',
+        description: 'Revisa y aprueba proveedores pendientes de validación.',
+        action: 'Revisar verificaciones',
+        icon: Users,
+        targetId: 'admin-provider-verification',
+        iconClassName: 'bg-primary/10 text-primary',
+      },
+    ];
+
+    return (
+      <MainLayout>
+        <div className="mx-auto w-full max-w-7xl min-w-0 px-3 py-5 space-y-8 overflow-x-hidden sm:px-6 sm:py-8 2xl:max-w-[1440px]">
+          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Administrador de usuarios</h1>
+            <p className="mt-1 text-muted-foreground">
+              Gestiona compradores, proveedores y verificaciones dentro de la plataforma.
+            </p>
+          </motion.div>
+
+          <section className="grid min-w-0 gap-4 md:grid-cols-3">
+            {userAdminCards.map((card) => {
+              const Icon = card.icon;
+
+              return (
+                <Card key={card.title} className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
+                  <CardContent className="flex h-full min-w-0 flex-col gap-4 p-5">
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${card.iconClassName}`}>
+                        <Icon className="h-7 w-7" />
+                      </div>
+                      <div className="min-w-0">
+                        <h2 className="text-base font-semibold text-foreground">{card.title}</h2>
+                        <p className="mt-1 text-sm leading-6 text-muted-foreground">{card.description}</p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-auto justify-start"
+                      onClick={() =>
+                        document.getElementById(card.targetId)?.scrollIntoView({
+                          behavior: 'smooth',
+                          block: 'start',
+                        })
+                      }
+                    >
+                      {card.action}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </section>
+
+          {renderSupplierVerification()}
+
+          <section className="grid lg:grid-cols-2 gap-6">
+            {renderManagedUsers(buyerUsers, 'Compradores', 'admin-buyers')}
+            {renderManagedUsers(supplierUsers, 'Proveedores', 'admin-suppliers')}
+          </section>
         </div>
       </MainLayout>
     );
@@ -572,8 +647,8 @@ const Admin = () => {
     return rawMessage;
   };
 
-  const renderManagedUsers = (users: typeof buyerUsers, roleLabel: string) => (
-    <section className="bg-card rounded-lg border border-border p-5">
+  const renderManagedUsers = (users: typeof buyerUsers, roleLabel: string, sectionId?: string) => (
+    <section id={sectionId} className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-medium text-foreground">{roleLabel}</h2>
@@ -744,6 +819,70 @@ const Admin = () => {
         })}
         {!users.length && <p className="text-sm text-muted-foreground">No hay usuarios en esta categoria.</p>}
       </div>
+    </section>
+  );
+
+  const renderSupplierVerification = () => (
+    <section id="admin-provider-verification" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-medium text-foreground">Verificación de proveedores</h2>
+          <p className="text-sm text-muted-foreground">
+            Solicitudes pendientes antes de habilitar acceso al ecosistema.
+          </p>
+        </div>
+        <Badge variant="outline" className="text-xs">
+          {pendingSupplierUsers.length} pendientes
+        </Badge>
+      </div>
+      {pendingSupplierUsers.length ? (
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="bg-muted/60 text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3 font-medium">Nombre</th>
+                <th className="px-4 py-3 font-medium">Empresa</th>
+                <th className="px-4 py-3 font-medium">Correo</th>
+                <th className="px-4 py-3 font-medium">Sector</th>
+                <th className="px-4 py-3 font-medium">Registro</th>
+                <th className="px-4 py-3 font-medium">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingSupplierUsers.map((supplier) => (
+                <tr key={supplier.id} className="border-t border-border">
+                  <td className="px-4 py-3 font-medium text-foreground">{supplier.fullName}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{supplier.company}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{supplier.email}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{supplier.sector ?? 'General'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{formatDateTime(supplier.createdAt)}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={statusMutation.isPending}
+                        onClick={() => void statusMutation.mutateAsync({ userId: supplier.id, status: 'active' })}
+                      >
+                        Aprobar
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={statusMutation.isPending}
+                        onClick={() => void statusMutation.mutateAsync({ userId: supplier.id, status: 'rejected' })}
+                      >
+                        Rechazar
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground">No hay proveedores pendientes de aprobación.</p>
+      )}
     </section>
   );
 
@@ -998,11 +1137,23 @@ const Admin = () => {
     <MainLayout>
       <div className="mx-auto w-full max-w-7xl min-w-0 px-3 py-5 space-y-8 overflow-x-hidden sm:px-6 sm:py-8 2xl:max-w-[1440px]">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">Panel administrativo</h1>
-          <p className="mt-1 text-muted-foreground">Resumen general del ecosistema</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {isContentAdminView
+              ? 'Administrador de contenido educativo'
+              : isAgentsAdminView
+                ? 'Administrador de agentes IA'
+                : 'Panel administrativo'}
+          </h1>
+          <p className="mt-1 text-muted-foreground">
+            {isContentAdminView
+              ? 'Gestiona, crea y organiza los contenidos educativos publicados dentro de la plataforma.'
+              : isAgentsAdminView
+                ? 'Gestiona, configura y supervisa los agentes de inteligencia artificial disponibles en la plataforma.'
+              : 'Resumen general del ecosistema'}
+          </p>
         </motion.div>
 
-        <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {!isDedicatedAdminView && <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {summaryCards.map((card) => {
             const Icon = card.icon;
 
@@ -1022,9 +1173,9 @@ const Admin = () => {
               </Card>
             );
           })}
-        </section>
+        </section>}
 
-        <section className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {!isDedicatedAdminView && <section className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Card className="min-w-0 rounded-xl border-0 bg-white/90 shadow-[var(--shadow-card)]">
             <CardContent className="flex min-w-0 items-center gap-3 p-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
@@ -1058,9 +1209,9 @@ const Admin = () => {
               </div>
             </CardContent>
           </Card>
-        </section>
+        </section>}
 
-        <section className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        {!isDedicatedAdminView && <section className="grid min-w-0 items-start gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
           <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Usuarios por sector</CardTitle>
@@ -1143,7 +1294,62 @@ const Admin = () => {
               </div>
             </CardContent>
           </Card>
-        </section>
+        </section>}
+
+        {isContentAdminView && (
+          <>
+            <section className="grid min-w-0 gap-4 md:grid-cols-2">
+              {[
+                {
+                  title: 'Gestión de Contenido Educativo',
+                  description: 'Administra recursos, publicaciones, videos y materiales educativos disponibles para los usuarios.',
+                  action: 'Gestionar contenido',
+                  icon: BookOpen,
+                  targetId: 'admin-educational-content',
+                  iconClassName: 'bg-primary/10 text-primary',
+                },
+                {
+                  title: 'Crear contenido',
+                  description: 'Crea nuevos recursos educativos para compradores, proveedores o comunidad.',
+                  action: 'Crear nuevo contenido',
+                  icon: FileText,
+                  targetId: 'admin-content-form',
+                  iconClassName: 'bg-secondary/15 text-secondary',
+                },
+              ].map((card) => {
+                const Icon = card.icon;
+
+                return (
+                  <Card key={card.title} className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
+                    <CardContent className="flex h-full min-w-0 flex-col gap-4 p-5">
+                      <div className="flex min-w-0 items-start gap-4">
+                        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${card.iconClassName}`}>
+                          <Icon className="h-7 w-7" />
+                        </div>
+                        <div className="min-w-0">
+                          <h2 className="text-base font-semibold text-foreground">{card.title}</h2>
+                          <p className="mt-1 text-sm leading-6 text-muted-foreground">{card.description}</p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-auto justify-start"
+                        onClick={() =>
+                          document.getElementById(card.targetId)?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'start',
+                          })
+                        }
+                      >
+                        {card.action}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </section>
 
         <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
           <div id="admin-content-form" className="min-w-0 overflow-hidden bg-card rounded-lg border border-border p-5 space-y-4 scroll-mt-6">
@@ -1632,7 +1838,7 @@ const Admin = () => {
         </section>
 
         <section className="grid lg:grid-cols-2 gap-6">
-          <div className="bg-card rounded-lg border border-border p-5">
+          <div id="admin-educational-content" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
             <h2 className="text-lg font-medium text-foreground mb-4">Gestion de Contenido Educativo</h2>
             {isLoading && <p className="text-sm text-muted-foreground">Cargando contenido...</p>}
             {isError && <p className="text-sm text-destructive">No se pudo cargar el panel.</p>}
@@ -1786,70 +1992,44 @@ const Admin = () => {
             </div>
           </div>
         </section>
+          </>
+        )}
 
-        <section className="bg-card rounded-lg border border-border p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-medium text-foreground">Verificación de proveedores</h2>
-              <p className="text-sm text-muted-foreground">
-                Solicitudes pendientes antes de habilitar acceso al ecosistema.
-              </p>
-            </div>
-            <Badge variant="outline" className="text-xs">
-              {pendingSupplierUsers.length} pendientes
-            </Badge>
-          </div>
-          {pendingSupplierUsers.length ? (
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="bg-muted/60 text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">Nombre</th>
-                    <th className="px-4 py-3 font-medium">Empresa</th>
-                    <th className="px-4 py-3 font-medium">Correo</th>
-                    <th className="px-4 py-3 font-medium">Sector</th>
-                    <th className="px-4 py-3 font-medium">Registro</th>
-                    <th className="px-4 py-3 font-medium">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pendingSupplierUsers.map((supplier) => (
-                    <tr key={supplier.id} className="border-t border-border">
-                      <td className="px-4 py-3 font-medium text-foreground">{supplier.fullName}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{supplier.company}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{supplier.email}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{supplier.sector ?? 'General'}</td>
-                      <td className="px-4 py-3 text-muted-foreground">{formatDateTime(supplier.createdAt)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            disabled={statusMutation.isPending}
-                            onClick={() => void statusMutation.mutateAsync({ userId: supplier.id, status: 'active' })}
-                          >
-                            Aprobar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={statusMutation.isPending}
-                            onClick={() => void statusMutation.mutateAsync({ userId: supplier.id, status: 'rejected' })}
-                          >
-                            Rechazar
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">No hay proveedores pendientes de aprobación.</p>
-          )}
-        </section>
+        {isAgentsAdminView && (
+          <section className="grid min-w-0 gap-4 md:grid-cols-1">
+            <Card className="min-w-0 rounded-xl shadow-[var(--shadow-card)]">
+              <CardContent className="flex h-full min-w-0 flex-col gap-4 p-5">
+                <div className="flex min-w-0 items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                    <Bot className="h-7 w-7" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-base font-semibold text-foreground">Gestión de agentes IA</h2>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Administra los agentes IA de la plataforma, su disponibilidad, estado y configuración.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-auto w-fit justify-start"
+                  onClick={() =>
+                    document.getElementById('admin-ai-agents')?.scrollIntoView({
+                      behavior: 'smooth',
+                      block: 'start',
+                    })
+                  }
+                >
+                  Gestionar agentes IA
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </CardContent>
+            </Card>
+          </section>
+        )}
 
-        <section className="bg-card rounded-lg border border-border p-5">
+        {isAgentsAdminView && <section id="admin-ai-agents" className="scroll-mt-6 bg-card rounded-lg border border-border p-5">
           <div className="mb-4">
             <h2 className="text-lg font-medium text-foreground">Gestion de agentes IA</h2>
             <p className="text-sm text-muted-foreground">
@@ -2066,12 +2246,7 @@ const Admin = () => {
           {!agentUsageQuery.isLoading && !(agentUsageQuery.data ?? []).length ? (
             <p className="mt-3 text-sm text-muted-foreground">Aun no hay operaciones registradas.</p>
           ) : null}
-        </section>
-        <section className="grid lg:grid-cols-2 gap-6">
-          {renderManagedUsers(buyerUsers, 'Compradores')}
-          {renderManagedUsers(supplierUsers, 'Proveedores')}
-        </section>
-
+        </section>}
         {showLegacyUsersSection && <section className="bg-card rounded-lg border border-border p-5">
           <h2 className="text-lg font-medium text-foreground mb-4">Usuarios</h2>
           <div className="space-y-3">
