@@ -400,7 +400,7 @@ const Admin = () => {
       return data.comments;
     }
 
-    return data.comments.filter((comment) => postsById.get(comment.postId)?.category.id === selectedCategoryId);
+    return data.comments.filter((comment) => postsById.get(comment.postId)?.category?.id === selectedCategoryId);
   }, [data?.comments, postsById, selectedCategoryId]);
   const selectedCategory = categories.find((category) => category.id === selectedCategoryId) ?? null;
   const educationalCategory = categories.find((category) => category.slug === 'contenido-educativo') ?? null;
@@ -421,7 +421,7 @@ const Admin = () => {
     return categories.map((category) => ({
       ...category,
       commentsCount: (data?.comments ?? []).filter(
-        (comment) => postsById.get(comment.postId)?.category.id === category.id,
+        (comment) => postsById.get(comment.postId)?.category?.id === category.id,
       ).length,
     }));
   }, [categories, data?.comments, postsById]);
@@ -950,7 +950,7 @@ const Admin = () => {
                   <div>
                     <p className="text-sm font-medium text-foreground">{comment.user.fullName}</p>
                     <p className="text-xs text-muted-foreground">
-                      En {comment.postTitle} - {postsById.get(comment.postId)?.category.name ?? 'Sin categoria'} -{' '}
+                      En {comment.postTitle} - {postsById.get(comment.postId)?.category?.name ?? 'Sin categoria'} -{' '}
                       {comment.repliesCount} respuestas
                     </p>
                   </div>
@@ -1079,12 +1079,12 @@ const Admin = () => {
       description: post.description,
       contentBody: post.contentBody ?? '',
       mediaType: post.mediaType ?? (post.videoUrl ? 'video' : 'image'),
-      categoryId: post.category.id,
+      categoryId: post.category?.id ?? educationalCategory?.id ?? categories[0]?.id ?? 'cat-7',
       learningRoute: postRoute,
       status: post.status ?? 'published',
       accessType: post.accessType ?? 'free',
       isFeatured: Boolean(post.isFeatured),
-      expertName: post.expertName ?? post.author.fullName ?? '',
+      expertName: post.expertName ?? post.author?.fullName ?? '',
     });
     setThumbnailFile(null);
     setVideoFile(null);
@@ -1948,7 +1948,7 @@ const Admin = () => {
                                 )}
                               </div>
                               <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{post.description}</p>
-                              <p className="mt-1 text-xs text-muted-foreground">{post.expertName || post.author.fullName}</p>
+                              <p className="mt-1 text-xs text-muted-foreground">{post.expertName || post.author?.fullName || 'Sin autor'}</p>
                             </div>
                           </div>
                         </td>
