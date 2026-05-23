@@ -259,7 +259,9 @@ function drawCharts(ctx: PdfCtx, charts: DashboardChart[]) {
   charts.forEach((chart, index) => {
     const max = Math.max(...chart.data.map((item) => Number(item.value) || 0), 1);
     const rows = chart.data.slice(0, 10);
-    const height = Math.max(46, 24 + rows.length * 8);
+    const descriptionHeight = measureText(ctx, chart.description, width - 6, { size: 5.8, lineHeight: 3 }).height;
+    const insightHeight = measureText(ctx, chart.insight, width - 6, { size: 5.7, lineHeight: 3 }).height;
+    const height = Math.max(52, 23 + descriptionHeight + rows.length * 8 + insightHeight + 8);
     if (index % 2 === 0) addPageIfNeeded(ctx, height + 8);
     const x = ctx.margin + (index % 2) * (width + gap);
     const y = ctx.y;
@@ -271,7 +273,7 @@ function drawCharts(ctx: PdfCtx, charts: DashboardChart[]) {
     ctx.doc.roundedRect(x + width - 14, y + 3, 11, 5, 2, 2);
     ctx.doc.text(chart.type, x + width - 11.5, y + 6.6);
     addWrappedText(ctx, chart.description, x + 3, y + 13, width - 6, { size: 5.8, color: '#6870c5', lineHeight: 3 });
-    let rowY = y + 23;
+    let rowY = y + 17 + descriptionHeight;
     rows.forEach((item) => {
       const barWidth = Math.max(4, ((Number(item.value) || 0) / max) * (width - 16));
       ctx.doc.setFont('helvetica', 'normal');
@@ -285,7 +287,7 @@ function drawCharts(ctx: PdfCtx, charts: DashboardChart[]) {
       ctx.doc.roundedRect(x + 3, rowY + 2, barWidth, 2.2, 1, 1, 'F');
       rowY += 7.8;
     });
-    addWrappedText(ctx, chart.insight, x + 3, y + height - 7, width - 6, { size: 5.7, color: '#6870c5', lineHeight: 3 });
+    addWrappedText(ctx, chart.insight, x + 3, rowY + 2, width - 6, { size: 5.7, color: '#6870c5', lineHeight: 3 });
     if (index % 2 === 1 || index === charts.length - 1) ctx.y += height + 5;
   });
 }

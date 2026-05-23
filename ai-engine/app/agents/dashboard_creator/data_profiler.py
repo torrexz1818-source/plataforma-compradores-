@@ -9,12 +9,13 @@ from app.agents.dashboard_creator.chart_recommender import recommend_chart_type
 from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type
 
-AMOUNT_HINTS = ("monto", "importe", "total", "precio", "costo", "gasto", "valor", "amount", "price", "cost", "columna1")
+AMOUNT_HINTS = ("monto", "importe", "total", "precio", "costo", "gasto", "valor", "amount", "price", "cost")
 SUPPLIER_HINTS = ("proveedor", "supplier", "vendor", "empresa", "razon", "cliente")
 CATEGORY_HINTS = ("categoria", "category", "rubro", "familia", "tipo", "linea", "producto", "servicio", "religion", "religión")
 DATE_HINTS = ("fecha", "date", "periodo", "mes", "month", "year", "ano")
 QUANTITY_HINTS = ("cantidad", "qty", "quantity", "unidades", "items")
 STATUS_HINTS = ("estado", "status", "situacion")
+NUMERIC_EXCLUDE_HINTS = ("telefono", "teléfono", "celular", "dni", "ruc", "documento", "edad")
 TEXT_KEYWORDS = (
     "proveedor",
     "precio",
@@ -170,7 +171,13 @@ def _detect_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str
         parsed_dates = pd.to_datetime(values, errors="coerce", dayfirst=True)
         date_ratio = parsed_dates.notna().mean()
 
-        if numeric_likeness >= 0.65 or any(hint in lower for hint in AMOUNT_HINTS + QUANTITY_HINTS):
+        has_numeric_hint = any(hint in lower for hint in AMOUNT_HINTS + QUANTITY_HINTS)
+        is_excluded_numeric = any(hint in lower for hint in NUMERIC_EXCLUDE_HINTS)
+        is_generic_numeric = lower.startswith("columna") or lower.startswith("column") or lower.startswith("unnamed")
+
+        if has_numeric_hint and not is_excluded_numeric:
+            numeric_columns.append(column)
+        elif numeric_likeness >= 0.65 and not is_excluded_numeric and not is_generic_numeric:
             numeric_columns.append(column)
         elif date_ratio >= 0.55 or any(hint in lower for hint in DATE_HINTS):
             date_columns.append(column)
@@ -186,6 +193,20 @@ def _best_column(columns: list[str], hints: tuple[str, ...]) -> str | None:
         if any(hint in lower for hint in hints):
             return column
     return columns[0] if columns else None
+
+
+def _is_generic_column(column: str | None) -> bool:
+    if not column:
+        return True
+    lower = column.strip().lower()
+    return lower.startswith("columna") or lower.startswith("column") or lower.startswith("unnamed")
+
+
+def _best_amount_column(columns: list[str]) -> str | None:
+    hinted = _hint_column(columns, AMOUNT_HINTS)
+    if hinted and not _is_generic_column(hinted):
+        return hinted
+    return None
 
 
 def _hint_column(columns: list[str], hints: tuple[str, ...]) -> str | None:
@@ -436,8 +457,10 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
     if combined.empty:
         warnings.append("No se detectaron datos tabulares suficientes; el dashboard se basara en texto extraido si existe.")
 
-    amount_col = _best_column(numeric_columns, AMOUNT_HINTS) if not combined.empty else None
-    quantity_col = _best_column(numeric_columns, QUANTITY_HINTS) if not combined.empty else None
+    amount_col = _best_amount_column(numeric_columns) if not combined.empty else None
+    quantity_col = _hint_column(numeric_columns, QUANTITY_HINTS) if not combined.empty else None
+    if _is_generic_column(quantity_col):
+        quantity_col = None
     usable_category_columns = _usable_category_columns(category_columns)
     supplier_col = _hint_column(usable_category_columns, SUPPLIER_HINTS) if not combined.empty else None
     category_col = (_hint_column(usable_category_columns, CATEGORY_HINTS) or _best_column(usable_category_columns, CATEGORY_HINTS)) if not combined.empty else None

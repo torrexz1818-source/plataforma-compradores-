@@ -52,6 +52,20 @@ def _normalize_llm_kpis(items: list[Any]) -> list[dict[str, Any]]:
     return normalized
 
 
+def _looks_like_numeric_financial_kpi(item: dict[str, Any]) -> bool:
+    haystack = f"{item.get('title', '')} {item.get('description', '')} {item.get('value', '')}".lower()
+    financial_words = ("monto", "total", "ticket", "ingreso", "egreso", "gasto", "financ", "presupuesto", "donacion", "venta")
+    has_financial_word = any(word in haystack for word in financial_words)
+    has_number = any(char.isdigit() for char in str(item.get("value", "")))
+    return has_financial_word and has_number
+
+
+def _filter_llm_financial_kpis(items: list[dict[str, Any]], has_reliable_amount_column: bool) -> list[dict[str, Any]]:
+    if has_reliable_amount_column:
+        return items
+    return [item for item in items if not _looks_like_numeric_financial_kpi(item)]
+
+
 def _normalize_llm_tables(items: list[Any]) -> list[dict[str, Any]]:
     normalized = []
     for index, item in enumerate(items[:4], start=1):
@@ -108,6 +122,12 @@ def _normalize_llm_charts(items: list[Any]) -> list[dict[str, Any]]:
             }
         )
     return normalized
+
+
+def _filter_llm_numeric_charts(items: list[dict[str, Any]], has_reliable_amount_column: bool) -> list[dict[str, Any]]:
+    if has_reliable_amount_column:
+        return items
+    return [item for item in items if item.get("data_source") == "suggested" and not item.get("data")]
 
 
 def _normalize_observations(items: list[Any]) -> list[dict[str, Any]]:
@@ -220,8 +240,12 @@ async def generate_dashboard(
                             [str(item) for item in llm_understanding["notes"]],
                         )
 
-                llm_kpis = _normalize_llm_kpis(_as_list(llm_result.get("kpis")))
-                llm_charts = _normalize_llm_charts(_as_list(llm_result.get("charts")))
+                has_reliable_amount_column = bool(profiled["profile"].get("numeric_columns")) and any(
+                    any(hint in str(column).lower() for hint in ("monto", "importe", "total", "precio", "costo", "gasto", "valor", "amount", "price", "cost"))
+                    for column in profiled["profile"].get("numeric_columns", [])
+                )
+                llm_kpis = _filter_llm_financial_kpis(_normalize_llm_kpis(_as_list(llm_result.get("kpis"))), has_reliable_amount_column)
+                llm_charts = _filter_llm_numeric_charts(_normalize_llm_charts(_as_list(llm_result.get("charts"))), has_reliable_amount_column)
                 llm_tables = _normalize_llm_tables(_as_list(llm_result.get("tables")))
                 if profiled.get("analysis_mode") in {"document_based", "mixed"}:
                     profiled["kpis"] = [*llm_kpis, *profiled.get("kpis", [])]
