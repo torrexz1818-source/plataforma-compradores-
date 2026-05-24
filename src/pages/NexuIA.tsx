@@ -1711,7 +1711,7 @@ const NexuIA = () => {
   };
 
   return (
-    <div className="min-w-0 space-y-6 pb-8">
+    <div className="responsive-agent-page min-w-0 space-y-6 pb-8">
       <section className="overflow-hidden rounded-2xl border border-[#2e24ba]/15 bg-[linear-gradient(135deg,#1f1fae_0%,#3325b8_38%,#4f31cb_70%,#6844dc_100%)] shadow-[0_24px_60px_rgba(54,33,170,0.22)] sm:rounded-[32px]">
         <div className="grid min-w-0 gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[1.35fr_0.95fr] lg:items-center lg:px-8 lg:py-9">
           <div className="min-w-0">
@@ -1732,7 +1732,7 @@ const NexuIA = () => {
           </div>
 
           <div className="flex min-w-0 flex-col gap-4 lg:items-end lg:justify-center">
-            <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-[420px] lg:grid-cols-1">
+            <div className="grid w-full gap-3 lg:max-w-[420px] lg:grid-cols-1">
               {marketplaceStats.map((item) => {
                 const Icon = item.icon;
 
@@ -1776,7 +1776,7 @@ const NexuIA = () => {
               />
             </div>
 
-            <div className="grid min-w-0 gap-4 md:grid-cols-2">
+            <div className="grid min-w-0 gap-4 lg:grid-cols-2">
               {filteredAgents.map((agent) => {
                 const Icon = getAgentIcon(agent.icon);
                 const isSelected = selectedAgentId === agent.id;
@@ -2023,7 +2023,7 @@ const NexuIA = () => {
                           <div className="space-y-5">
                             <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
                               <p className="text-sm font-medium text-foreground">Paso 1 - Información general del dashboard</p>
-                              <div className="grid gap-3 md:grid-cols-2">
+                              <div className="grid gap-3 lg:grid-cols-2">
                                 <div className="space-y-1.5">
                                   <label className="text-sm font-medium text-foreground/80">Nombre del dashboard *</label>
                                   <Input value={dashboardForm.title} onChange={(event) => updateDashboardForm('title', event.target.value)} placeholder="Ejemplo: Dashboard de gastos por proveedor 2026" className="rounded-xl border-primary/15" />
@@ -2110,7 +2110,7 @@ const NexuIA = () => {
                           <div className="space-y-5">
                             <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
                               <p className="text-sm font-medium text-foreground">Paso 1 - Datos generales</p>
-                              <div className="grid gap-3 md:grid-cols-2">
+                              <div className="grid gap-3 lg:grid-cols-2">
                                 <div className="space-y-1.5">
                                   <label className="text-sm font-medium text-foreground/80">Nombre del análisis *</label>
                                   <Input
@@ -2420,7 +2420,7 @@ const NexuIA = () => {
                         <div data-export-hidden="true">{renderExportControls(handleDownloadTermsPdf)}</div>
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-4">
+                      <div className="grid gap-3 lg:grid-cols-4">
                         {[
                           ['Nombre', termsResult.title],
                           ['Tipo', termsResult.requirement_type],
@@ -2434,7 +2434,7 @@ const NexuIA = () => {
                         ))}
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-3">
+                      <div className="grid gap-3 lg:grid-cols-3">
                         {(termsResult.dashboard_metrics?.length ? termsResult.dashboard_metrics : [
                           { label: 'Riesgo informacion faltante', value: termsResult.risk_level ?? 'Medio', status: 'warning' },
                           { label: 'Documentos cargados', value: String(termsResult.supporting_documents_summary.length), status: 'neutral' },
@@ -2462,7 +2462,7 @@ const NexuIA = () => {
 
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
                         <p className="text-sm font-medium text-foreground">Entregables para enviar a proveedores</p>
-                        <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <div className="mt-3 grid gap-3 lg:grid-cols-3">
                           <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
                             <p className="text-sm font-medium text-foreground">Bases sugeridas para licitación</p>
                             <p className="mt-2 text-xs leading-5 text-muted-foreground">
@@ -2524,7 +2524,7 @@ const NexuIA = () => {
                           </Accordion>
                         </TabsContent>
 
-                        <TabsContent value="calidad" className="mt-4 grid gap-4 md:grid-cols-2">
+                        <TabsContent value="calidad" className="mt-4 grid gap-4 lg:grid-cols-2">
                           <div className="rounded-xl border border-primary/15 p-4">
                             <p className="text-sm font-medium text-foreground">Checklist de calidad</p>
                             <div className="mt-3 space-y-2">
@@ -2557,7 +2557,7 @@ const NexuIA = () => {
                             <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium text-foreground">Objeto:</span> {termsResult.tender_bases?.object ?? 'No especificado'}</p>
                             <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium text-foreground">Alcance:</span> {termsResult.tender_bases?.scope ?? 'No especificado'}</p>
                           </div>
-                          <div className="grid gap-3 md:grid-cols-2">
+                          <div className="grid gap-3 lg:grid-cols-2">
                             {[
                               ['Requisitos mínimos del proveedor', termsResult.tender_bases?.minimum_supplier_requirements],
                               ['Documentación solicitada', termsResult.tender_bases?.requested_documentation],
@@ -2604,7 +2604,7 @@ const NexuIA = () => {
                         </TabsContent>
 
                         <TabsContent value="proceso" className="mt-4">
-                          <div className="grid gap-2 md:grid-cols-2">
+                          <div className="grid gap-2 lg:grid-cols-2">
                             {(termsResult.tender_process?.length ? termsResult.tender_process : [
                               'Validar término de referencia',
                               'Seleccionar proveedores invitados',
@@ -2712,7 +2712,7 @@ const NexuIA = () => {
                       {(dashboardResult.source_files?.length || dashboardResult.document_summaries?.length) ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Archivos analizados</p>
-                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          <div className="mt-3 grid gap-2 lg:grid-cols-2">
                             {(dashboardResult.document_summaries?.length ? dashboardResult.document_summaries : dashboardResult.source_files).map((file) => (
                               <div key={`${file.file_name}-${file.detected_type}`} className="rounded-xl bg-primary/5 p-3">
                                 <p className="text-sm font-medium text-foreground">{file.file_name}</p>
@@ -2763,7 +2763,7 @@ const NexuIA = () => {
                       {dashboardResult.observations.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Observaciones</p>
-                          <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          <div className="mt-3 grid gap-2 lg:grid-cols-2">
                             {dashboardResult.observations.map((observation) => (
                               <div key={`${observation.type}-${observation.title}`} className="rounded-xl bg-primary/5 p-3">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -2777,7 +2777,7 @@ const NexuIA = () => {
                         </div>
                       ) : null}
 
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Insights detectados</p>
                           <div className="mt-3 space-y-2">
@@ -2796,7 +2796,7 @@ const NexuIA = () => {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Calidad de datos</p>
                           <p className="mt-2 text-sm text-muted-foreground">
@@ -2828,7 +2828,7 @@ const NexuIA = () => {
                         <div data-export-hidden="true">{renderExportControls(handleDownloadTcoPdf)}</div>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">Mejor alternativa</p>
                           <p className="mt-2 text-lg font-semibold text-foreground">{tcoResult.executive_summary.best_alternative}</p>
@@ -2892,7 +2892,7 @@ const NexuIA = () => {
 
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
                         <p className="text-sm font-medium text-foreground">B. Datos usados</p>
-                        <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="mt-3 grid gap-3 lg:grid-cols-2">
                           {tcoResult.data_used.map((item, index) => (
                             <div key={index} className="rounded-xl bg-primary/5 p-3">
                               {renderRecordBlock(item)}
@@ -2931,7 +2931,7 @@ const NexuIA = () => {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">D. Ranking</p>
                           <div className="mt-3 space-y-2">
@@ -2950,7 +2950,7 @@ const NexuIA = () => {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">F. Análisis de sensibilidad</p>
                           {renderRecordBlock(tcoResult.sensitivity_analysis)}
@@ -2971,7 +2971,7 @@ const NexuIA = () => {
                       {tcoResult.risk_analysis.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Análisis de riesgos</p>
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <div className="mt-3 grid gap-3 lg:grid-cols-2">
                             {tcoResult.risk_analysis.map((item, index) => (
                               <div key={index} className="rounded-xl bg-primary/5 p-3">
                                 {renderRecordBlock(item)}
@@ -2981,7 +2981,7 @@ const NexuIA = () => {
                         </div>
                       ) : null}
 
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">H. Preguntas o datos faltantes</p>
                           {renderValueList([...tcoResult.missing_information, ...tcoResult.questions_for_user_or_suppliers])}
@@ -2995,7 +2995,7 @@ const NexuIA = () => {
                       {tcoResult.supporting_documents_summary.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Documentos de apoyo leídos</p>
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <div className="mt-3 grid gap-3 lg:grid-cols-2">
                             {tcoResult.supporting_documents_summary.map((item, index) => (
                               <div key={index} className="rounded-xl bg-primary/5 p-3">
                                 {renderRecordBlock(item)}
@@ -3219,7 +3219,7 @@ const NexuIA = () => {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-3">
+                      <div className="grid gap-4 lg:grid-cols-3">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Riesgos globales</p>
                           <ul className="mt-2 space-y-1 text-sm text-muted-foreground">

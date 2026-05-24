@@ -73,4 +73,49 @@
     border: 1px solid var(--border-soft);
     box-shadow: var(--shadow-card);
   }
+
+  @media (max-width: 900px) {
+    .topbar-shell {
+      gap: 0.5rem;
+      padding-inline: 0.75rem;
+    }
+
+    .topbar-shell > a {
+      min-width: 0;
+      font-size: clamp(0.95rem, 4vw, 1.125rem);
+      line-height: 1.2;
+    }
+
+    .topbar-shell > div:last-child {
+      gap: 0.375rem;
+    }
+
+    .responsive-agent-page,
+    .responsive-agent-page * {
+      min-width: 0;
+    }
+
+    .responsive-agent-page .grid {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .responsive-agent-page p,
+    .responsive-agent-page span,
+    .responsive-agent-page li,
+    .responsive-agent-page label,
+    .responsive-agent-page h1,
+    .responsive-agent-page h2,
+    .responsive-agent-page h3,
+    .responsive-agent-page th,
+    .responsive-agent-page td {
+      overflow-wrap: anywhere;
+      word-break: normal;
+    }
+
+    .responsive-agent-page input,
+    .responsive-agent-page textarea,
+    .responsive-agent-page select {
+      width: 100%;
+    }
+  }
 }
