@@ -818,7 +818,7 @@ const NexuIA = () => {
   };
 
   const handleGenerateTerms = async () => {
-    const requiredFields = ['title', 'requirement_type', 'objective', 'scope', 'deliverables', 'justification'];
+    const requiredFields = ['title', 'requirement_type', 'objective', 'scope', 'deliverables'];
     const hasMissingRequired = requiredFields.some((field) => !termsFields[field]?.trim());
 
     if (!termsInitialDescription.trim()) {
@@ -833,7 +833,7 @@ const NexuIA = () => {
     if (hasMissingRequired) {
       toast({
         title: 'Completa los campos obligatorios antes de generar el término de referencia.',
-        description: 'Revisa nombre, tipo, objetivo, alcance, entregables y justificación.',
+        description: 'Revisa nombre, tipo, objetivo, alcance y entregables.',
         variant: 'destructive',
       });
       return;
@@ -912,7 +912,6 @@ const NexuIA = () => {
       result: termsGenerateMutation.data as unknown as Record<string, unknown>,
       fileName: 'termino-referencia-nodus-ia',
       operationName: 'Descarga término de referencia',
-      captureElementId: 'terms-reference-export-view',
     });
   };
 
@@ -1024,7 +1023,6 @@ const NexuIA = () => {
       result: tcoAnalysisMutation.data as unknown as Record<string, unknown>,
       fileName: 'analisis-tco-nodus-ia',
       operationName: 'Descarga análisis TCO',
-      captureElementId: 'tco-analysis-export-view',
     });
   };
 
@@ -1035,7 +1033,6 @@ const NexuIA = () => {
       result: dashboardCreatorMutation.data as unknown as Record<string, unknown>,
       fileName: 'dashboard-nodus-ia',
       operationName: 'Descarga dashboard',
-      captureElementId: 'dashboard-creator-export-view',
     });
   };
 

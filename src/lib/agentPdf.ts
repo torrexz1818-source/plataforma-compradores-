@@ -695,6 +695,140 @@ function addProposalComparisonPdf(input: PdfInput) {
   ctx.doc.save(input.fileName ?? 'comparativo-propuestas-nodus-ia.pdf');
 }
 
+function addDashboardResultPdf(input: PdfInput) {
+  const result = asRecord(input.result);
+  const ctx = createContext(input);
+  const subtitle = `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Confianza: ${asText(result.confidence_level)}`;
+
+  addHeader(ctx, input, subtitle);
+  addCard(ctx, 'Resumen ejecutivo', [
+    shortText(result.executive_summary, 360),
+    `Tipo de datos: ${asText(result.data_type)}`,
+    `Confianza: ${asText(result.confidence_level)} - ${shortText(result.confidence_reason, 180)}`,
+  ]);
+
+  const kpis = asArray(result.kpis).map(asRecord);
+  if (kpis.length) {
+    addSection(ctx, 'KPIs principales');
+    addTable(
+      ctx,
+      ['KPI', 'Valor', 'Descripcion', 'Fuente', 'Confianza'],
+      kpis.map((kpi) => [kpi.title, kpi.value, kpi.description, kpi.source, kpi.confidence]),
+      [36, 27, 58, 32, ctx.maxWidth - 153],
+    );
+  }
+
+  const charts = asArray(result.charts).map(asRecord);
+  if (charts.length) {
+    addSection(ctx, 'Graficos y datos base');
+    addTable(
+      ctx,
+      ['Grafico', 'Tipo', 'Datos mostrados', 'Insight'],
+      chartRows(charts).map((row) => [row.chart, row.type, row.data, row.insight]),
+      [38, 24, 62, ctx.maxWidth - 124],
+    );
+    addText(ctx, 'Los graficos se documentan con la misma data generada por el agente para que el reporte sea editable y auditable.', {
+      size: 8.2,
+      color: '#64748b',
+    });
+  }
+
+  const tables = asArray(result.tables).map(asRecord);
+  if (tables.length) {
+    addSection(ctx, 'Tablas del dashboard');
+    tables.slice(0, 6).forEach((table) => {
+      addText(ctx, asText(table.title, 'Tabla resumen'), { size: 9.5, bold: true, color: '#0f172a' });
+      if (table.description) addText(ctx, shortText(table.description, 220), { size: 8.5, color: '#64748b' });
+      const rows = dashboardTableRows(table);
+      const keys = Object.keys(rows[0] ?? {}).slice(0, 5);
+      if (keys.length) {
+        addTable(
+          ctx,
+          keys,
+          rows.slice(0, 10).map((row) => keys.map((key) => row[key])),
+          keys.map(() => ctx.maxWidth / keys.length),
+        );
+      }
+    });
+  }
+
+  const insights = asArray(result.insights).map(asRecord);
+  if (insights.length) {
+    addSection(ctx, 'Insights accionables');
+    addTable(
+      ctx,
+      ['Insight', 'Descripcion', 'Impacto', 'Accion sugerida'],
+      insights.map((item) => [item.title, item.description, item.impact, item.recommended_action]),
+      [38, 58, 26, ctx.maxWidth - 122],
+    );
+  }
+
+  const observations = asArray(result.observations).map(asRecord);
+  if (observations.length) {
+    addSection(ctx, 'Observaciones');
+    addTable(
+      ctx,
+      ['Observacion', 'Tipo', 'Descripcion'],
+      observations.map((item) => [item.title, item.type, item.description]),
+      [48, 28, ctx.maxWidth - 76],
+    );
+  }
+
+  addSection(ctx, 'Recomendaciones');
+  addBulletList(ctx, 'Acciones sugeridas', asArray(result.recommendations), 8);
+  addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 8);
+
+  const dataProfile = asRecord(result.data_profile);
+  const qualityWarnings = asArray(dataProfile.data_quality_warnings);
+  if (qualityWarnings.length || result.data_understanding || result.extracted_data_quality) {
+    addSection(ctx, 'Calidad de datos');
+    if (result.data_understanding) addText(ctx, shortText(result.data_understanding, 360), { size: 8.7, color: '#334155' });
+    if (result.extracted_data_quality) addValueBlock(ctx, 'extracted_data_quality', result.extracted_data_quality);
+    addBulletList(ctx, 'Advertencias de calidad', qualityWarnings, 8);
+  }
+
+  const sourceFiles = asArray(result.source_files).map(asRecord);
+  if (sourceFiles.length) {
+    addSection(ctx, 'Archivos procesados');
+    addTable(
+      ctx,
+      ['Archivo', 'Tipo', 'Filas', 'Columnas', 'Estado'],
+      sourceFiles.map((item) => [item.file_name ?? item.name, item.detected_type ?? item.type, item.rows, item.columns, item.status ?? item.confidence]),
+      [48, 26, 22, 24, ctx.maxWidth - 120],
+    );
+  }
+
+  addAdditionalResultSections(ctx, result, [
+    'dashboard_title',
+    'audience',
+    'period',
+    'data_type',
+    'confidence_level',
+    'confidence_reason',
+    'executive_summary',
+    'kpis',
+    'charts',
+    'tables',
+    'insights',
+    'observations',
+    'recommendations',
+    'missing_information',
+    'data_profile',
+    'data_understanding',
+    'extracted_data_quality',
+    'source_files',
+    'disclaimer',
+  ]);
+
+  addSection(ctx, 'Disclaimer');
+  addText(ctx, asText(result.disclaimer, 'Dashboard generado por Nodus IA como apoyo ejecutivo. Validar los datos fuente antes de tomar decisiones finales.'), {
+    size: 8.5,
+    color: '#64748b',
+  });
+  addFooter(ctx);
+  ctx.doc.save(input.fileName ?? 'dashboard-nodus-ia.pdf');
+}
+
 function addAdditionalResultSections(ctx: PdfContext, result: Record<string, unknown>, coveredKeys: string[]) {
   const covered = new Set(coveredKeys);
   orderedResultEntries(result).forEach(([key, value]) => {
@@ -1760,6 +1894,10 @@ export async function downloadAgentResultPdf(input: PdfInput) {
   }
   if (isProposalComparison(input.result)) {
     addProposalComparisonPdf(input);
+    return;
+  }
+  if (isDashboardResult(input.result)) {
+    addDashboardResultPdf(input);
     return;
   }
   addGenericPdf(input);

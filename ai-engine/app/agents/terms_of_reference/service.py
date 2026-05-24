@@ -30,6 +30,7 @@ REDUNDANT_FORM_FIELDS = {
     "compliance_notes",
     "requesting_area",
     "request_owner",
+    "justification",
 }
 
 
@@ -301,7 +302,7 @@ async def generate_terms_of_reference(
     scope: str,
     activities: str | None,
     deliverables: str,
-    justification: str,
+    justification: str | None,
     safety_requirements: str | None,
     budget_project: str | None,
     budget_cost_center: str | None,
@@ -320,7 +321,6 @@ async def generate_terms_of_reference(
         "objective": objective,
         "scope": scope,
         "deliverables": deliverables,
-        "justification": justification,
     }
     missing = [name for name, value in required.items() if not value or not value.strip()]
     if missing:
@@ -350,6 +350,11 @@ async def generate_terms_of_reference(
 
         parsed_safety = _parse_json_field(safety_requirements, [])
         parsed_dynamic = _parse_json_field(dynamic_form_data, {})
+        derived_justification = (
+            (justification or "").strip()
+            or str(parsed_dynamic.get("important_observations") or "").strip()
+            or f"El requerimiento se sustenta en la necesidad descrita por el comprador: {initial_description.strip()}"
+        )
         budget_chain = {
             "project": budget_project or None,
             "cost_center": budget_cost_center or None,
@@ -368,7 +373,7 @@ async def generate_terms_of_reference(
             "scope": scope,
             "activities": activities,
             "deliverables": deliverables,
-            "justification": justification,
+            "justification": derived_justification,
             "safety_requirements": parsed_safety,
             "budget_chain": budget_chain,
             "additional_instructions": additional_instructions,

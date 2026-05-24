@@ -124,7 +124,6 @@ def base_form_sections(category: str | None = None) -> list[dict[str, Any]]:
             "section_title": "Objetivo y justificacion",
             "fields": [
                 {"name": "objective", "label": "Objetivo de la contratacion", "type": "textarea", "required": True, "placeholder": "Describe que se busca lograr con este requerimiento.", "options": []},
-                {"name": "justification", "label": "Justificacion", "type": "textarea", "required": True, "placeholder": "Explica que problema resuelve, que riesgo evita o que necesidad atiende.", "options": []},
                 {"name": "important_observations", "label": "Observaciones importantes", "type": "textarea", "required": False, "placeholder": "Agrega riesgos, restricciones, condiciones criticas, antecedentes, urgencia, impactos o puntos que el proveedor debe considerar.", "options": []},
             ],
         },

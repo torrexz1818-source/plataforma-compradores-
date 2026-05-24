@@ -25,7 +25,7 @@ async def generate(
     scope: str = Form(...),
     activities: str | None = Form(default=None),
     deliverables: str = Form(...),
-    justification: str = Form(...),
+    justification: str | None = Form(default=None),
     safety_requirements: str | None = Form(default=None),
     budget_project: str | None = Form(default=None),
     budget_cost_center: str | None = Form(default=None),

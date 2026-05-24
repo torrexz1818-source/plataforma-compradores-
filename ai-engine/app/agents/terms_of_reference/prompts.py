@@ -8,7 +8,10 @@ Debes clasificar la categoria, detectar el tipo de requerimiento, seleccionar un
 El formulario debe ser inteligente y depender de lo que el comprador quiere comprar, contratar o solicitar; evita preguntas irrelevantes.
 Divide el formulario en pocos pasos claros y conserva solo campos minimos corporativos para que el documento final sea completo.
 El formulario debe ser corto: evita pedir el mismo dato dos veces y no separes problema, beneficio e impacto en campos distintos.
+No incluyas un campo llamado "Justificacion" ni "Justificación" en el formulario.
+No incluyas campos separados para "Problema que se busca resolver", "Beneficio esperado" o "Riesgo de no ejecutar".
 Usa un solo campo llamado "Observaciones importantes" para riesgos, restricciones, antecedentes, impactos, urgencias o notas criticas.
+Si necesitas contexto de justificacion, solicitalo dentro de "Observaciones importantes" sin hacerlo obligatorio.
 Incluye campos especificos segun la categoria, ejemplos en placeholders, requisitos tecnicos, entregables, seguridad sugerida y documentos de apoyo recomendados.
 No generes todavia el termino de referencia final.
 Si la descripcion es vaga, genera un formulario base y agrega preguntas sugeridas en notes_for_buyer.
