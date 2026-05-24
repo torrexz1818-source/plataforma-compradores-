@@ -32,7 +32,6 @@ import {
   recordAgentUsage,
   runAgent,
   submitAgentFeedback,
-  consumeAiCredit,
   validateAgentPdfMode,
 } from '@/lib/api';
 import { nodusIaAgents } from '../../shared/nodusIaAgents';
@@ -453,22 +452,8 @@ const NexuIA = () => {
   ];
 
   const ensureNodusIaCredit = async () => {
-    if (user?.role === 'admin') {
-      setLimitNotice('');
-      setShowUpgradePanel(false);
-      return true;
-    }
-
-    const result = await consumeAiCredit();
-    if (!result.allowed) {
-      setLimitNotice('Has alcanzado tu límite de créditos IA. Mejora tu plan o compra créditos adicionales para continuar.');
-      setShowUpgradePanel(true);
-      return false;
-    }
-
     setLimitNotice('');
     setShowUpgradePanel(false);
-    await queryClient.invalidateQueries({ queryKey: ['monetization', 'mine'] });
     return true;
   };
 
