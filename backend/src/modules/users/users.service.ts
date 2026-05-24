@@ -111,7 +111,7 @@ type ProfileViewNotificationRecord = {
 const DUPLICATE_EMAIL_MESSAGE =
   'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.';
 
-const ADMIN_UNLIMITED_AI_CREDITS = 999999999;
+const TEMP_UNLIMITED_AI_CREDITS = 999999999;
 
 @Injectable()
 export class UsersService {
@@ -303,8 +303,8 @@ export class UsersService {
       creditPacks: aiCreditPacks,
       additionalServices,
       entitlements: {
-        aiCreditsRemaining: normalized.aiCreditsBalance ?? 0,
-        aiCreditsMonthlyIncluded: normalized.aiCreditsMonthlyIncluded ?? 0,
+        aiCreditsRemaining: TEMP_UNLIMITED_AI_CREDITS,
+        aiCreditsMonthlyIncluded: TEMP_UNLIMITED_AI_CREDITS,
         aiCreditsUsedThisPeriod: normalized.aiCreditsUsedThisPeriod ?? 0,
         agentBranding: plan.agentBranding,
         companyLogoUrl: normalized.companyLogoUrl,
@@ -357,39 +357,10 @@ export class UsersService {
   }
 
   async consumeAiCredit(userId: string) {
-    const user = await this.requireActiveUser(userId);
-
-    if (user.role === UserRole.ADMIN) {
-      return {
-        allowed: true,
-        remainingCredits: ADMIN_UNLIMITED_AI_CREDITS,
-        overview: await this.getMonetizationOverview(userId),
-      };
-    }
-
-    const membership = await this.normalizeCreditPeriod(await this.ensureMembershipForUser(userId));
-    const available = membership.aiCreditsBalance ?? 0;
-    if (available < 1) {
-      return {
-        allowed: false,
-        reason: 'NO_AI_CREDITS',
-        remainingCredits: available,
-        overview: await this.getMonetizationOverview(userId),
-      };
-    }
-
-    await this.membershipsCollection().updateOne(
-      { userId },
-      {
-        $inc: { aiCreditsBalance: -1, aiCreditsUsedThisPeriod: 1 },
-        $set: { updatedAt: new Date() },
-      },
-    );
-
-    const updated = await this.ensureMembershipForUser(userId);
+    await this.requireActiveUser(userId);
     return {
       allowed: true,
-      remainingCredits: updated.aiCreditsBalance ?? 0,
+      remainingCredits: TEMP_UNLIMITED_AI_CREDITS,
       overview: await this.getMonetizationOverview(userId),
     };
   }
@@ -1373,8 +1344,8 @@ export class UsersService {
       plan: 'premium',
       status: 'active',
       adminApproved: true,
-      aiCreditsBalance: ADMIN_UNLIMITED_AI_CREDITS,
-      aiCreditsMonthlyIncluded: ADMIN_UNLIMITED_AI_CREDITS,
+      aiCreditsBalance: TEMP_UNLIMITED_AI_CREDITS,
+      aiCreditsMonthlyIncluded: TEMP_UNLIMITED_AI_CREDITS,
       aiCreditsUsedThisPeriod: 0,
       aiCreditsPeriod: this.currentCreditPeriod(),
       createdAt: user.createdAt,
@@ -1388,7 +1359,7 @@ export class UsersService {
         name: 'Administrador ilimitado',
         priceLabel: 'Ilimitado',
         priceAmount: 0,
-        aiCreditsMonthly: ADMIN_UNLIMITED_AI_CREDITS,
+        aiCreditsMonthly: TEMP_UNLIMITED_AI_CREDITS,
         limits: {
           ...premiumBuyerPlan.limits,
           aiCredits: 'ilimitado',
@@ -1399,8 +1370,8 @@ export class UsersService {
       creditPacks: aiCreditPacks,
       additionalServices,
       entitlements: {
-        aiCreditsRemaining: ADMIN_UNLIMITED_AI_CREDITS,
-        aiCreditsMonthlyIncluded: ADMIN_UNLIMITED_AI_CREDITS,
+        aiCreditsRemaining: TEMP_UNLIMITED_AI_CREDITS,
+        aiCreditsMonthlyIncluded: TEMP_UNLIMITED_AI_CREDITS,
         aiCreditsUsedThisPeriod: 0,
         agentBranding: 'custom_brand' as const,
       },
