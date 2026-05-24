@@ -1,23 +1,11 @@
 import jsPDF from 'jspdf';
-import {
-  AlignmentType,
-  BorderStyle,
-  Document,
-  Footer,
-  Packer,
-  PageNumber,
-  Paragraph,
-  Table,
-  TableCell,
-  TableRow,
-  TextRun,
-  WidthType,
-} from 'docx';
-import pptxgen from 'pptxgenjs';
-import * as XLSX from 'xlsx';
 import type { AgentPdfMode, AgentPdfOptions } from '@/types';
 
 export type AgentExportFormat = 'pdf' | 'docx' | 'pptx' | 'xlsx';
+type DocxModule = typeof import('docx');
+type XlsxModule = typeof import('xlsx');
+type DocxChild = import('docx').Paragraph | import('docx').Table;
+type PptxSlide = import('pptxgenjs').Slide;
 
 type PdfInput = {
   title: string;
@@ -725,7 +713,7 @@ function normalizeSheetName(name: string, used: Set<string>) {
   return candidate;
 }
 
-function addMetadataSheet(workbook: XLSX.WorkBook, input: AgentExportInput, result: Record<string, unknown>) {
+function addMetadataSheet(XLSX: XlsxModule, workbook: import('xlsx').WorkBook, input: AgentExportInput, result: Record<string, unknown>) {
   const mode = input.pdfMode ?? 'standard_branded';
   const rows = [
     ['Titulo', input.title],
@@ -742,10 +730,11 @@ function addMetadataSheet(workbook: XLSX.WorkBook, input: AgentExportInput, resu
   XLSX.utils.book_append_sheet(workbook, sheet, 'Resumen');
 }
 
-function downloadAgentResultXlsx(input: AgentExportInput) {
+async function downloadAgentResultXlsx(input: AgentExportInput) {
+  const XLSX = await import('xlsx');
   const result = asRecord(input.result);
   const workbook = XLSX.utils.book_new();
-  addMetadataSheet(workbook, input, result);
+  addMetadataSheet(XLSX, workbook, input, result);
   const used = new Set<string>(['Resumen']);
 
   getExportSections(result).forEach(([key, value]) => {
@@ -762,11 +751,11 @@ function downloadAgentResultXlsx(input: AgentExportInput) {
   XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
 }
 
-function docxParagraph(text: string, options: { heading?: boolean; bold?: boolean; color?: string } = {}) {
-  return new Paragraph({
+function docxParagraph(docx: DocxModule, text: string, options: { heading?: boolean; bold?: boolean; color?: string } = {}): import('docx').Paragraph {
+  return new docx.Paragraph({
     spacing: { after: options.heading ? 180 : 90 },
     children: [
-      new TextRun({
+      new docx.TextRun({
         text,
         bold: Boolean(options.bold || options.heading),
         color: options.color ?? (options.heading ? '09008B' : '1F2937'),
@@ -776,23 +765,23 @@ function docxParagraph(text: string, options: { heading?: boolean; bold?: boolea
   });
 }
 
-function docxTableFromRows(rows: Array<Record<string, unknown>>) {
+function docxTableFromRows(docx: DocxModule, rows: Array<Record<string, unknown>>): import('docx').Table | undefined {
   const keys = Object.keys(rows[0] ?? {}).slice(0, 6);
   if (!keys.length) return undefined;
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
+  return new docx.Table({
+    width: { size: 100, type: docx.WidthType.PERCENTAGE },
     rows: [
-      new TableRow({
+      new docx.TableRow({
         tableHeader: true,
-        children: keys.map((key) => new TableCell({
+        children: keys.map((key) => new docx.TableCell({
           shading: { fill: 'EEF2FF' },
-          borders: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CBD5E1' } },
-          children: [docxParagraph(key, { bold: true, color: '09008B' })],
+          borders: { bottom: { style: docx.BorderStyle.SINGLE, size: 1, color: 'CBD5E1' } },
+          children: [docxParagraph(docx, key, { bold: true, color: '09008B' })],
         })),
       }),
-      ...rows.slice(0, 80).map((row) => new TableRow({
-        children: keys.map((key) => new TableCell({
-          children: [docxParagraph(shortText(row[key], 500))],
+      ...rows.slice(0, 80).map((row) => new docx.TableRow({
+        children: keys.map((key) => new docx.TableCell({
+          children: [docxParagraph(docx, shortText(row[key], 500))],
         })),
       })),
     ],
@@ -800,49 +789,50 @@ function docxTableFromRows(rows: Array<Record<string, unknown>>) {
 }
 
 async function downloadAgentResultDocx(input: AgentExportInput) {
+  const docx = await import('docx');
   const result = asRecord(input.result);
   const mode = input.pdfMode ?? 'standard_branded';
-  const children: Array<Paragraph | Table> = [
-    docxParagraph(input.title, { heading: true }),
-    docxParagraph(`Fecha de generacion: ${formatDate()}`),
-    docxParagraph(`Agente usado: ${input.agentName || input.title}`),
-    docxParagraph(`Usuario o empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}`),
-    docxParagraph(`Formato generado: WORD / DOCX`),
+  const children: DocxChild[] = [
+    docxParagraph(docx, input.title, { heading: true }),
+    docxParagraph(docx, `Fecha de generacion: ${formatDate()}`),
+    docxParagraph(docx, `Agente usado: ${input.agentName || input.title}`),
+    docxParagraph(docx, `Usuario o empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}`),
+    docxParagraph(docx, `Formato generado: WORD / DOCX`),
   ];
   const objective = getObjective(result);
-  if (objective) children.push(docxParagraph(`Objetivo o descripcion: ${objective}`));
+  if (objective) children.push(docxParagraph(docx, `Objetivo o descripcion: ${objective}`));
 
   getExportSections(result).forEach(([key, value]) => {
-    children.push(docxParagraph(formatLabel(key), { heading: true }));
+    children.push(docxParagraph(docx, formatLabel(key), { heading: true }));
     const rows = key === 'charts' ? chartRows(value) : rowsFromValue(value);
-    const table = docxTableFromRows(rows);
+    const table = docxTableFromRows(docx, rows);
     if (table) {
       children.push(table);
     } else {
-      formatValue(value).slice(0, 60).forEach((line) => children.push(docxParagraph(line)));
+      formatValue(value).slice(0, 60).forEach((line) => children.push(docxParagraph(docx, line)));
     }
   });
 
   if (result.disclaimer) {
-    children.push(docxParagraph('Disclaimer', { heading: true }));
-    children.push(docxParagraph(asText(result.disclaimer)));
+    children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
+    children.push(docxParagraph(docx, asText(result.disclaimer)));
   }
 
   const footerLeft = getFooterLeft(mode, input.pdfOptions);
   const footerRight = getFooterRight(mode, input.pdfOptions);
-  const doc = new Document({
+  const doc = new docx.Document({
     sections: [{
       footers: {
-        default: new Footer({
+        default: new docx.Footer({
           children: [
-            new Paragraph({
-              alignment: AlignmentType.LEFT,
+            new docx.Paragraph({
+              alignment: docx.AlignmentType.LEFT,
               children: [
-                new TextRun(footerLeft || ''),
-                new TextRun({ text: footerLeft ? '     ' : '' }),
-                new TextRun(footerRight),
-                new TextRun({ text: '     Pagina ' }),
-                new TextRun({ children: [PageNumber.CURRENT] }),
+                new docx.TextRun(footerLeft || ''),
+                new docx.TextRun({ text: footerLeft ? '     ' : '' }),
+                new docx.TextRun(footerRight),
+                new docx.TextRun({ text: '     Pagina ' }),
+                new docx.TextRun({ children: [docx.PageNumber.CURRENT] }),
               ],
             }),
           ],
@@ -851,11 +841,11 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
       children,
     }],
   });
-  const blob = await Packer.toBlob(doc);
+  const blob = await docx.Packer.toBlob(doc);
   downloadBlob(blob, getDefaultFileName(input, 'docx'));
 }
 
-function addPptFooter(slide: pptxgen.Slide, input: AgentExportInput) {
+function addPptFooter(slide: PptxSlide, input: AgentExportInput) {
   const mode = input.pdfMode ?? 'standard_branded';
   const left = getFooterLeft(mode, input.pdfOptions);
   const right = getFooterRight(mode, input.pdfOptions);
@@ -863,7 +853,7 @@ function addPptFooter(slide: pptxgen.Slide, input: AgentExportInput) {
   slide.addText(right, { x: 8.9, y: 7.12, w: 3.8, h: 0.18, fontSize: 7, color: '64748B', align: 'right' });
 }
 
-function addPptTitle(slide: pptxgen.Slide, title: string, subtitle?: string) {
+function addPptTitle(slide: PptxSlide, title: string, subtitle?: string) {
   slide.background = { color: 'FFFFFF' };
   slide.addText(title, { x: 0.5, y: 0.35, w: 12.3, h: 0.45, fontSize: 23, bold: true, color: '09008B', fit: 'shrink' });
   if (subtitle) slide.addText(subtitle, { x: 0.52, y: 0.9, w: 11.8, h: 0.35, fontSize: 9, color: '64748B', fit: 'shrink' });
@@ -871,6 +861,7 @@ function addPptTitle(slide: pptxgen.Slide, title: string, subtitle?: string) {
 
 async function downloadAgentResultPptx(input: AgentExportInput) {
   const result = asRecord(input.result);
+  const pptxgen = (await import('pptxgenjs')).default;
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_WIDE';
   pptx.author = 'Buyer Nodus';
@@ -952,5 +943,5 @@ export async function downloadAgentResult(input: AgentExportInput) {
     await downloadAgentResultPptx(input);
     return;
   }
-  downloadAgentResultXlsx(input);
+  await downloadAgentResultXlsx(input);
 }
