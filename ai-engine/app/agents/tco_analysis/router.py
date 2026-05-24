@@ -14,7 +14,7 @@ async def analyze(
     item_name: str = Form(...),
     analysis_type: str = Form(...),
     evaluation_horizon: str = Form(...),
-    comparison_unit: str = Form(...),
+    comparison_unit: str = Form(default="Por compra"),
     currency: str = Form(...),
     purchase_volume: str | None = Form(default=None),
     objective: str | None = Form(default=None),

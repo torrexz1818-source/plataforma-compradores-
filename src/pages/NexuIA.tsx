@@ -6,6 +6,7 @@ import {
   Bot,
   BrainCircuit,
   CheckCircle2,
+  Copy,
   Download,
   FileSpreadsheet,
   FileText,
@@ -40,8 +41,10 @@ import type { Agent, AgentPdfMode } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { useProposalComparison } from '@/features/proposal-comparison/useProposalComparison';
@@ -71,9 +74,9 @@ const iconMap = {
 };
 
 const tcoAnalysisTypes = [
-  'Producto físico / compra local',
+  'Compra local',
   'Importación vs compra local',
-  'Maquinaria / vehículo / activo',
+  'Maquinaria / activo',
   'Software / SaaS',
   'Servicio recurrente',
   'Servicio puntual',
@@ -81,7 +84,7 @@ const tcoAnalysisTypes = [
   'Otro',
 ];
 
-const tcoEvaluationHorizons = ['Por compra', 'Mensual', 'Anual', '3 años', '5 años', 'Vida útil', 'Personalizado'];
+const tcoEvaluationHorizons = ['Por compra', '1 año', '3 años', '5 años', 'Vida útil', 'Personalizado'];
 const tcoComparisonUnits = ['Por unidad', 'Por lote', 'Por usuario', 'Por km', 'Por hora', 'Por contrato', 'Por proyecto', 'Por año', 'Por mes'];
 const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
 const dashboardAudiences = ['Gerencia', 'Compras', 'Finanzas', 'Operaciones', 'Proveedores', 'Auditoría', 'Otro'];
@@ -95,6 +98,17 @@ const dashboardLoadingSteps = [
   'Creando gráficos',
   'Preparando dashboard',
   'Finalizando',
+];
+const termsGenerationSteps = [
+  'Leyendo informacion',
+  'Analizando requerimiento',
+  'Revisando documentos de apoyo',
+  'Organizando alcance',
+  'Generando termino de referencia',
+  'Generando bases de licitacion',
+  'Preparando correo para proveedores',
+  'Validando calidad del documento',
+  'Preparando resultado',
 ];
 
 function getAgentIcon(icon: string) {
@@ -138,6 +152,7 @@ const NexuIA = () => {
   const [termsFields, setTermsFields] = useState<Record<string, string>>({});
   const [termsSafetyRequirements, setTermsSafetyRequirements] = useState<string[]>([]);
   const [termsFiles, setTermsFiles] = useState<File[]>([]);
+  const [termsCurrentStep, setTermsCurrentStep] = useState(0);
   const [loggedRunIds, setLoggedRunIds] = useState<Record<string, string>>({});
   const [feedbackStars, setFeedbackStars] = useState(5);
   const [feedbackType, setFeedbackType] = useState('me_sirvio');
@@ -245,6 +260,7 @@ const NexuIA = () => {
     setTermsFields({});
     setTermsSafetyRequirements([]);
     setTermsFiles([]);
+    setTermsCurrentStep(0);
     termsFormSchemaMutation.reset();
     termsGenerateMutation.reset();
     dashboardCreatorMutation.reset();
@@ -599,6 +615,7 @@ const NexuIA = () => {
         nextFields.category = nextFields.category || schema.detected_category;
         setTermsFields(nextFields);
         setTermsSafetyRequirements(schema.recommended_safety_requirements);
+        setTermsCurrentStep(1);
         toast({
           title: 'Formulario inteligente creado',
           description: 'Revisa la categoría sugerida y completa los campos del requerimiento.',
@@ -903,23 +920,22 @@ const NexuIA = () => {
       tcoGeneral.itemName,
       tcoGeneral.analysisType,
       tcoGeneral.evaluationHorizon,
-      tcoGeneral.comparisonUnit,
       tcoGeneral.currency,
     ];
 
     if (requiredGeneral.some((value) => !value.trim())) {
       toast({
         title: 'Completa los campos obligatorios antes de analizar.',
-        description: 'Revisa datos generales, horizonte, unidad y moneda.',
+        description: 'Revisa nombre, producto, tipo de análisis, horizonte y moneda.',
         variant: 'destructive',
       });
       return;
     }
 
-    if (!tcoFiles.length) {
+    if (!tcoFiles.length && !tcoGeneral.objective.trim() && !tcoGeneral.generalContext.trim() && !tcoGeneral.additionalInstructions.trim()) {
       toast({
-        title: 'Sube al menos una cotización/propuesta.',
-        description: 'El agente necesita documentos para detectar proveedores, costos y condiciones.',
+        title: 'Agrega documentos o contexto.',
+        description: 'Puedes subir cotizaciones/propuestas o describir la compra para generar un análisis preliminar.',
         variant: 'destructive',
       });
       return;
@@ -1033,6 +1049,71 @@ const NexuIA = () => {
   const termsResult = termsGenerateMutation.data;
   const tcoResult = tcoAnalysisMutation.data;
   const dashboardResult = dashboardCreatorMutation.data;
+  const termsSections = termsFormSchema?.form_sections ?? [];
+  const termsTotalSteps = termsFormSchema ? termsSections.length + 2 : 1;
+  const termsProgressPercent = termsFormSchema
+    ? Math.round(((termsCurrentStep + 1) / termsTotalSteps) * 100)
+    : termsInitialDescription.trim()
+      ? 18
+      : 0;
+  const termsRequiredFields = useMemo(
+    () => termsSections.flatMap((section) => section.fields).filter((field) => field.required && field.type !== 'file' && field.type !== 'multiselect'),
+    [termsSections],
+  );
+  const termsCompletedRequired = termsRequiredFields.filter((field) => Boolean(termsFields[field.name]?.trim())).length;
+  const termsMissingRequired = termsRequiredFields.filter((field) => !termsFields[field.name]?.trim());
+  const termsRecommendedMissing = termsSections
+    .flatMap((section) => section.fields)
+    .filter((field) => !field.required && field.type !== 'file' && field.type !== 'multiselect' && !termsFields[field.name]?.trim())
+    .slice(0, 6);
+
+  const getTermsSectionStatus = (sectionIndex: number) => {
+    const section = termsSections[sectionIndex];
+    if (!section) return 'pending';
+    const required = section.fields.filter((field) => field.required && field.type !== 'file' && field.type !== 'multiselect');
+    if (!required.length) return 'recommended';
+    return required.every((field) => termsFields[field.name]?.trim()) ? 'completed' : 'pending';
+  };
+
+  const goToNextTermsStep = () => {
+    if (!termsFormSchema && !termsInitialDescription.trim()) {
+      toast({
+        title: 'Describe primero qué necesitas realizar.',
+        description: 'La IA necesita ese punto de partida para crear el formulario inteligente.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!termsFormSchema) {
+      handleCreateTermsForm();
+      return;
+    }
+    setTermsCurrentStep((current) => Math.min(current + 1, termsTotalSteps - 1));
+  };
+
+  const goToPreviousTermsStep = () => {
+    setTermsCurrentStep((current) => Math.max(current - 1, 0));
+  };
+
+  const copySupplierEmail = async () => {
+    const email = termsResult?.supplier_invitation_email;
+    if (!email) return;
+    const text = [
+      `Asunto: ${email.subject}`,
+      '',
+      email.greeting,
+      '',
+      email.body,
+      '',
+      email.attached_documents?.length ? `Documentos adjuntos: ${email.attached_documents.join(', ')}` : '',
+      `Plazo de respuesta: ${email.response_deadline || 'No especificado'}`,
+      `Contacto: ${email.contact_details || 'No especificado'}`,
+      '',
+      email.closing,
+    ].filter(Boolean).join('\n');
+    await navigator.clipboard.writeText(text);
+    toast({ title: 'Correo copiado', description: 'El texto quedó listo para pegarlo en tu correo.' });
+  };
 
   const renderTermsField = (field: TermsFormField) => {
     if (field.type === 'file') {
@@ -1147,6 +1228,210 @@ const NexuIA = () => {
       </div>
     );
   };
+
+  const renderTermsGuidedForm = () => {
+    const isReviewStep = Boolean(termsFormSchema) && termsCurrentStep === termsTotalSteps - 1;
+    const activeSection = termsFormSchema ? termsSections[termsCurrentStep - 1] : null;
+    const activeStatus = activeSection ? getTermsSectionStatus(termsCurrentStep - 1) : 'pending';
+
+    return (
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Paso {Math.min(termsCurrentStep + 1, termsTotalSteps)} de {termsTotalSteps}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground/70">
+                {termsFormSchema ? `${termsProgressPercent}% completado` : 'Empieza describiendo la necesidad para que la IA cree el formulario.'}
+              </p>
+            </div>
+            {termsFormSchema ? (
+              <Badge variant="outline" className="rounded-full bg-white">
+                {termsCompletedRequired}/{termsRequiredFields.length} obligatorios completos
+              </Badge>
+            ) : null}
+          </div>
+          <Progress value={termsProgressPercent} className="mt-3 h-2 bg-white" />
+          {termsFormSchema ? (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+              {['Necesidad inicial', ...termsSections.map((section) => section.section_title), 'Revision'].map((label, index) => {
+                const status = index === 0 ? 'completed' : index === termsTotalSteps - 1 ? (termsMissingRequired.length ? 'pending' : 'completed') : getTermsSectionStatus(index - 1);
+                return (
+                  <button
+                    key={`${label}-${index}`}
+                    type="button"
+                    onClick={() => setTermsCurrentStep(index)}
+                    className={`min-w-[150px] rounded-xl border px-3 py-2 text-left text-xs transition ${
+                      index === termsCurrentStep
+                        ? 'border-primary bg-white text-foreground shadow-sm'
+                        : 'border-primary/10 bg-white/70 text-muted-foreground hover:bg-white'
+                    }`}
+                  >
+                    <span className="block font-medium">{label}</span>
+                    <span className="mt-1 block">
+                      {status === 'completed' ? 'Completado' : status === 'recommended' ? 'Recomendado' : 'Pendiente'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+
+        {termsCurrentStep === 0 ? (
+          <div className="space-y-3 rounded-2xl border border-primary/15 bg-white p-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground/80">
+                ¿Qué necesitas contratar o solicitar?
+              </label>
+              <Textarea
+                value={termsInitialDescription}
+                onChange={(event) => setTermsInitialDescription(event.target.value)}
+                placeholder="Ejemplo: Necesito mantenimiento de luminarias en planta, reparación de paredes con humedad, servicio de limpieza de oficinas, compra de laptops..."
+                className="min-h-[112px] rounded-2xl border-primary/15"
+                required
+              />
+            </div>
+            <Button
+              type="button"
+              className="rounded-full bg-primary hover:bg-primary"
+              onClick={handleCreateTermsForm}
+              disabled={termsFormSchemaMutation.isPending}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              {termsFormSchemaMutation.isPending ? 'Creando formulario inteligente...' : 'Crear formulario inteligente'}
+            </Button>
+          </div>
+        ) : null}
+
+        {termsFormSchema && activeSection ? (
+          <div className="space-y-4 rounded-2xl border border-primary/15 bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">{activeSection.section_title}</p>
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  Estado: {activeStatus === 'completed' ? 'completado' : activeStatus === 'recommended' ? 'recomendado' : 'pendiente'}
+                </p>
+              </div>
+              <Badge variant="outline" className="rounded-full">
+                {termsFormSchema.detected_category}
+              </Badge>
+            </div>
+            <div className="grid gap-3">
+              {activeSection.fields.map((field) => renderTermsField(field))}
+            </div>
+          </div>
+        ) : null}
+
+        {termsFormSchema && isReviewStep ? (
+          <div className="space-y-4 rounded-2xl border border-primary/15 bg-white p-4">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl bg-primary/5 p-3">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Categoria</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.detected_category}</p>
+              </div>
+              <div className="rounded-xl bg-primary/5 p-3">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Tipo</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.requirement_type}</p>
+              </div>
+              <div className="rounded-xl bg-primary/5 p-3">
+                <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Complejidad</p>
+                <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.complexity}</p>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-primary/15 p-3">
+                <p className="text-sm font-medium text-foreground">Campos completos</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{termsCompletedRequired}/{termsRequiredFields.length}</p>
+                <p className="mt-1 text-xs text-muted-foreground/70">Obligatorios para generar un TdR corporativo.</p>
+              </div>
+              <div className="rounded-xl border border-primary/15 p-3">
+                <p className="text-sm font-medium text-foreground">Documentos cargados</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{termsFiles.length}</p>
+                <p className="mt-1 text-xs text-muted-foreground/70">Se usarán como contexto temporal.</p>
+              </div>
+            </div>
+            {termsMissingRequired.length ? (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3">
+                <p className="text-sm font-medium text-destructive">Campos obligatorios pendientes</p>
+                <ul className="mt-2 space-y-1 text-sm text-destructive">
+                  {termsMissingRequired.map((field) => <li key={field.name}>- {field.label}</li>)}
+                </ul>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-sm text-foreground/80">
+                El requerimiento tiene los campos obligatorios listos para generar el término de referencia.
+              </div>
+            )}
+            {termsRecommendedMissing.length ? (
+              <div className="rounded-xl border border-primary/15 p-3">
+                <p className="text-sm font-medium text-foreground">Información recomendable por completar</p>
+                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  {termsRecommendedMissing.map((field) => <li key={field.name}>- {field.label}</li>)}
+                </ul>
+              </div>
+            ) : null}
+            {termsFormSchema.notes_for_buyer.length ? (
+              <div className="rounded-xl border border-primary/15 p-3">
+                <p className="text-sm font-medium text-foreground">Advertencias y sugerencias</p>
+                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                  {termsFormSchema.notes_for_buyer.map((note) => <li key={note}>- {note}</li>)}
+                </ul>
+              </div>
+            ) : null}
+            <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
+              <p className="text-sm font-medium text-foreground">Al generar también recibirás</p>
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                {[
+                  ['Bases sugeridas para licitación', 'Objeto, alcance, documentación solicitada, criterios de evaluación y advertencia de revisión interna/legal.'],
+                  ['Correo para invitar proveedores', 'Asunto, cuerpo del correo, adjuntos sugeridos, plazo de respuesta y cierre profesional.'],
+                  ['Proceso sugerido de licitación', 'Pasos para validar TdR, invitar proveedores, recibir consultas, comparar propuestas y adjudicar.'],
+                ].map(([title, description]) => (
+                  <div key={title} className="rounded-xl border border-primary/10 bg-white p-3">
+                    <p className="text-sm font-medium text-foreground">{title}</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {termsGenerateMutation.isPending ? (
+          <div className="rounded-2xl border border-primary/15 bg-white p-4">
+            <p className="text-sm font-medium text-foreground">Nodus IA está preparando el resultado</p>
+            <Progress value={72} className="mt-3 h-2 bg-primary/10 [&>div]:animate-pulse" />
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {termsGenerationSteps.map((step, index) => (
+                <div key={step} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CheckCircle2 className={`h-3.5 w-3.5 ${index < 5 ? 'text-primary' : 'text-muted-foreground/50'}`} />
+                  {step}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap justify-between gap-2">
+          <Button type="button" variant="outline" className="rounded-full" onClick={goToPreviousTermsStep} disabled={termsCurrentStep === 0 || termsGenerateMutation.isPending}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Anterior
+          </Button>
+          <Button type="button" variant="outline" className="rounded-full" onClick={goToNextTermsStep} disabled={termsCurrentStep >= termsTotalSteps - 1 || termsGenerateMutation.isPending}>
+            Siguiente
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTermsList = (items?: string[]) => (
+    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+      {(items?.length ? items : ['No especificado']).map((item) => <li key={item}>- {item}</li>)}
+    </ul>
+  );
 
   const renderAgentFeedbackPanel = () => {
     if (!currentFeedbackRunId) {
@@ -1514,74 +1799,7 @@ const NexuIA = () => {
                       </p>
                       <div className="mt-3 space-y-3">
                         {isTermsReference ? (
-                          <>
-                            <div className="space-y-1.5">
-                              <label className="text-sm font-medium text-foreground/80">
-                                Describe qué necesitas realizar
-                              </label>
-                              <Textarea
-                                value={termsInitialDescription}
-                                onChange={(event) => setTermsInitialDescription(event.target.value)}
-                                placeholder="Ejemplo: Necesito mantenimiento de luminarias en planta, reparación de paredes con humedad, implementación de estacionamiento, inspección de equipos de aire acondicionado, compra de laptops..."
-                                className="min-h-[112px] rounded-2xl border-primary/15"
-                                required
-                              />
-                            </div>
-                            <Button
-                              type="button"
-                              className="rounded-full bg-primary hover:bg-primary"
-                              onClick={handleCreateTermsForm}
-                              disabled={termsFormSchemaMutation.isPending}
-                            >
-                              <Sparkles className="mr-2 h-4 w-4" />
-                              {termsFormSchemaMutation.isPending ? 'Creando formulario inteligente...' : 'Crear formulario inteligente'}
-                            </Button>
-
-                            {termsFormSchema ? (
-                              <div className="space-y-4 rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                                <div className="grid gap-3 md:grid-cols-3">
-                                  <div className="rounded-xl bg-white p-3">
-                                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
-                                      Categoría sugerida
-                                    </p>
-                                    <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.detected_category}</p>
-                                  </div>
-                                  <div className="rounded-xl bg-white p-3">
-                                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
-                                      Tipo
-                                    </p>
-                                    <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.requirement_type}</p>
-                                  </div>
-                                  <div className="rounded-xl bg-white p-3">
-                                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">
-                                      Complejidad
-                                    </p>
-                                    <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.complexity}</p>
-                                  </div>
-                                </div>
-
-                                {termsFormSchema.notes_for_buyer.length ? (
-                                  <div className="rounded-xl border border-primary/15 bg-white p-3">
-                                    <p className="text-sm font-medium text-foreground">Puntos sugeridos para aclarar</p>
-                                    <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                                      {termsFormSchema.notes_for_buyer.map((note) => (
-                                        <li key={note}>- {note}</li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ) : null}
-
-                                {termsFormSchema.form_sections.map((section) => (
-                                  <div key={section.section_title} className="space-y-3 rounded-2xl border border-primary/15 bg-white p-4">
-                                    <p className="text-sm font-medium text-foreground">{section.section_title}</p>
-                                    <div className="space-y-3">
-                                      {section.fields.map((field) => renderTermsField(field))}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : null}
-                          </>
+                          renderTermsGuidedForm()
                         ) : isQuoteComparator ? (
                           <>
                             <div className="space-y-1.5">
@@ -1775,7 +1993,6 @@ const NexuIA = () => {
                                 {[
                                   ['analysisType', 'Tipo de análisis', tcoAnalysisTypes],
                                   ['evaluationHorizon', 'Horizonte de evaluación', tcoEvaluationHorizons],
-                                  ['comparisonUnit', 'Unidad de comparación', tcoComparisonUnits],
                                   ['currency', 'Moneda base', tcoCurrencies],
                                 ].map(([field, label, options]) => (
                                   <div key={String(field)} className="space-y-1.5">
@@ -1791,15 +2008,6 @@ const NexuIA = () => {
                                     </select>
                                   </div>
                                 ))}
-                                <div className="space-y-1.5">
-                                  <label className="text-sm font-medium text-foreground/80">Volumen de compra</label>
-                                  <Input
-                                    value={tcoGeneral.purchaseVolume}
-                                    onChange={(event) => updateTcoGeneral('purchaseVolume', event.target.value)}
-                                    placeholder="Ejemplo: 1 equipo, 200 unidades, 50 usuarios"
-                                    className="rounded-xl border-primary/15"
-                                  />
-                                </div>
                               </div>
                               <div className="space-y-1.5">
                                 <label className="text-sm font-medium text-foreground/80">Objetivo del análisis</label>
@@ -1815,14 +2023,14 @@ const NexuIA = () => {
                             <div className="space-y-2 rounded-2xl border border-primary/15 bg-primary/5 p-4">
                               <p className="text-sm font-medium text-foreground">Paso 2 - Documentos para analizar</p>
                               <p className="text-xs leading-5 text-muted-foreground/70">
-                                Sube cotizaciones, propuestas, fichas técnicas, PDFs, imágenes, Excel, CSV, contratos o cualquier documento donde aparezcan proveedores, precios, condiciones, garantías, plazos, costos y datos técnicos.
+                                Sube cotizaciones, propuestas, fichas técnicas, PDFs, Excel, imágenes o documentos comerciales. El agente detectará las alternativas y realizará el análisis TCO con la información disponible.
                               </p>
                               <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-white px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
                                 <Upload className="h-5 w-5 text-muted-foreground" />
                                 <div>
-                                  <p className="text-sm font-medium text-foreground">Subir documentos para análisis automático</p>
+                                  <p className="text-sm font-medium text-foreground">Subir documentos para analizar</p>
                                   <p className="mt-1 text-xs text-muted-foreground/70">PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. Máximo 8 archivos.</p>
-                                  <p className="mt-1 text-xs text-muted-foreground/70">El agente extraerá automáticamente las alternativas/proveedores desde los documentos cargados.</p>
+                                  <p className="mt-1 text-xs text-muted-foreground/70">También puedes generar un análisis preliminar solo con contexto escrito.</p>
                                 </div>
                                 <input type="file" multiple accept=".pdf,.docx,.xlsx,.csv,.jpg,.jpeg,.png" onChange={handleTcoFilesChange} className="hidden" />
                               </label>
@@ -1846,17 +2054,17 @@ const NexuIA = () => {
                             </div>
 
                             <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
-                              <label className="text-sm font-medium text-foreground/80">Paso 3 - Información general o contexto adicional</label>
+                              <label className="text-sm font-medium text-foreground/80">Paso 3 - Contexto o instrucciones adicionales</label>
                               <Textarea
                                 value={tcoGeneral.generalContext}
                                 onChange={(event) => updateTcoGeneral('generalContext', event.target.value)}
-                                placeholder="Agrega aquí cualquier dato general que no aparezca en los documentos: tipo de cambio, supuestos, restricciones, costos internos, condiciones comerciales, volumen esperado, horizonte, riesgos conocidos o criterios importantes para tu empresa."
+                                placeholder="Considerar disponibilidad local, garantía, mantenimiento, repuestos, riesgo de importación y soporte técnico como factores importantes."
                                 className="min-h-[96px] rounded-2xl border-primary/15"
                               />
                             </div>
 
                             <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
-                              <label className="text-sm font-medium text-foreground/80">Paso 4 - Instrucciones adicionales</label>
+                              <label className="text-sm font-medium text-foreground/80">Notas adicionales</label>
                               <Textarea
                                 value={tcoGeneral.additionalInstructions}
                                 onChange={(event) => updateTcoGeneral('additionalInstructions', event.target.value)}
@@ -1998,7 +2206,7 @@ const NexuIA = () => {
                         disabled={tcoAnalysisMutation.isPending}
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
-                        {tcoAnalysisMutation.isPending ? 'Analizando documentos y calculando TCO…' : 'Analizar costo total'}
+                        {tcoAnalysisMutation.isPending ? 'Analizando documentos y construyendo análisis TCO…' : 'Analizar TCO'}
                       </Button>
                     ) : (
                       <>
@@ -2023,7 +2231,7 @@ const NexuIA = () => {
                           {dashboardCreatorMutation.isPending
                             ? 'Analizando datos y creando dashboard…'
                             : tcoAnalysisMutation.isPending
-                              ? 'Analizando documentos y calculando TCO…'
+                              ? 'Analizando documentos y construyendo análisis TCO…'
                           : 'Nodus IA está trabajando en tu solicitud…'}
                         </span>
                       </div>
@@ -2065,7 +2273,7 @@ const NexuIA = () => {
                     <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-medium text-foreground">Resumen del requerimiento</p>
+                          <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>
                           <p className="mt-2 text-sm leading-6 text-muted-foreground">
                             {termsResult.executive_summary}
                           </p>
@@ -2073,70 +2281,211 @@ const NexuIA = () => {
                         {renderExportControls(handleDownloadTermsPdf)}
                       </div>
 
+                      <div className="grid gap-3 md:grid-cols-4">
+                        {[
+                          ['Nombre', termsResult.title],
+                          ['Tipo', termsResult.requirement_type],
+                          ['Categoria', termsResult.category],
+                          ['Completitud', `${termsResult.completion_level ?? 'Media'}${termsResult.completion_score ? ` (${termsResult.completion_score}%)` : ''}`],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-2xl border border-primary/15 bg-white p-4">
+                            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">{label}</p>
+                            <p className="mt-2 text-sm font-medium text-foreground">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        {(termsResult.dashboard_metrics?.length ? termsResult.dashboard_metrics : [
+                          { label: 'Riesgo informacion faltante', value: termsResult.risk_level ?? 'Medio', status: 'warning' },
+                          { label: 'Documentos cargados', value: String(termsResult.supporting_documents_summary.length), status: 'neutral' },
+                          { label: 'Entregables definidos', value: String(termsResult.generated_document.final_deliverables.length), status: 'complete' },
+                        ]).map((metric) => (
+                          <div key={metric.label} className="rounded-2xl border border-primary/15 bg-white p-4">
+                            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">{metric.label}</p>
+                            <p className="mt-2 text-xl font-semibold text-foreground">{metric.value}</p>
+                            {metric.detail ? <p className="mt-1 text-xs text-muted-foreground">{metric.detail}</p> : null}
+                          </div>
+                        ))}
+                      </div>
+
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
-                          Documento generado
-                        </p>
-                        <div className="mt-3 space-y-4 text-sm leading-6 text-muted-foreground">
-                          <div>
-                            <p className="font-medium text-foreground">Objetivo</p>
-                            <p>{termsResult.generated_document.objective}</p>
-                          </div>
-                          <div>
-                            <p className="font-medium text-foreground">Alcance</p>
-                            <p>{termsResult.generated_document.scope}</p>
-                          </div>
-                          {[
-                            ['Características técnicas', termsResult.generated_document.technical_characteristics],
-                            ['Actividades requeridas', termsResult.generated_document.required_activities],
-                            ['Producto final / entregables', termsResult.generated_document.final_deliverables],
-                            ['Requisitos de seguridad', termsResult.generated_document.safety_requirements],
-                            ['Condiciones para proveedores', termsResult.generated_document.supplier_conditions],
-                            ['Anexos sugeridos', termsResult.generated_document.suggested_annexes],
-                          ].map(([title, items]) => (
-                            <div key={String(title)}>
-                              <p className="font-medium text-foreground">{String(title)}</p>
-                              <ul className="mt-1 space-y-1">
-                                {(items as string[]).map((item) => (
-                                  <li key={item}>- {item}</li>
-                                ))}
-                              </ul>
+                        <p className="text-sm font-medium text-foreground">Flujo del requerimiento</p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {(termsResult.flow_steps?.length ? termsResult.flow_steps : ['Necesidad', 'Alcance', 'Actividades', 'Entregables', 'Requisitos', 'Proveedor']).map((step, index, steps) => (
+                            <div key={`${step}-${index}`} className="flex items-center gap-2">
+                              <span className="rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-medium text-foreground">{step}</span>
+                              {index < steps.length - 1 ? <ArrowRight className="h-4 w-4 text-muted-foreground" /> : null}
                             </div>
                           ))}
                         </div>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-3">
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Información faltante</p>
-                          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                            {termsResult.missing_information.map((item) => (
-                              <li key={item}>- {item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Recomendaciones</p>
-                          <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                            {termsResult.buyer_recommendations.map((item) => (
-                              <li key={item}>- {item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Validación de calidad</p>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            {termsResult.quality_check.is_complete ? 'Documento completo según la validación básica.' : 'Requiere completar secciones antes de enviarlo.'}
-                          </p>
-                          {termsResult.quality_check.warnings.length ? (
-                            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                              {termsResult.quality_check.warnings.map((item) => (
-                                <li key={item}>- {item}</li>
-                              ))}
-                            </ul>
-                          ) : null}
+                      <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                        <p className="text-sm font-medium text-foreground">Entregables para enviar a proveedores</p>
+                        <div className="mt-3 grid gap-3 md:grid-cols-3">
+                          <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
+                            <p className="text-sm font-medium text-foreground">Bases sugeridas para licitación</p>
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                              {termsResult.tender_bases?.object ?? 'Objeto, alcance, requisitos, criterios y condiciones para solicitar propuestas.'}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
+                            <p className="text-sm font-medium text-foreground">Correo a proveedores</p>
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                              {termsResult.supplier_invitation_email?.subject ?? 'Correo listo para copiar, ajustar y enviar.'}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
+                            <p className="text-sm font-medium text-foreground">Siguientes pasos de licitación</p>
+                            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                              {(termsResult.tender_process?.length ?? 0) > 0
+                                ? `${termsResult.tender_process?.length} pasos sugeridos desde validar el TdR hasta emitir OC o contrato.`
+                                : 'Flujo sugerido para invitar, resolver consultas, comparar propuestas y adjudicar.'}
+                            </p>
+                          </div>
                         </div>
                       </div>
+
+                      <Tabs defaultValue="documento" className="rounded-2xl border border-primary/15 bg-white p-4">
+                        <TabsList className="flex h-auto flex-wrap justify-start rounded-xl bg-primary/5 p-1">
+                          <TabsTrigger value="documento">Documento</TabsTrigger>
+                          <TabsTrigger value="calidad">Calidad</TabsTrigger>
+                          <TabsTrigger value="licitacion">Bases de licitación</TabsTrigger>
+                          <TabsTrigger value="correo">Correo a proveedores</TabsTrigger>
+                          <TabsTrigger value="proceso">Proceso de licitación</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="documento" className="mt-4">
+                          <Accordion type="multiple" defaultValue={['datos', 'objetivo']} className="space-y-2">
+                            {[
+                              ['datos', 'Datos generales', [
+                                `Nombre: ${termsResult.generated_document.general_data.requirement_name}`,
+                                `Tipo: ${termsResult.generated_document.general_data.requirement_type}`,
+                                `Categoria: ${termsResult.generated_document.general_data.category}`,
+                                `Ubicacion: ${termsResult.generated_document.general_data.location ?? 'No especificado'}`,
+                                `Fecha requerida: ${termsResult.generated_document.general_data.required_date ?? 'No especificado'}`,
+                              ]],
+                              ['objetivo', 'Objetivo', [termsResult.generated_document.objective]],
+                              ['alcance', 'Alcance', [termsResult.generated_document.scope]],
+                              ['tecnicas', 'Caracteristicas tecnicas', termsResult.generated_document.technical_characteristics],
+                              ['actividades', 'Actividades requeridas', termsResult.generated_document.required_activities],
+                              ['entregables', 'Entregables', termsResult.generated_document.final_deliverables],
+                              ['justificacion', 'Justificacion', [termsResult.generated_document.justification]],
+                              ['seguridad', 'Requisitos de seguridad', termsResult.generated_document.safety_requirements],
+                              ['proveedores', 'Condiciones para proveedores', termsResult.generated_document.supplier_conditions],
+                              ['informe', 'Estructura de informe final', termsResult.generated_document.final_report_structure],
+                              ['anexos', 'Anexos sugeridos', termsResult.generated_document.suggested_annexes],
+                            ].map(([value, title, items]) => (
+                              <AccordionItem key={String(value)} value={String(value)} className="rounded-xl border border-primary/15 px-3">
+                                <AccordionTrigger className="text-sm font-medium text-foreground">{String(title)}</AccordionTrigger>
+                                <AccordionContent>{renderTermsList(items as string[])}</AccordionContent>
+                              </AccordionItem>
+                            ))}
+                          </Accordion>
+                        </TabsContent>
+
+                        <TabsContent value="calidad" className="mt-4 grid gap-4 md:grid-cols-2">
+                          <div className="rounded-xl border border-primary/15 p-4">
+                            <p className="text-sm font-medium text-foreground">Checklist de calidad</p>
+                            <div className="mt-3 space-y-2">
+                              {(termsResult.checklist?.length ? termsResult.checklist : []).map((item) => (
+                                <div key={item.label} className="flex items-start gap-2 rounded-lg bg-primary/5 p-2 text-sm">
+                                  <CheckCircle2 className={`mt-0.5 h-4 w-4 ${item.status === 'complete' ? 'text-primary' : 'text-muted-foreground'}`} />
+                                  <div>
+                                    <p className="font-medium text-foreground">{item.label}</p>
+                                    {item.detail ? <p className="text-xs text-muted-foreground">{item.detail}</p> : null}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="space-y-3">
+                            <div className="rounded-xl border border-primary/15 p-4">
+                              <p className="text-sm font-medium text-foreground">Información que conviene completar antes de enviar</p>
+                              {renderTermsList(termsResult.missing_information)}
+                            </div>
+                            <div className="rounded-xl border border-primary/15 p-4">
+                              <p className="text-sm font-medium text-foreground">Recomendaciones accionables</p>
+                              {renderTermsList(termsResult.buyer_recommendations)}
+                            </div>
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent value="licitacion" className="mt-4 space-y-3">
+                          <div className="rounded-xl border border-primary/15 p-4">
+                            <p className="text-sm font-medium text-foreground">Bases sugeridas para la licitación</p>
+                            <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium text-foreground">Objeto:</span> {termsResult.tender_bases?.object ?? 'No especificado'}</p>
+                            <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium text-foreground">Alcance:</span> {termsResult.tender_bases?.scope ?? 'No especificado'}</p>
+                          </div>
+                          <div className="grid gap-3 md:grid-cols-2">
+                            {[
+                              ['Requisitos mínimos del proveedor', termsResult.tender_bases?.minimum_supplier_requirements],
+                              ['Documentación solicitada', termsResult.tender_bases?.requested_documentation],
+                              ['Criterios de evaluación', termsResult.tender_bases?.evaluation_criteria],
+                              ['Condiciones de presentación', termsResult.tender_bases?.proposal_submission_conditions],
+                              ['Criterios de adjudicación', termsResult.tender_bases?.award_criteria],
+                              ['Condiciones de descalificación', termsResult.tender_bases?.disqualification_conditions],
+                              ['Observaciones para compradores', termsResult.tender_bases?.buyer_observations],
+                            ].map(([title, items]) => (
+                              <div key={String(title)} className="rounded-xl border border-primary/15 p-4">
+                                <p className="text-sm font-medium text-foreground">{String(title)}</p>
+                                {renderTermsList(items as string[] | undefined)}
+                              </div>
+                            ))}
+                          </div>
+                          <p className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">
+                            {termsResult.tender_bases?.disclaimer ?? 'Estas bases son una guía inicial y deben ser revisadas por el área de compras, legal o responsable interno antes de enviarse.'}
+                          </p>
+                        </TabsContent>
+
+                        <TabsContent value="correo" className="mt-4">
+                          <div className="rounded-xl border border-primary/15 p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <p className="text-sm font-medium text-foreground">Correo sugerido para invitar proveedores</p>
+                              <Button type="button" variant="outline" className="rounded-full" onClick={() => void copySupplierEmail()}>
+                                <Copy className="mr-2 h-4 w-4" />
+                                Copiar correo
+                              </Button>
+                            </div>
+                            <div className="mt-4 space-y-3 text-sm leading-6 text-muted-foreground">
+                              <p><span className="font-medium text-foreground">Asunto:</span> {termsResult.supplier_invitation_email?.subject ?? 'Invitación a presentar propuesta'}</p>
+                              <p>{termsResult.supplier_invitation_email?.greeting}</p>
+                              <Textarea
+                                value={termsResult.supplier_invitation_email?.body ?? ''}
+                                readOnly
+                                className="min-h-[120px] rounded-2xl border-primary/15 bg-primary/5"
+                              />
+                              <p><span className="font-medium text-foreground">Adjuntos:</span> {(termsResult.supplier_invitation_email?.attached_documents ?? ['Termino de referencia']).join(', ')}</p>
+                              <p><span className="font-medium text-foreground">Plazo:</span> {termsResult.supplier_invitation_email?.response_deadline ?? 'No especificado'}</p>
+                              <p><span className="font-medium text-foreground">Contacto:</span> {termsResult.supplier_invitation_email?.contact_details ?? 'No especificado'}</p>
+                              <p>{termsResult.supplier_invitation_email?.closing}</p>
+                            </div>
+                          </div>
+                        </TabsContent>
+
+                        <TabsContent value="proceso" className="mt-4">
+                          <div className="grid gap-2 md:grid-cols-2">
+                            {(termsResult.tender_process?.length ? termsResult.tender_process : [
+                              'Validar término de referencia',
+                              'Seleccionar proveedores invitados',
+                              'Enviar correo de invitación',
+                              'Recibir consultas',
+                              'Responder consultas',
+                              'Recibir propuestas',
+                              'Comparar propuestas',
+                              'Negociar si aplica',
+                              'Seleccionar proveedor',
+                              'Emitir orden de compra o contrato',
+                            ]).map((step, index) => (
+                              <div key={`${step}-${index}`} className="flex items-start gap-3 rounded-xl border border-primary/15 p-3">
+                                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">{index + 1}</span>
+                                <p className="text-sm text-foreground/80">{step}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </TabsContent>
+                      </Tabs>
 
                       {termsResult.supporting_documents_summary.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -2357,11 +2706,15 @@ const NexuIA = () => {
                             </p>
                           ) : null}
                           <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
-                            <table className="w-full min-w-[760px] text-left text-sm">
+                            <table className="w-full min-w-[1120px] text-left text-sm">
                               <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
                                 <tr>
                                   <th className="px-4 py-3 font-medium">Proveedor</th>
                                   <th className="px-4 py-3 font-medium">Archivo fuente</th>
+                                  <th className="px-4 py-3 font-medium">Precio detectado</th>
+                                  <th className="px-4 py-3 font-medium">Garantía</th>
+                                  <th className="px-4 py-3 font-medium">Plazo</th>
+                                  <th className="px-4 py-3 font-medium">Costos detectados</th>
                                   <th className="px-4 py-3 font-medium">Datos detectados</th>
                                   <th className="px-4 py-3 font-medium">Datos faltantes</th>
                                   <th className="px-4 py-3 font-medium">Confianza</th>
@@ -2372,6 +2725,10 @@ const NexuIA = () => {
                                   <tr key={`${item.supplier_name}-${index}`} className="border-t border-primary/10">
                                     <td className="px-4 py-3 font-medium text-foreground">{item.supplier_name}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{item.source_file}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.detected_price || 'No especificado'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.warranty || 'No especificado'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.lead_time || 'No especificado'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.detected_costs?.join(', ') || 'No especificado'}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{item.data_detected.join(', ') || 'No especificado'}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{item.data_missing.join(', ') || 'No especificado'}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{item.confidence_level ?? 'medium'}</td>
@@ -2459,6 +2816,13 @@ const NexuIA = () => {
                           {renderRecordBlock(tcoResult.strategic_recommendation)}
                         </div>
                       </div>
+
+                      {tcoResult.hidden_costs_detected?.length ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Costos ocultos detectados</p>
+                          <div className="mt-2">{renderValueList(tcoResult.hidden_costs_detected)}</div>
+                        </div>
+                      ) : null}
 
                       {tcoResult.risk_analysis.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">

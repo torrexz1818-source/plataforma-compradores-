@@ -85,6 +85,45 @@ class QualityCheck(BaseModel):
     missing_sections: list[str] = Field(default_factory=list)
 
 
+class DashboardMetric(BaseModel):
+    label: str
+    value: str
+    status: Literal["complete", "warning", "risk", "neutral"] = "neutral"
+    detail: str | None = None
+
+
+class ChecklistItem(BaseModel):
+    label: str
+    status: Literal["complete", "incomplete", "recommended"]
+    detail: str | None = None
+
+
+class TenderBases(BaseModel):
+    object: str = "No especificado"
+    scope: str = "No especificado"
+    minimum_supplier_requirements: list[str] = Field(default_factory=list)
+    requested_documentation: list[str] = Field(default_factory=list)
+    evaluation_criteria: list[str] = Field(default_factory=list)
+    proposal_submission_conditions: list[str] = Field(default_factory=list)
+    question_deadline: str = "No especificado"
+    proposal_deadline: str = "No especificado"
+    submission_method: str = "No especificado"
+    award_criteria: list[str] = Field(default_factory=list)
+    disqualification_conditions: list[str] = Field(default_factory=list)
+    buyer_observations: list[str] = Field(default_factory=list)
+    disclaimer: str = "Estas bases son una guia inicial y deben ser revisadas por el area de compras, legal o responsable interno antes de enviarse."
+
+
+class SupplierInvitationEmail(BaseModel):
+    subject: str = "Invitacion a presentar propuesta"
+    greeting: str = "Estimados proveedores,"
+    body: str = "No especificado"
+    attached_documents: list[str] = Field(default_factory=list)
+    response_deadline: str = "No especificado"
+    contact_details: str = "No especificado"
+    closing: str = "Saludos cordiales,"
+
+
 class TermsOfReferenceResult(BaseModel):
     title: str
     requirement_type: str
@@ -96,6 +135,15 @@ class TermsOfReferenceResult(BaseModel):
     missing_information: list[str] = Field(default_factory=list)
     buyer_recommendations: list[str] = Field(default_factory=list)
     quality_check: QualityCheck
+    completion_score: int = Field(default=0, ge=0, le=100)
+    completion_level: Literal["Alta", "Media", "Baja"] = "Media"
+    risk_level: Literal["Bajo", "Medio", "Alto"] = "Medio"
+    checklist: list[ChecklistItem] = Field(default_factory=list)
+    flow_steps: list[str] = Field(default_factory=list)
+    dashboard_metrics: list[DashboardMetric] = Field(default_factory=list)
+    tender_bases: TenderBases = Field(default_factory=TenderBases)
+    supplier_invitation_email: SupplierInvitationEmail = Field(default_factory=SupplierInvitationEmail)
+    tender_process: list[str] = Field(default_factory=list)
     disclaimer: str = "Este documento fue generado con asistencia de IA y debe ser revisado por el comprador antes de enviarse a proveedores."
 
 

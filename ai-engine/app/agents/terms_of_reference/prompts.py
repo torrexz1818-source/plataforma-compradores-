@@ -4,8 +4,10 @@ from typing import Any
 FORM_SCHEMA_SYSTEM_PROMPT = """
 Actua como especialista senior en compras corporativas.
 Lee la descripcion inicial del comprador y determina que tipo de requerimiento quiere crear.
-Debes clasificar la categoria, detectar el tipo de requerimiento, seleccionar una plantilla recomendada y generar un formulario detallado.
-Incluye campos especificos segun la categoria, requisitos de seguridad sugeridos y documentos de apoyo recomendados.
+Debes clasificar la categoria, detectar el tipo de requerimiento, seleccionar una plantilla recomendada y generar o ajustar un formulario detallado.
+El formulario debe ser inteligente y depender de lo que el comprador quiere comprar, contratar o solicitar; evita preguntas irrelevantes.
+Divide el formulario en pasos claros y conserva campos minimos corporativos para que el documento final sea completo.
+Incluye campos especificos segun la categoria, ejemplos en placeholders, requisitos tecnicos, entregables, seguridad sugerida y documentos de apoyo recomendados.
 No generes todavia el termino de referencia final.
 Si la descripcion es vaga, genera un formulario base y agrega preguntas sugeridas en notes_for_buyer.
 Devuelve exclusivamente JSON valido con las claves solicitadas.
@@ -16,7 +18,9 @@ Actua como especialista senior en compras, abastecimiento y elaboracion de termi
 Genera un documento profesional en espanol a partir de la descripcion inicial, categoria, formulario completado, documentos de apoyo, instrucciones adicionales y plantilla seleccionada.
 El documento debe estar orientado a uso corporativo.
 Incluye como minimo datos generales, objetivo, alcance, caracteristicas tecnicas, actividades requeridas, entregables, justificacion, requisitos SST/SSMA, condiciones para proveedores, estructura de informe final si aplica, cadena presupuestal si aplica, anexos sugeridos, informacion faltante y recomendaciones para el comprador.
-Reglas: no inventes datos especificos; si falta informacion, agregala en informacion faltante o puntos por validar; mejora la redaccion tecnica; usa tono corporativo claro y profesional; adapta el documento al tipo de servicio o compra; sugiere requisitos de seguridad razonables indicando que deben ser validados por el comprador.
+Ademas genera apoyo operativo para compras: bases sugeridas para licitacion o solicitud de propuestas, correo sugerido para invitar proveedores y proceso sugerido de licitacion.
+Reglas: no inventes datos especificos; usa "No especificado" cuando un dato no este disponible; si falta informacion, agregala en informacion faltante o puntos por validar; mejora la redaccion tecnica; usa tono corporativo claro y profesional; adapta el documento al tipo de servicio o compra; sugiere requisitos de seguridad razonables indicando que deben ser validados por el comprador.
+Las bases de licitacion y el correo son una guia inicial operativa, no documentos legales definitivos, y deben incluir advertencia de revision interna/legal cuando aplique.
 Si hay documentos de apoyo, usalos como contexto. Si hay planos o fichas tecnicas, extrae medidas, cantidades, equipos o condiciones relevantes cuando sea posible. Si hay fotos o anexos, usalos para reforzar la justificacion, alcance o anexos sugeridos.
 Devuelve exclusivamente JSON valido. No devuelvas markdown fuera del JSON.
 """
@@ -107,6 +111,41 @@ def build_generate_prompt(payload: dict[str, Any]) -> str:
                     "warnings": ["string"],
                     "missing_sections": ["string"],
                 },
+                "completion_score": 0,
+                "completion_level": "Alta|Media|Baja",
+                "risk_level": "Bajo|Medio|Alto",
+                "checklist": [
+                    {"label": "string", "status": "complete|incomplete|recommended", "detail": "string|null"}
+                ],
+                "flow_steps": ["Necesidad", "Alcance", "Actividades", "Entregables", "Requisitos", "Proveedor"],
+                "dashboard_metrics": [
+                    {"label": "string", "value": "string", "status": "complete|warning|risk|neutral", "detail": "string|null"}
+                ],
+                "tender_bases": {
+                    "object": "string",
+                    "scope": "string",
+                    "minimum_supplier_requirements": ["string"],
+                    "requested_documentation": ["string"],
+                    "evaluation_criteria": ["string"],
+                    "proposal_submission_conditions": ["string"],
+                    "question_deadline": "string",
+                    "proposal_deadline": "string",
+                    "submission_method": "string",
+                    "award_criteria": ["string"],
+                    "disqualification_conditions": ["string"],
+                    "buyer_observations": ["string"],
+                    "disclaimer": "Estas bases son una guia inicial y deben ser revisadas por el area de compras, legal o responsable interno antes de enviarse.",
+                },
+                "supplier_invitation_email": {
+                    "subject": "string",
+                    "greeting": "string",
+                    "body": "string",
+                    "attached_documents": ["string"],
+                    "response_deadline": "string",
+                    "contact_details": "string",
+                    "closing": "string",
+                },
+                "tender_process": ["string"],
                 "disclaimer": "Este documento fue generado con asistencia de IA y debe ser revisado por el comprador antes de enviarse a proveedores.",
             },
             "input": payload,

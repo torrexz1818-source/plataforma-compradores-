@@ -5,20 +5,22 @@ from typing import Any
 
 
 SYSTEM_PROMPT = """
-Eres un Agente Especialista en Analisis TCO - Total Cost of Ownership - para compras estrategicas,
-proveedores, importaciones, servicios, maquinaria, software, vehiculos, repuestos, insumos y productos
-o servicios empresariales.
+Eres un analista senior de compras corporativas especializado en TCO (Total Cost of Ownership),
+costos ocultos, evaluacion economica, riesgos de abastecimiento e importacion vs compra local.
 
 Reglas obligatorias:
-- El usuario ya no llena manualmente todas las alternativas. Debes extraer proveedores y alternativas desde documentos cargados.
-- Analiza cotizaciones, propuestas, imagenes, fichas tecnicas, Excel, CSV o PDFs para identificar proveedores, costos, condiciones, plazos, garantias y riesgos.
-- No elijas por precio inicial. Justifica con numeros, riesgos y logica de negocio.
-- No inventes impuestos, aranceles, tipo de cambio, regulaciones, fletes, seguros ni cargos aduaneros.
+- El analisis principal lo realizas tu como LLM con la informacion disponible.
+- Analiza documentos, imagenes, cotizaciones, propuestas, Excel, CSV, fichas tecnicas, contratos y datos escritos por el usuario.
+- Siempre entrega un analisis preliminar util aunque falten datos.
+- Si falta informacion, incluye exactamente esta idea: "Con la informacion disponible se puede realizar este analisis preliminar. Para mejorar la precision del TCO, seria recomendable contar con los siguientes datos..."
+- No elijas solo por precio inicial.
+- No inventes impuestos, aranceles, tipo de cambio, fletes, seguros, costos legales ni regulaciones.
 - Si un dato no aparece, usa "No especificado".
-- Separa datos encontrados en documentos, datos entregados por el comprador, SUPUESTOS e informacion faltante.
+- Separa datos encontrados, SUPUESTOS, datos faltantes y limitaciones.
 - Todo supuesto debe empezar con la palabra "SUPUESTO".
-- Si falta informacion, lista preguntas concretas para usuario o proveedor.
-- Si puedes avanzar con advertencias, hazlo sin inventar montos.
+- No presentes supuestos como datos reales.
+- Si puedes estimar cualitativamente, explica que es preliminar y no numerico.
+- Sugiere preguntas concretas para proveedores.
 - Devuelve exclusivamente JSON valido. No devuelvas markdown fuera del JSON.
 - Usa lenguaje ejecutivo, claro y profesional.
 - Manten el disclaimer indicado.
@@ -43,8 +45,12 @@ EXPECTED_JSON_SHAPE = {
         {
             "supplier_name": "string",
             "source_file": "string",
-            "data_detected": ["precio", "garantia", "lead time"],
-            "data_missing": ["mantenimiento", "repuestos", "vida util"],
+            "detected_price": "string",
+            "warranty": "string",
+            "lead_time": "string",
+            "detected_costs": ["string"],
+            "data_detected": ["string"],
+            "data_missing": ["string"],
             "confidence_level": "low|medium|high",
         }
     ],
@@ -54,33 +60,82 @@ EXPECTED_JSON_SHAPE = {
         "confidence_level": "low|medium|high",
         "warnings": ["string"],
     },
-    "data_used": [],
-    "tco_matrix": [],
-    "tco_totals": [],
-    "ranking": [],
+    "data_used": [
+        {
+            "alternative": "string",
+            "base_price": "string",
+            "quantity": "string",
+            "currency": "string",
+            "horizon": "string",
+            "origin": "string",
+            "destination": "string",
+            "incoterm": "string",
+            "lead_time": "string",
+            "key_assumptions": ["SUPUESTO string"],
+        }
+    ],
+    "tco_matrix": [
+        {
+            "cost_component": "Precio base | Instalacion | Transporte | Flete | Seguro | Aduanas/impuestos | Mantenimiento | Operacion | Energia | Repuestos | Soporte | Capacitacion | Riesgos | Costos administrativos | Valor residual | TCO total estimado",
+            "values": {"Alternativa": "numero o texto"},
+            "notes": "string",
+        }
+    ],
+    "tco_totals": [
+        {
+            "alternative": "string",
+            "initial_price": 0,
+            "total_tco": 0,
+            "tco_per_unit": 0,
+            "tco_monthly": 0,
+            "tco_annual": 0,
+            "risk_level": "low|medium|high",
+            "main_hidden_costs": ["string"],
+        }
+    ],
+    "ranking": [
+        {
+            "position": 1,
+            "alternative": "string",
+            "ranking_type": "Menor TCO | Menor riesgo | Mejor balance costo-beneficio | Mejor alternativa estrategica",
+            "total_tco": 0,
+            "reason": "string",
+        }
+    ],
     "interpretation": {
         "why_winner_wins": "string",
-        "hidden_costs": [],
-        "cheap_but_risky_options": [],
-        "expensive_but_convenient_options": [],
-        "conditions_that_change_decision": [],
+        "hidden_costs": ["string"],
+        "cheap_but_risky_options": ["string"],
+        "expensive_but_convenient_options": ["string"],
+        "conditions_that_change_decision": ["string"],
     },
-    "risk_analysis": [],
+    "hidden_costs_detected": ["string"],
+    "risk_analysis": [
+        {
+            "risk": "string",
+            "alternative": "string",
+            "probability": "string",
+            "economic_impact": "string",
+            "expected_risk_cost": "string",
+            "level": "low|medium|high",
+            "mitigation": "string",
+        }
+    ],
     "sensitivity_analysis": {
-        "base": [],
-        "optimistic": [],
-        "pessimistic": [],
-        "break_even": [],
+        "base": ["string"],
+        "optimistic": ["string"],
+        "pessimistic": ["string"],
+        "break_even": ["string"],
         "most_sensitive_variable": "string",
     },
     "strategic_recommendation": {
-        "recommended_action": "Comprar local / Importar / Negociar / Pedir mas informacion / Hacer piloto / Dividir compra / Usar como BATNA",
-        "negotiation_points": [],
-        "next_steps": [],
+        "recommended_action": "Comprar local | Importar | Negociar | Pedir mas informacion | Hacer piloto | Dividir compra | Usar como BATNA",
+        "negotiation_points": ["string"],
+        "next_steps": ["string"],
     },
-    "missing_information": [],
-    "questions_for_user_or_suppliers": [],
-    "assumptions_and_limits": [],
+    "missing_information": ["string"],
+    "questions_for_user_or_suppliers": ["string"],
+    "assumptions_and_limits": ["string"],
     "supporting_documents_summary": [],
     "disclaimer": "Este analisis TCO es una recomendacion asistida por IA y debe ser validado por el comprador antes de tomar una decision final.",
 }
@@ -94,13 +149,10 @@ def build_user_prompt(
     evaluation_horizon: str,
     comparison_unit: str,
     currency: str,
-    purchase_volume: str | None,
     objective: str | None,
-    alternatives: list[dict[str, Any]],
     general_context: str | None,
     additional_instructions: str | None,
     documents: list[dict[str, Any]],
-    python_calculations: dict[str, Any],
 ) -> str:
     payload = {
         "analysis_context": {
@@ -110,31 +162,26 @@ def build_user_prompt(
             "evaluation_horizon": evaluation_horizon,
             "comparison_unit": comparison_unit,
             "currency": currency,
-            "purchase_volume": purchase_volume or "No especificado",
             "objective": objective or "No especificado",
             "general_context": general_context or "No especificado",
             "additional_instructions": additional_instructions or "No especificado",
         },
-        "alternatives_from_user_fallback": alternatives,
-        "document_context_compact": documents,
-        "python_calculations": python_calculations,
+        "document_context_available_to_model": documents,
         "methodology": [
-            "Extrae alternativas/proveedores desde documentos. Si alternatives_from_user_fallback tiene datos, usalos solo como fallback.",
-            "Para cada proveedor detecta: proveedor, marca/modelo, producto/servicio, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, costos no incluidos, riesgos y observaciones.",
-            "Define alcance, alternativas, origen/destino, horizonte, unidad, moneda, volumen y condiciones.",
-            "Clasifica costos por adquisicion, logistica, implementacion, operacion, mantenimiento, financieros, riesgo, administracion, salida y valor residual.",
-            "Calcula y explica TCO total, por unidad, mensual o anual cuando haya datos suficientes.",
-            "Para importacion vs local, compara costo puesto almacen con costo local real y advierte ilusion de precio bajo si aplica.",
-            "Convierte riesgos a costo esperado solo si hay probabilidad e impacto economico entregados.",
-            "Incluye escenarios base, optimista, pesimista y punto de equilibrio.",
+            "Identifica alternativas/proveedores desde documentos e instrucciones.",
+            "Extrae proveedor, marca/modelo, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas si aparece, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, riesgos y costos no incluidos.",
+            "Construye matriz TCO con datos reales cuando existan y usa 'No especificado' cuando no existan.",
+            "Genera ranking por menor TCO si hay numeros suficientes; si no, genera ranking preliminar por menor riesgo, mejor balance o mejor alternativa estrategica y explica la limitacion.",
+            "Incluye costos ocultos, riesgos bajo/medio/alto, sensibilidad o explica que falta para hacerla.",
+            "Incluye informacion faltante con la frase requerida y preguntas sugeridas para proveedores.",
+            "No inventes costos ni variables reguladas. Cualquier hipotesis debe empezar con SUPUESTO.",
         ],
         "expected_json_shape": EXPECTED_JSON_SHAPE,
     }
 
     return (
-        "Analiza el siguiente caso TCO. Extrae primero las alternativas desde los documentos cargados. "
-        "Usa los calculos Python como fuente de validacion numerica cuando esten disponibles y completa "
-        "la interpretacion ejecutiva sin inventar datos. Separa datos encontrados en documentos, datos "
-        "entregados por el comprador, SUPUESTOS e informacion faltante.\n\n"
+        "Analiza este caso TCO con enfoque LLM-first. Usa todos los textos, metadatos y, cuando esten adjuntas, "
+        "las imagenes enviadas al modelo. Debes entregar un resultado preliminar aunque la informacion sea incompleta. "
+        "Devuelve solo JSON valido con la estructura solicitada.\n\n"
         f"{json.dumps(payload, ensure_ascii=False, default=str)}"
     )

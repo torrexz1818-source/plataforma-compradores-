@@ -118,16 +118,28 @@ def base_form_sections(category: str | None = None) -> list[dict[str, Any]]:
                 {"name": "category", "label": "Categoria", "type": "select", "required": True, "placeholder": "", "options": CATEGORIES},
                 {"name": "location", "label": "Instalacion o ubicacion", "type": "text", "required": False, "placeholder": "Ejemplo: Terminal Monte Azul Sur, edificio administrativo, zona 2", "options": []},
                 {"name": "required_date", "label": "Fecha requerida o urgencia", "type": "text", "required": False, "placeholder": "Ejemplo: Urgente, marzo, 31 de julio, esta semana", "options": []},
+                {"name": "requesting_area", "label": "Area solicitante", "type": "text", "required": False, "placeholder": "Ejemplo: Operaciones, Mantenimiento, TI, Comercial", "options": []},
+                {"name": "request_owner", "label": "Responsable o solicitante", "type": "text", "required": False, "placeholder": "Nombre del responsable interno, si aplica", "options": []},
             ],
         },
         {
-            "section_title": "Alcance y necesidad",
+            "section_title": "Objetivo y justificacion",
             "fields": [
                 {"name": "objective", "label": "Objetivo de la contratacion", "type": "textarea", "required": True, "placeholder": "Describe que se busca lograr con este requerimiento.", "options": []},
+                {"name": "justification", "label": "Justificacion", "type": "textarea", "required": True, "placeholder": "Explica que problema resuelve, que riesgo evita o que necesidad atiende.", "options": []},
+                {"name": "problem_to_solve", "label": "Problema que se busca resolver", "type": "textarea", "required": False, "placeholder": "Ejemplo: baja iluminacion, humedad recurrente, falta de capacidad operativa", "options": []},
+                {"name": "expected_benefit", "label": "Beneficio esperado", "type": "textarea", "required": False, "placeholder": "Ejemplo: reducir riesgos, asegurar continuidad operativa, mejorar cumplimiento", "options": []},
+                {"name": "non_execution_risk", "label": "Riesgo de no ejecutar", "type": "textarea", "required": False, "placeholder": "Describe el impacto si no se realiza el servicio o compra.", "options": []},
+            ],
+        },
+        {
+            "section_title": "Alcance y actividades",
+            "fields": [
                 {"name": "scope", "label": "Alcance del servicio o compra", "type": "textarea", "required": True, "placeholder": "Describe que debe realizar el proveedor, zonas incluidas, actividades y limites.", "options": []},
                 {"name": "activities", "label": "Actividades requeridas", "type": "textarea", "required": False, "placeholder": "Lista una actividad por linea.", "options": []},
-                {"name": "deliverables", "label": "Producto final / entregables", "type": "textarea", "required": True, "placeholder": "Ejemplo: servicio ejecutado, informe tecnico, registro fotografico, acta de conformidad.", "options": []},
-                {"name": "justification", "label": "Justificacion", "type": "textarea", "required": True, "placeholder": "Explica que problema resuelve, que riesgo evita o que necesidad atiende.", "options": []},
+                {"name": "areas_or_equipment", "label": "Zonas, areas o equipos involucrados", "type": "textarea", "required": False, "placeholder": "Ejemplo: oficinas administrativas, luminarias exteriores, equipos split, paredes del comedor", "options": []},
+                {"name": "estimated_quantities", "label": "Cantidades, medidas o detalles tecnicos", "type": "textarea", "required": False, "placeholder": "Ejemplo: 24 luminarias, 300 m2, 15 laptops, 3 ambientes", "options": []},
+                {"name": "exclusions", "label": "Limites o exclusiones", "type": "textarea", "required": False, "placeholder": "Indica que no esta incluido o que debe cotizarse por separado.", "options": []},
             ],
         },
         {
@@ -138,9 +150,25 @@ def base_form_sections(category: str | None = None) -> list[dict[str, Any]]:
             ],
         },
         {
-            "section_title": "Seguridad y presupuesto",
+            "section_title": "Entregables y condiciones",
+            "fields": [
+                {"name": "deliverables", "label": "Producto final / entregables", "type": "textarea", "required": True, "placeholder": "Ejemplo: servicio ejecutado, informe tecnico, registro fotografico, acta de conformidad.", "options": []},
+                {"name": "warranty", "label": "Garantia esperada", "type": "text", "required": False, "placeholder": "Ejemplo: 6 meses por mano de obra, garantia del fabricante, no aplica", "options": []},
+                {"name": "execution_deadline", "label": "Plazo de ejecucion o entrega", "type": "text", "required": False, "placeholder": "Ejemplo: 5 dias habiles, 30 dias calendario, segun cronograma aprobado", "options": []},
+                {"name": "allowed_hours", "label": "Horarios permitidos", "type": "text", "required": False, "placeholder": "Ejemplo: lunes a viernes 8:00 a 18:00, fines de semana, fuera de horario operativo", "options": []},
+                {"name": "supplier_conditions_extra", "label": "Condiciones para el proveedor", "type": "textarea", "required": False, "placeholder": "Indica visitas tecnicas, garantia, exclusiones, documentacion o condiciones comerciales.", "options": []},
+            ],
+        },
+        {
+            "section_title": "Seguridad y cumplimiento",
             "fields": [
                 {"name": "safety_requirements", "label": "Requisitos de seguridad", "type": "multiselect", "required": False, "placeholder": "", "options": SAFETY_OPTIONS},
+                {"name": "compliance_notes", "label": "Cumplimiento o requisitos internos", "type": "textarea", "required": False, "placeholder": "Ejemplo: induccion, acceso a planta, manual del contratista, gestion de residuos", "options": []},
+            ],
+        },
+        {
+            "section_title": "Presupuesto y cadena presupuestal",
+            "fields": [
                 {"name": "budget_project", "label": "Proyecto", "type": "text", "required": False, "placeholder": "", "options": []},
                 {"name": "budget_cost_center", "label": "Centro de costos", "type": "text", "required": False, "placeholder": "", "options": []},
                 {"name": "budget_account", "label": "Cuenta", "type": "text", "required": False, "placeholder": "", "options": []},
@@ -149,9 +177,14 @@ def base_form_sections(category: str | None = None) -> list[dict[str, Any]]:
             ],
         },
         {
-            "section_title": "Documentos e instrucciones",
+            "section_title": "Documentos de apoyo",
             "fields": [
                 {"name": "files", "label": "Documentos de apoyo", "type": "file", "required": False, "placeholder": "Puedes subir planos, fichas tecnicas, fotos, croquis, Excel o PDF base.", "options": ["PDF", "DOCX", "XLSX", "CSV", "JPG", "JPEG", "PNG"]},
+            ],
+        },
+        {
+            "section_title": "Instrucciones adicionales",
+            "fields": [
                 {"name": "additional_instructions", "label": "Instrucciones adicionales", "type": "textarea", "required": False, "placeholder": "Agrega restricciones, condiciones especiales, criterios tecnicos, marcas sugeridas, zonas criticas, horarios permitidos, exclusiones o comentarios para el proveedor.", "options": []},
             ],
         },

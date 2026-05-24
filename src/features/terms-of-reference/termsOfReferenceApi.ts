@@ -71,6 +71,46 @@ export type TermsResult = {
     warnings: string[];
     missing_sections: string[];
   };
+  completion_score?: number;
+  completion_level?: 'Alta' | 'Media' | 'Baja';
+  risk_level?: 'Bajo' | 'Medio' | 'Alto';
+  checklist?: Array<{
+    label: string;
+    status: 'complete' | 'incomplete' | 'recommended';
+    detail?: string | null;
+  }>;
+  flow_steps?: string[];
+  dashboard_metrics?: Array<{
+    label: string;
+    value: string;
+    status: 'complete' | 'warning' | 'risk' | 'neutral';
+    detail?: string | null;
+  }>;
+  tender_bases?: {
+    object: string;
+    scope: string;
+    minimum_supplier_requirements: string[];
+    requested_documentation: string[];
+    evaluation_criteria: string[];
+    proposal_submission_conditions: string[];
+    question_deadline: string;
+    proposal_deadline: string;
+    submission_method: string;
+    award_criteria: string[];
+    disqualification_conditions: string[];
+    buyer_observations: string[];
+    disclaimer: string;
+  };
+  supplier_invitation_email?: {
+    subject: string;
+    greeting: string;
+    body: string;
+    attached_documents: string[];
+    response_deadline: string;
+    contact_details: string;
+    closing: string;
+  };
+  tender_process?: string[];
   disclaimer: string;
 };
 

@@ -12,7 +12,7 @@ from app.agents.terms_of_reference.prompts import (
     build_generate_prompt,
 )
 from app.agents.terms_of_reference.quality_validator import validate_quality
-from app.agents.terms_of_reference.schemas import FormSchemaResponse, TermsOfReferenceResult
+from app.agents.terms_of_reference.schemas import ChecklistItem, DashboardMetric, FormSchemaResponse, TermsOfReferenceResult
 from app.agents.terms_of_reference.template_selector import base_form_sections, get_template
 from app.ai.llm_client import analyze_with_openai
 from app.config import get_settings
@@ -64,15 +64,28 @@ async def create_form_schema(initial_description: str) -> FormSchemaResponse:
 
 def _fallback_document(payload: dict[str, Any], document_summaries: list[dict[str, Any]]) -> dict[str, Any]:
     template = get_template(payload.get("category"))
+    title = payload["title"]
+    tender_process = [
+        "Validar termino de referencia",
+        "Seleccionar proveedores invitados",
+        "Enviar correo de invitacion",
+        "Recibir consultas",
+        "Responder consultas",
+        "Recibir propuestas",
+        "Comparar propuestas",
+        "Negociar si aplica",
+        "Seleccionar proveedor",
+        "Emitir orden de compra o contrato",
+    ]
     return {
-        "title": payload["title"],
+        "title": title,
         "requirement_type": payload["requirement_type"],
         "category": payload["category"],
         "template_used": payload.get("category") or "Otro",
-        "executive_summary": f"Termino de referencia para {payload['title']}, orientado a cubrir el alcance indicado por el comprador.",
+        "executive_summary": f"Termino de referencia para {title}, orientado a cubrir el alcance indicado por el comprador.",
         "generated_document": {
             "general_data": {
-                "requirement_name": payload["title"],
+                "requirement_name": title,
                 "requirement_type": payload["requirement_type"],
                 "category": payload["category"],
                 "location": payload.get("location"),
@@ -99,8 +112,139 @@ def _fallback_document(payload: dict[str, Any], document_summaries: list[dict[st
         "missing_information": ["Validar cantidades finales, fechas exactas, responsable interno y condiciones particulares de la instalacion."],
         "buyer_recommendations": ["Revisar el documento con el area usuaria y SST/SSMA antes de enviarlo a proveedores."],
         "quality_check": {"is_complete": True, "warnings": [], "missing_sections": []},
+        "completion_score": 80,
+        "completion_level": "Alta",
+        "risk_level": "Medio",
+        "checklist": [],
+        "flow_steps": ["Necesidad", "Alcance", "Actividades", "Entregables", "Requisitos", "Proveedor"],
+        "dashboard_metrics": [],
+        "tender_bases": {
+            "object": f"Convocar proveedores para {title}.",
+            "scope": payload["scope"],
+            "minimum_supplier_requirements": [
+                "Experiencia relacionada con el alcance solicitado.",
+                "Capacidad tecnica y recursos suficientes para ejecutar el requerimiento.",
+                "Cumplimiento de requisitos de seguridad y acceso definidos por el comprador.",
+            ],
+            "requested_documentation": template["documents"],
+            "evaluation_criteria": ["Cumplimiento tecnico", "Precio total", "Plazo", "Garantia", "Experiencia", "Condiciones comerciales"],
+            "proposal_submission_conditions": ["Presentar propuesta tecnica y economica", "Indicar exclusiones", "Adjuntar cronograma y garantia"],
+            "question_deadline": "No especificado",
+            "proposal_deadline": "No especificado",
+            "submission_method": "No especificado",
+            "award_criteria": ["Mejor cumplimiento tecnico-economico validado por compras y area usuaria."],
+            "disqualification_conditions": ["No presentar informacion tecnica minima", "No cumplir requisitos criticos de seguridad", "Presentar informacion incompleta no subsanada"],
+            "buyer_observations": ["Validar estas bases con compras, legal o responsable interno antes del envio."],
+            "disclaimer": "Estas bases son una guia inicial y deben ser revisadas por el area de compras, legal o responsable interno antes de enviarse.",
+        },
+        "supplier_invitation_email": {
+            "subject": f"Invitacion a presentar propuesta - {title}",
+            "greeting": "Estimados proveedores,",
+            "body": f"Los invitamos a presentar su propuesta tecnica y economica para {title}. Adjuntamos el termino de referencia y documentos de apoyo disponibles para su revision.",
+            "attached_documents": ["Termino de referencia", *template["documents"]],
+            "response_deadline": "No especificado",
+            "contact_details": "No especificado",
+            "closing": "Saludos cordiales,",
+        },
+        "tender_process": tender_process,
         "disclaimer": "Este documento fue generado con asistencia de IA y debe ser revisado por el comprador antes de enviarse a proveedores.",
     }
+
+
+def _completion_level(score: int) -> str:
+    if score >= 80:
+        return "Alta"
+    if score >= 55:
+        return "Media"
+    return "Baja"
+
+
+def _risk_level(score: int, missing_count: int) -> str:
+    if score < 55 or missing_count >= 5:
+        return "Alto"
+    if score < 80 or missing_count:
+        return "Medio"
+    return "Bajo"
+
+
+def _enhance_result(result: TermsOfReferenceResult) -> TermsOfReferenceResult:
+    document = result.generated_document
+    checks = [
+        ("Objetivo definido", bool(document.objective.strip()), "Completar objetivo de la contratacion."),
+        ("Alcance definido", bool(document.scope.strip()), "Completar alcance y limites del requerimiento."),
+        ("Actividades definidas", bool(document.required_activities), "Agregar actividades requeridas o validar si no aplica."),
+        ("Entregables definidos", bool(document.final_deliverables), "Agregar entregables esperados."),
+        ("Justificacion incluida", bool(document.justification.strip()), "Agregar justificacion del requerimiento."),
+        ("Requisitos de seguridad revisados", bool(document.safety_requirements), "Validar requisitos SST/SSMA aplicables."),
+        ("Documentos de apoyo adjuntos", bool(result.supporting_documents_summary), "Adjuntar planos, fotos, fichas o documentos si existen."),
+        ("Informacion faltante identificada", bool(result.missing_information), "Revisar informacion faltante antes del envio."),
+        ("Condiciones para proveedor definidas", bool(document.supplier_conditions), "Agregar condiciones de presentacion o ejecucion."),
+        ("Anexos sugeridos incluidos", bool(document.suggested_annexes), "Validar anexos sugeridos."),
+    ]
+
+    if not result.checklist:
+        result.checklist = [
+            ChecklistItem(
+                label=label,
+                status="complete" if complete else ("recommended" if "Documentos" in label else "incomplete"),
+                detail=None if complete else detail,
+            )
+            for label, complete, detail in checks
+        ]
+
+    completed = sum(1 for _, complete, _ in checks if complete)
+    score = round((completed / len(checks)) * 100)
+    if not result.completion_score:
+        result.completion_score = score
+        result.completion_level = _completion_level(result.completion_score)  # type: ignore[assignment]
+        result.risk_level = _risk_level(result.completion_score, len(result.missing_information))  # type: ignore[assignment]
+
+    if not result.flow_steps:
+        result.flow_steps = ["Necesidad", "Alcance", "Actividades", "Entregables", "Requisitos", "Proveedor"]
+
+    if not result.dashboard_metrics:
+        result.dashboard_metrics = [
+            DashboardMetric(label="Completitud", value=result.completion_level, status="complete" if result.completion_score >= 80 else "warning"),
+            DashboardMetric(label="Riesgo informacion faltante", value=result.risk_level, status="risk" if result.risk_level == "Alto" else "warning" if result.risk_level == "Medio" else "complete"),
+            DashboardMetric(label="Detalle tecnico", value="Alto" if len(document.technical_characteristics) >= 4 else "Medio" if document.technical_characteristics else "Bajo", status="neutral"),
+            DashboardMetric(label="Seguridad requerida", value="Si" if document.safety_requirements and "No aplica" not in document.safety_requirements else "No aplica", status="warning" if document.safety_requirements and "No aplica" not in document.safety_requirements else "neutral"),
+            DashboardMetric(label="Documentos cargados", value=str(len(result.supporting_documents_summary)), status="complete" if result.supporting_documents_summary else "neutral"),
+            DashboardMetric(label="Entregables definidos", value=str(len(document.final_deliverables)), status="complete" if document.final_deliverables else "risk"),
+            DashboardMetric(label="Requisitos criticos", value=str(len(document.safety_requirements)), status="warning" if document.safety_requirements else "neutral"),
+        ]
+
+    if not result.tender_process:
+        result.tender_process = [
+            "Validar termino de referencia",
+            "Seleccionar proveedores invitados",
+            "Enviar correo de invitacion",
+            "Recibir consultas",
+            "Responder consultas",
+            "Recibir propuestas",
+            "Comparar propuestas",
+            "Negociar si aplica",
+            "Seleccionar proveedor",
+            "Emitir orden de compra o contrato",
+        ]
+
+    if result.tender_bases.object == "No especificado":
+        result.tender_bases.object = f"Convocar proveedores para {result.title}."
+    if result.tender_bases.scope == "No especificado":
+        result.tender_bases.scope = document.scope or "No especificado"
+    if not result.tender_bases.requested_documentation:
+        result.tender_bases.requested_documentation = document.suggested_annexes or ["Termino de referencia"]
+    if not result.tender_bases.evaluation_criteria:
+        result.tender_bases.evaluation_criteria = ["Cumplimiento tecnico", "Precio total", "Plazo", "Garantia", "Experiencia"]
+
+    if result.supplier_invitation_email.body == "No especificado":
+        result.supplier_invitation_email.subject = f"Invitacion a presentar propuesta - {result.title}"
+        result.supplier_invitation_email.body = (
+            f"Los invitamos a presentar su propuesta tecnica y economica para {result.title}. "
+            "Adjuntamos el termino de referencia y documentos disponibles para su revision."
+        )
+        result.supplier_invitation_email.attached_documents = ["Termino de referencia", *document.suggested_annexes]
+
+    return result
 
 
 async def generate_terms_of_reference(
@@ -203,6 +347,7 @@ async def generate_terms_of_reference(
 
         result = TermsOfReferenceResult.model_validate(raw)
         result = validate_quality(result)
+        result = _enhance_result(result)
         print("terms_of_reference_generation_completed", {"file_count": len(files)})
         return result
     except HTTPException:

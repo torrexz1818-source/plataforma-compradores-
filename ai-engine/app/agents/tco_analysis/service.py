@@ -1,30 +1,59 @@
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 import time
 from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
+from openai import AsyncOpenAI, OpenAIError
 
-from app.agents.tco_analysis.calculator import calculate_tco, merge_calculations
 from app.agents.tco_analysis.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.agents.tco_analysis.quality_validator import validate_alternatives, validate_required_fields
 from app.agents.tco_analysis.schemas import SupportingDocumentSummary, TcoAnalysisResult
 from app.agents.tco_analysis.sensitivity import build_sensitivity_from_totals
-from app.ai.llm_client import analyze_with_openai
+from app.ai.json_utils import parse_json_response
 from app.config import get_settings
 from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type, validate_allowed_file
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
 
-MAX_DOCUMENT_CONTEXT_CHARS = 3500
+MAX_DOCUMENT_CONTEXT_CHARS = 12000
+MAX_TOTAL_DOCUMENT_CONTEXT_CHARS = 60000
+IMAGE_FILE_TYPES = {"jpg", "jpeg", "png"}
+PRELIMINARY_MISSING_INFO_NOTE = (
+    "Con la informacion disponible se puede realizar este analisis preliminar. "
+    "Para mejorar la precision del TCO, seria recomendable contar con los siguientes datos..."
+)
+DEFAULT_MISSING_INFORMATION = [
+    "Mantenimiento anual",
+    "Vida util",
+    "Repuestos",
+    "Garantia",
+    "Costos logisticos",
+    "Instalacion",
+    "Consumo energetico",
+    "Soporte",
+    "Valor residual",
+    "Tipo de cambio e impuestos/aranceles si aplica",
+]
+DEFAULT_SUPPLIER_QUESTIONS = [
+    "El precio incluye instalacion?",
+    "Cual es la vida util estimada?",
+    "Que garantia aplica?",
+    "Cual es el costo anual de mantenimiento?",
+    "Hay repuestos disponibles localmente?",
+    "El flete esta incluido?",
+    "Que costos no estan incluidos?",
+]
 RELEVANT_TERMS = (
     "precio", "fob", "cif", "exw", "flete", "seguro", "aduana", "impuesto", "arancel",
-    "garantía", "garantia", "mantenimiento", "repuesto", "instalación", "instalacion",
-    "capacitación", "capacitacion", "soporte", "vida útil", "vida util", "lead time",
-    "plazo", "pago", "condiciones", "exclusiones", "riesgo", "consumo", "energía",
-    "energia", "transporte", "penalidad", "contrato", "licencia", "suscripción",
+    "garantia", "warranty", "mantenimiento", "repuesto", "instalacion", "capacitacion",
+    "soporte", "vida util", "lead time", "plazo", "pago", "condiciones", "exclusiones",
+    "riesgo", "consumo", "energia", "transporte", "penalidad", "contrato", "licencia",
+    "suscripcion", "servicio", "modelo", "marca", "cantidad", "total", "moneda",
 )
 
 
@@ -34,214 +63,8 @@ def parse_alternatives_json(alternatives_json: str | None) -> list[dict[str, Any
     try:
         parsed = json.loads(alternatives_json)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail="alternatives_json no es JSON válido.") from exc
+        raise HTTPException(status_code=400, detail="alternatives_json no es JSON valido.") from exc
     return validate_alternatives(parsed)
-
-
-def build_detected_alternatives_from_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    detected: list[dict[str, Any]] = []
-    for document in documents:
-        findings = "\n".join(str(item) for item in document.get("relevant_findings", []))
-        data_detected = [
-            label for label, terms in {
-                "precio": ["precio", "total", "monto", "usd", "pen", "eur"],
-                "garantía": ["garantía", "garantia", "warranty"],
-                "lead time": ["lead time", "plazo", "entrega"],
-                "forma de pago": ["pago", "crédito", "credito", "adelanto"],
-                "costos logísticos": ["flete", "transporte", "seguro", "aduana", "arancel"],
-                "mantenimiento/soporte": ["mantenimiento", "soporte", "repuestos"],
-            }.items()
-            if any(term in findings.lower() for term in terms)
-        ]
-        data_missing = [
-            item for item in ["mantenimiento", "repuestos", "vida útil", "riesgos", "costos no incluidos"]
-            if item not in data_detected
-        ]
-        detected.append(
-            {
-                "supplier_name": f"Proveedor detectado en {document.get('file_name', 'documento')}",
-                "source_file": str(document.get("file_name", "No especificado")),
-                "data_detected": data_detected,
-                "data_missing": data_missing,
-                "confidence_level": "low",
-            }
-        )
-    return detected
-
-
-def compact_text_for_tco(text: str) -> tuple[str, list[str]]:
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
-    relevant = [
-        line for line in lines
-        if any(term in line.lower() for term in RELEVANT_TERMS)
-    ]
-    selected = relevant[:80] if relevant else lines[:80]
-    compact = "\n".join(selected)
-    limitations: list[str] = []
-
-    if len(text) > len(compact):
-        limitations.append("Se envió al LLM un contexto documental compacto con términos relevantes para TCO.")
-    if len(compact) > MAX_DOCUMENT_CONTEXT_CHARS:
-        compact = compact[:MAX_DOCUMENT_CONTEXT_CHARS]
-        limitations.append("El contexto documental fue truncado para evitar enviar documentos completos.")
-
-    return compact, limitations
-
-
-def build_document_summary(path: Path, filename: str) -> dict[str, Any]:
-    text, file_type, warnings = read_document_text(path, filename)
-    compact, limitations = compact_text_for_tco(text)
-    return {
-        "file_name": filename,
-        "detected_type": file_type,
-        "relevant_findings": [compact] if compact else [],
-        "limitations": [*warnings, *limitations],
-    }
-
-
-def build_fallback_result(
-    *,
-    title: str,
-    item_name: str,
-    analysis_type: str,
-    evaluation_horizon: str,
-    comparison_unit: str,
-    currency: str,
-    alternatives: list[dict[str, Any]],
-    documents: list[dict[str, Any]],
-    calculation_warnings: list[str],
-) -> dict[str, Any]:
-    matrix, totals, ranking, warnings = calculate_tco(alternatives, evaluation_horizon)
-    sensitivity = build_sensitivity_from_totals(totals)
-    best = ranking[0]["alternative"] if ranking else "No determinado"
-
-    return {
-        "analysis_title": title,
-        "item_name": item_name,
-        "analysis_type": analysis_type,
-        "evaluation_horizon": evaluation_horizon,
-        "comparison_unit": comparison_unit,
-        "currency": currency,
-        "executive_summary": {
-            "best_alternative": best,
-            "why_it_wins": "Resultado calculado con los montos numéricos disponibles. Falta interpretación avanzada de OpenAI.",
-            "estimated_saving_or_overcost": "No determinado" if len(ranking) < 2 else "Ver ranking TCO calculado.",
-            "main_risk": "Información incompleta",
-            "final_recommendation": "Validar datos faltantes antes de adjudicar.",
-        },
-        "data_used": [
-            {
-                "alternative": item["supplier_name"],
-                "base_price": str(item.get("base_price")) if item.get("base_price") is not None else None,
-                "quantity": str(item.get("quantity")) if item.get("quantity") is not None else None,
-                "currency": str(item.get("currency") or currency),
-                "horizon": evaluation_horizon,
-                "origin": item.get("origin_country"),
-                "destination": item.get("destination_country"),
-                "incoterm": item.get("incoterm"),
-                "lead_time": item.get("lead_time"),
-                "key_assumptions": [],
-            }
-            for item in alternatives
-        ],
-        "tco_matrix": matrix,
-        "tco_totals": totals,
-        "ranking": ranking,
-        "interpretation": {
-            "why_winner_wins": "El ganador se define por menor TCO calculable con datos disponibles.",
-            "hidden_costs": [],
-            "cheap_but_risky_options": [],
-            "expensive_but_convenient_options": [],
-            "conditions_that_change_decision": ["Completar costos faltantes puede cambiar el ranking."],
-        },
-        "risk_analysis": [],
-        "sensitivity_analysis": sensitivity,
-        "strategic_recommendation": {
-            "recommended_action": "Pedir más información",
-            "negotiation_points": ["Solicitar desglose de costos ocultos, garantía, soporte y lead time."],
-            "next_steps": ["Completar costos faltantes y validar condiciones comerciales."],
-        },
-        "missing_information": ["Completar cualquier costo no informado por proveedor."],
-        "questions_for_user_or_suppliers": ["¿Qué costos de mantenimiento, operación, garantía y soporte aplican por alternativa?"],
-        "assumptions_and_limits": ["No se inventaron impuestos, aranceles ni tipo de cambio."],
-        "supporting_documents_summary": documents,
-        "detected_alternatives": build_detected_alternatives_from_documents(documents) if documents else [],
-        "extracted_data_quality": {
-            "detected_alternatives_count": len(documents),
-            "documents_processed": len(documents),
-            "confidence_level": "low",
-            "warnings": [
-                "OpenAI no estuvo disponible; se generó una lectura documental básica sin extracción avanzada."
-            ] if documents else [],
-        },
-        "calculation_warnings": [*calculation_warnings, *warnings],
-        "disclaimer": "Este análisis TCO es una recomendación asistida por IA y debe ser validado por el comprador antes de tomar una decisión final.",
-    }
-
-
-def ensure_result_defaults(
-    result: dict[str, Any],
-    *,
-    title: str,
-    item_name: str,
-    analysis_type: str,
-    evaluation_horizon: str,
-    comparison_unit: str,
-    currency: str,
-) -> dict[str, Any]:
-    result.setdefault("analysis_title", title)
-    result.setdefault("item_name", item_name)
-    result.setdefault("analysis_type", analysis_type)
-    result.setdefault("evaluation_horizon", evaluation_horizon)
-    result.setdefault("comparison_unit", comparison_unit)
-    result.setdefault("currency", currency)
-    result.setdefault(
-        "executive_summary",
-        {
-            "best_alternative": "No determinado",
-            "why_it_wins": "Falta información para definir una alternativa ganadora.",
-            "estimated_saving_or_overcost": "No determinado",
-            "main_risk": "Información incompleta",
-            "final_recommendation": "Completar datos faltantes antes de decidir.",
-        },
-    )
-    result.setdefault(
-        "interpretation",
-        {
-            "why_winner_wins": "No determinado",
-            "hidden_costs": [],
-            "cheap_but_risky_options": [],
-            "expensive_but_convenient_options": [],
-            "conditions_that_change_decision": [],
-        },
-    )
-    result.setdefault(
-        "strategic_recommendation",
-        {
-            "recommended_action": "Pedir más información",
-            "negotiation_points": [],
-            "next_steps": [],
-        },
-    )
-    result.setdefault("data_used", [])
-    result.setdefault("tco_matrix", [])
-    result.setdefault("tco_totals", [])
-    result.setdefault("ranking", [])
-    result.setdefault("risk_analysis", [])
-    result.setdefault("detected_alternatives", [])
-    result.setdefault(
-        "extracted_data_quality",
-        {
-            "detected_alternatives_count": len(result.get("detected_alternatives", [])),
-            "documents_processed": 0,
-            "confidence_level": "low",
-            "warnings": [],
-        },
-    )
-    result.setdefault("missing_information", [])
-    result.setdefault("questions_for_user_or_suppliers", [])
-    result.setdefault("assumptions_and_limits", [])
-    return result
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -275,6 +98,7 @@ def _as_number(value: Any) -> float | None:
         .replace("$", "")
         .replace("USD", "")
         .replace("PEN", "")
+        .replace("EUR", "")
         .replace(",", "")
         .strip()
     )
@@ -290,79 +114,369 @@ def _normalize_level(value: Any, default: str = "medium") -> str:
         return "low"
     if text in {"medium", "medio", "media", "moderado", "moderada"}:
         return "medium"
-    if text in {"high", "alto", "alta"}:
+    if text in {"high", "alto", "alta", "critico", "critica"}:
         return "high"
     return default
 
 
+def compact_text_for_tco(text: str) -> tuple[str, list[str]]:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    relevant = [line for line in lines if any(term in line.lower() for term in RELEVANT_TERMS)]
+    selected = relevant[:220] if relevant else lines[:220]
+    compact = "\n".join(selected)
+    limitations: list[str] = []
+
+    if len(text) > len(compact):
+        limitations.append("Se envio al LLM un contexto documental priorizado por terminos relevantes para TCO.")
+    if len(compact) > MAX_DOCUMENT_CONTEXT_CHARS:
+        compact = compact[:MAX_DOCUMENT_CONTEXT_CHARS]
+        limitations.append("El contexto documental fue truncado para proteger rendimiento y privacidad.")
+
+    return compact, limitations
+
+
+def build_document_summary(path: Path, filename: str) -> dict[str, Any]:
+    file_type = detect_file_type(filename)
+    try:
+        text, detected_file_type, warnings = read_document_text(path, filename)
+        file_type = detected_file_type or file_type
+    except Exception:
+        text = ""
+        warnings = ["No se pudo extraer texto del archivo; se enviaron metadatos y, si aplica, la imagen al LLM."]
+
+    compact, limitations = compact_text_for_tco(text)
+    return {
+        "file_name": filename,
+        "detected_type": file_type,
+        "relevant_findings": [compact] if compact else [],
+        "limitations": [*warnings, *limitations],
+    }
+
+
+def trim_total_document_context(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    remaining = MAX_TOTAL_DOCUMENT_CONTEXT_CHARS
+    trimmed: list[dict[str, Any]] = []
+
+    for document in documents:
+        next_document = {**document}
+        findings: list[str] = []
+        for finding in _as_list(next_document.get("relevant_findings")):
+            text = str(finding)
+            if remaining <= 0:
+                break
+            if len(text) > remaining:
+                findings.append(text[:remaining])
+                remaining = 0
+            else:
+                findings.append(text)
+                remaining -= len(text)
+
+        if not findings and next_document.get("relevant_findings"):
+            next_document["limitations"] = [
+                *_as_list(next_document.get("limitations")),
+                "El contexto textual total fue truncado para mantener el analisis dentro del limite del modelo.",
+            ]
+        next_document["relevant_findings"] = findings
+        trimmed.append(next_document)
+
+    return trimmed
+
+
+def build_detected_alternatives_from_documents(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    detected: list[dict[str, Any]] = []
+    for document in documents:
+        findings = "\n".join(str(item) for item in _as_list(document.get("relevant_findings")))
+        lowered = findings.lower()
+        data_detected = [
+            label
+            for label, terms in {
+                "precio": ["precio", "total", "monto", "usd", "pen", "eur"],
+                "garantia": ["garantia", "warranty"],
+                "lead time": ["lead time", "plazo", "entrega"],
+                "forma de pago": ["pago", "credito", "adelanto"],
+                "costos logisticos": ["flete", "transporte", "seguro", "aduana", "arancel"],
+                "mantenimiento/soporte": ["mantenimiento", "soporte", "repuestos"],
+            }.items()
+            if any(term in lowered for term in terms)
+        ]
+        detected.append(
+            {
+                "supplier_name": f"Proveedor detectado en {document.get('file_name', 'documento')}",
+                "source_file": str(document.get("file_name", "No especificado")),
+                "detected_price": "No especificado",
+                "warranty": "No especificado",
+                "lead_time": "No especificado",
+                "detected_costs": data_detected,
+                "data_detected": data_detected,
+                "data_missing": DEFAULT_MISSING_INFORMATION,
+                "confidence_level": "low",
+            }
+        )
+    return detected
+
+
+def build_image_content_parts(paths: list[Path], files: list[UploadFile]) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = []
+    for path, upload in zip(paths, files):
+        filename = upload.filename or path.name
+        if detect_file_type(filename) not in IMAGE_FILE_TYPES:
+            continue
+        mime_type = mimetypes.guess_type(filename)[0] or "image/png"
+        encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        parts.append({"type": "text", "text": f"Imagen adjunta para analisis TCO: {filename}"})
+        parts.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}})
+    return parts
+
+
+async def analyze_tco_with_openai(user_prompt: str, image_parts: list[dict[str, Any]]) -> dict[str, Any]:
+    settings = get_settings()
+    if not settings.openai_api_key:
+        raise HTTPException(status_code=500, detail="OPENAI_API_KEY no esta configurada en el AI Engine.")
+
+    user_content: str | list[dict[str, Any]] = user_prompt
+    if image_parts:
+        user_content = [{"type": "text", "text": user_prompt}, *image_parts]
+
+    client = AsyncOpenAI(api_key=settings.openai_api_key)
+    try:
+        response = await client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={"type": "json_object"},
+        )
+    except OpenAIError as exc:
+        raise HTTPException(status_code=502, detail="OpenAI no pudo procesar el analisis TCO en este momento.") from exc
+
+    content = response.choices[0].message.content or ""
+    try:
+        result = parse_json_response(content)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="OpenAI devolvio una respuesta TCO que no es JSON valido.") from exc
+
+    usage = getattr(response, "usage", None)
+    if usage:
+        result["_usage"] = {
+            "tokens_input": getattr(usage, "prompt_tokens", None),
+            "tokens_output": getattr(usage, "completion_tokens", None),
+        }
+    return result
+
+
+def build_fallback_result(
+    *,
+    title: str,
+    item_name: str,
+    analysis_type: str,
+    evaluation_horizon: str,
+    comparison_unit: str,
+    currency: str,
+    documents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    detected = build_detected_alternatives_from_documents(documents) if documents else []
+    best = detected[0]["supplier_name"] if detected else "No determinado"
+
+    return {
+        "analysis_title": title,
+        "item_name": item_name,
+        "analysis_type": analysis_type,
+        "evaluation_horizon": evaluation_horizon,
+        "comparison_unit": comparison_unit,
+        "currency": currency,
+        "executive_summary": {
+            "best_alternative": best,
+            "why_it_wins": "Analisis preliminar construido con la informacion disponible. Falta interpretacion avanzada de OpenAI.",
+            "estimated_saving_or_overcost": "No determinado",
+            "main_risk": "Informacion incompleta",
+            "final_recommendation": "Pedir informacion faltante antes de adjudicar.",
+        },
+        "data_used": [],
+        "tco_matrix": [
+            {
+                "cost_component": "TCO total estimado",
+                "values": {best: "No especificado"} if detected else {},
+                "notes": PRELIMINARY_MISSING_INFO_NOTE,
+            }
+        ],
+        "tco_totals": [],
+        "ranking": [
+            {
+                "position": 1,
+                "alternative": best,
+                "ranking_type": "Mejor alternativa estrategica",
+                "total_tco": None,
+                "reason": "No hay suficientes datos numericos para ordenar por menor TCO. Se requiere validacion documental adicional.",
+            }
+        ] if detected else [],
+        "interpretation": {
+            "why_winner_wins": "No determinado con precision por falta de datos completos.",
+            "hidden_costs": ["Mantenimiento", "Repuestos", "Soporte", "Logistica", "Instalacion"],
+            "cheap_but_risky_options": [],
+            "expensive_but_convenient_options": [],
+            "conditions_that_change_decision": ["Completar costos faltantes puede cambiar el ranking."],
+        },
+        "hidden_costs_detected": ["Mantenimiento", "Repuestos", "Soporte", "Logistica", "Instalacion"],
+        "risk_analysis": [],
+        "sensitivity_analysis": build_sensitivity_from_totals([]),
+        "strategic_recommendation": {
+            "recommended_action": "Pedir mas informacion",
+            "negotiation_points": ["Solicitar desglose de costos ocultos, garantia, soporte y lead time."],
+            "next_steps": ["Completar costos faltantes y validar condiciones comerciales."],
+        },
+        "missing_information": [PRELIMINARY_MISSING_INFO_NOTE, *DEFAULT_MISSING_INFORMATION],
+        "questions_for_user_or_suppliers": DEFAULT_SUPPLIER_QUESTIONS,
+        "assumptions_and_limits": ["No se inventaron impuestos, aranceles ni tipo de cambio."],
+        "supporting_documents_summary": documents,
+        "detected_alternatives": detected,
+        "extracted_data_quality": {
+            "detected_alternatives_count": len(detected),
+            "documents_processed": len(documents),
+            "confidence_level": "low",
+            "warnings": ["OpenAI no estuvo disponible; se genero una lectura preliminar basica sin interpretacion avanzada."]
+            if documents
+            else [],
+        },
+        "calculation_warnings": ["No se ejecuto calculo rigido previo; el flujo TCO es LLM-first."],
+        "disclaimer": "Este analisis TCO es una recomendacion asistida por IA y debe ser validado por el comprador antes de tomar una decision final.",
+    }
+
+
+def ensure_result_defaults(
+    result: dict[str, Any],
+    *,
+    title: str,
+    item_name: str,
+    analysis_type: str,
+    evaluation_horizon: str,
+    comparison_unit: str,
+    currency: str,
+) -> dict[str, Any]:
+    result.setdefault("analysis_title", title)
+    result.setdefault("item_name", item_name)
+    result.setdefault("analysis_type", analysis_type)
+    result.setdefault("evaluation_horizon", evaluation_horizon)
+    result.setdefault("comparison_unit", comparison_unit)
+    result.setdefault("currency", currency)
+    result.setdefault(
+        "executive_summary",
+        {
+            "best_alternative": "No determinado",
+            "why_it_wins": "Falta informacion para definir una alternativa ganadora.",
+            "estimated_saving_or_overcost": "No determinado",
+            "main_risk": "Informacion incompleta",
+            "final_recommendation": "Completar datos faltantes antes de decidir.",
+        },
+    )
+    result.setdefault(
+        "interpretation",
+        {
+            "why_winner_wins": "No determinado",
+            "hidden_costs": [],
+            "cheap_but_risky_options": [],
+            "expensive_but_convenient_options": [],
+            "conditions_that_change_decision": [],
+        },
+    )
+    result.setdefault(
+        "strategic_recommendation",
+        {
+            "recommended_action": "Pedir mas informacion",
+            "negotiation_points": [],
+            "next_steps": [],
+        },
+    )
+    result.setdefault("data_used", [])
+    result.setdefault("tco_matrix", [])
+    result.setdefault("tco_totals", [])
+    result.setdefault("ranking", [])
+    result.setdefault("hidden_costs_detected", [])
+    result.setdefault("risk_analysis", [])
+    result.setdefault("detected_alternatives", [])
+    result.setdefault(
+        "extracted_data_quality",
+        {
+            "detected_alternatives_count": len(result.get("detected_alternatives", [])),
+            "documents_processed": 0,
+            "confidence_level": "low",
+            "warnings": [],
+        },
+    )
+    result.setdefault("missing_information", [])
+    result.setdefault("questions_for_user_or_suppliers", [])
+    result.setdefault("assumptions_and_limits", [])
+    result.setdefault("calculation_warnings", [])
+    return result
+
+
 def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
-    summary = result.get("executive_summary")
-    if not isinstance(summary, dict):
-        summary = {}
+    usage = result.pop("_usage", {}) if isinstance(result.get("_usage"), dict) else {}
+
+    summary = result.get("executive_summary") if isinstance(result.get("executive_summary"), dict) else {}
     result["executive_summary"] = {
         "best_alternative": _as_text(summary.get("best_alternative"), "No determinado"),
         "why_it_wins": _as_text(summary.get("why_it_wins"), "No determinado"),
         "estimated_saving_or_overcost": _as_text(summary.get("estimated_saving_or_overcost"), "No determinado"),
-        "main_risk": _as_text(summary.get("main_risk"), "Información incompleta"),
+        "main_risk": _as_text(summary.get("main_risk"), "Informacion incompleta"),
         "final_recommendation": _as_text(summary.get("final_recommendation"), "Validar datos antes de decidir."),
     }
 
-    data_used: list[dict[str, Any]] = []
-    for item in _as_list(result.get("data_used")):
-        if not isinstance(item, dict):
-            continue
-        data_used.append(
-            {
-                "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
-                "base_price": None if item.get("base_price") is None else _as_text(item.get("base_price")),
-                "quantity": None if item.get("quantity") is None else _as_text(item.get("quantity")),
-                "currency": None if item.get("currency") is None else _as_text(item.get("currency")),
-                "horizon": None if item.get("horizon") is None else _as_text(item.get("horizon")),
-                "origin": None if item.get("origin") is None else _as_text(item.get("origin")),
-                "destination": None if item.get("destination") is None else _as_text(item.get("destination")),
-                "incoterm": None if item.get("incoterm") is None else _as_text(item.get("incoterm")),
-                "lead_time": None if item.get("lead_time") is None else _as_text(item.get("lead_time")),
-                "key_assumptions": [_as_text(value) for value in _as_list(item.get("key_assumptions"))],
-            }
-        )
-    result["data_used"] = data_used
+    result["data_used"] = [
+        {
+            "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
+            "base_price": None if item.get("base_price") is None else _as_text(item.get("base_price")),
+            "quantity": None if item.get("quantity") is None else _as_text(item.get("quantity")),
+            "currency": None if item.get("currency") is None else _as_text(item.get("currency")),
+            "horizon": None if item.get("horizon") is None else _as_text(item.get("horizon")),
+            "origin": None if item.get("origin") is None else _as_text(item.get("origin")),
+            "destination": None if item.get("destination") is None else _as_text(item.get("destination")),
+            "incoterm": None if item.get("incoterm") is None else _as_text(item.get("incoterm")),
+            "lead_time": None if item.get("lead_time") is None else _as_text(item.get("lead_time")),
+            "key_assumptions": [_as_text(value) for value in _as_list(item.get("key_assumptions"))],
+        }
+        for item in _as_list(result.get("data_used"))
+        if isinstance(item, dict)
+    ]
 
-    totals: list[dict[str, Any]] = []
-    for item in _as_list(result.get("tco_totals")):
-        if not isinstance(item, dict):
-            continue
-        totals.append(
-            {
-                "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
-                "initial_price": _as_number(item.get("initial_price")),
-                "total_tco": _as_number(item.get("total_tco")),
-                "tco_per_unit": _as_number(item.get("tco_per_unit")),
-                "tco_monthly": _as_number(item.get("tco_monthly")),
-                "tco_annual": _as_number(item.get("tco_annual")),
-                "risk_level": _normalize_level(item.get("risk_level")),
-                "main_hidden_costs": [_as_text(value) for value in _as_list(item.get("main_hidden_costs"))],
-            }
-        )
-    result["tco_totals"] = totals
+    result["tco_matrix"] = [
+        {
+            "cost_component": _as_text(item.get("cost_component")),
+            "values": item.get("values") if isinstance(item.get("values"), dict) else {},
+            "notes": _as_text(item.get("notes"), ""),
+        }
+        for item in _as_list(result.get("tco_matrix"))
+        if isinstance(item, dict)
+    ]
 
-    ranking: list[dict[str, Any]] = []
-    for index, item in enumerate(_as_list(result.get("ranking")), start=1):
-        if not isinstance(item, dict):
-            continue
-        ranking.append(
-            {
-                "position": int(_as_number(item.get("position")) or index),
-                "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
-                "ranking_type": _as_text(item.get("ranking_type"), "Mejor balance"),
-                "total_tco": _as_number(item.get("total_tco")),
-                "reason": _as_text(item.get("reason"), "Ranking construido con la información disponible."),
-            }
-        )
-    result["ranking"] = ranking
+    result["tco_totals"] = [
+        {
+            "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
+            "initial_price": _as_number(item.get("initial_price")),
+            "total_tco": _as_number(item.get("total_tco")),
+            "tco_per_unit": _as_number(item.get("tco_per_unit")),
+            "tco_monthly": _as_number(item.get("tco_monthly")),
+            "tco_annual": _as_number(item.get("tco_annual")),
+            "risk_level": _normalize_level(item.get("risk_level")),
+            "main_hidden_costs": [_as_text(value) for value in _as_list(item.get("main_hidden_costs"))],
+        }
+        for item in _as_list(result.get("tco_totals"))
+        if isinstance(item, dict)
+    ]
 
-    interpretation = result.get("interpretation")
-    if not isinstance(interpretation, dict):
-        interpretation = {}
+    result["ranking"] = [
+        {
+            "position": int(_as_number(item.get("position")) or index),
+            "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
+            "ranking_type": _as_text(item.get("ranking_type"), "Mejor balance costo-beneficio"),
+            "total_tco": _as_number(item.get("total_tco")),
+            "reason": _as_text(item.get("reason"), "Ranking preliminar construido con la informacion disponible."),
+        }
+        for index, item in enumerate(_as_list(result.get("ranking")), start=1)
+        if isinstance(item, dict)
+    ]
+
+    interpretation = result.get("interpretation") if isinstance(result.get("interpretation"), dict) else {}
     result["interpretation"] = {
         "why_winner_wins": _as_text(interpretation.get("why_winner_wins"), "No determinado"),
         "hidden_costs": [_as_text(value) for value in _as_list(interpretation.get("hidden_costs"))],
@@ -371,59 +485,82 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
         "conditions_that_change_decision": [_as_text(value) for value in _as_list(interpretation.get("conditions_that_change_decision"))],
     }
 
-    risks: list[dict[str, Any]] = []
-    for item in _as_list(result.get("risk_analysis")):
-        if not isinstance(item, dict):
-            continue
-        risks.append(
-            {
-                "risk": _as_text(item.get("risk")),
-                "alternative": _as_text(item.get("alternative"), "General"),
-                "probability": None if item.get("probability") is None else _as_text(item.get("probability")),
-                "economic_impact": None if item.get("economic_impact") is None else _as_text(item.get("economic_impact")),
-                "expected_risk_cost": None if item.get("expected_risk_cost") is None else _as_text(item.get("expected_risk_cost")),
-                "level": _normalize_level(item.get("level")),
-                "mitigation": _as_text(item.get("mitigation"), "Validar y documentar mitigación."),
-            }
-        )
-    result["risk_analysis"] = risks
+    hidden_costs = [
+        *_as_list(result.get("hidden_costs_detected")),
+        *_as_list(result["interpretation"].get("hidden_costs")),
+        *[cost for total in result["tco_totals"] for cost in _as_list(total.get("main_hidden_costs"))],
+    ]
+    result["hidden_costs_detected"] = list(dict.fromkeys(_as_text(item) for item in hidden_costs if _as_text(item, "")))
 
-    detected: list[dict[str, Any]] = []
-    for item in _as_list(result.get("detected_alternatives")):
-        if not isinstance(item, dict):
-            continue
-        detected.append(
-            {
-                "supplier_name": _as_text(item.get("supplier_name")),
-                "source_file": _as_text(item.get("source_file")),
-                "data_detected": [_as_text(value) for value in _as_list(item.get("data_detected"))],
-                "data_missing": [_as_text(value) for value in _as_list(item.get("data_missing"))],
-                "confidence_level": _normalize_level(item.get("confidence_level"), "low"),
-            }
-        )
-    result["detected_alternatives"] = detected
+    result["risk_analysis"] = [
+        {
+            "risk": _as_text(item.get("risk")),
+            "alternative": _as_text(item.get("alternative"), "General"),
+            "probability": None if item.get("probability") is None else _as_text(item.get("probability")),
+            "economic_impact": None if item.get("economic_impact") is None else _as_text(item.get("economic_impact")),
+            "expected_risk_cost": None if item.get("expected_risk_cost") is None else _as_text(item.get("expected_risk_cost")),
+            "level": _normalize_level(item.get("level")),
+            "mitigation": _as_text(item.get("mitigation"), "Validar y documentar mitigacion."),
+        }
+        for item in _as_list(result.get("risk_analysis"))
+        if isinstance(item, dict)
+    ]
 
-    quality = result.get("extracted_data_quality")
-    if not isinstance(quality, dict):
-        quality = {}
+    result["detected_alternatives"] = [
+        {
+            "supplier_name": _as_text(item.get("supplier_name")),
+            "source_file": _as_text(item.get("source_file")),
+            "detected_price": None if item.get("detected_price") is None else _as_text(item.get("detected_price")),
+            "warranty": None if item.get("warranty") is None else _as_text(item.get("warranty")),
+            "lead_time": None if item.get("lead_time") is None else _as_text(item.get("lead_time")),
+            "detected_costs": [_as_text(value) for value in _as_list(item.get("detected_costs"))],
+            "data_detected": [_as_text(value) for value in _as_list(item.get("data_detected"))],
+            "data_missing": [_as_text(value) for value in _as_list(item.get("data_missing"))],
+            "confidence_level": _normalize_level(item.get("confidence_level"), "low"),
+        }
+        for item in _as_list(result.get("detected_alternatives"))
+        if isinstance(item, dict)
+    ]
+
+    quality = result.get("extracted_data_quality") if isinstance(result.get("extracted_data_quality"), dict) else {}
     result["extracted_data_quality"] = {
-        "detected_alternatives_count": int(_as_number(quality.get("detected_alternatives_count")) or len(detected)),
+        "detected_alternatives_count": int(_as_number(quality.get("detected_alternatives_count")) or len(result["detected_alternatives"])),
         "documents_processed": int(_as_number(quality.get("documents_processed")) or 0),
         "confidence_level": _normalize_level(quality.get("confidence_level"), "low"),
         "warnings": [_as_text(value) for value in _as_list(quality.get("warnings"))],
     }
 
-    recommendation = result.get("strategic_recommendation")
-    if not isinstance(recommendation, dict):
-        recommendation = {}
+    recommendation = result.get("strategic_recommendation") if isinstance(result.get("strategic_recommendation"), dict) else {}
     result["strategic_recommendation"] = {
-        "recommended_action": _as_text(recommendation.get("recommended_action"), "Pedir más información"),
+        "recommended_action": _as_text(recommendation.get("recommended_action"), "Pedir mas informacion"),
         "negotiation_points": [_as_text(value) for value in _as_list(recommendation.get("negotiation_points"))],
         "next_steps": [_as_text(value) for value in _as_list(recommendation.get("next_steps"))],
     }
 
+    sensitivity = result.get("sensitivity_analysis") if isinstance(result.get("sensitivity_analysis"), dict) else {}
+    if not sensitivity:
+        sensitivity = build_sensitivity_from_totals(result.get("tco_totals", []))
+    result["sensitivity_analysis"] = {
+        "base": [_as_text(value) for value in _as_list(sensitivity.get("base"))],
+        "optimistic": [_as_text(value) for value in _as_list(sensitivity.get("optimistic"))],
+        "pessimistic": [_as_text(value) for value in _as_list(sensitivity.get("pessimistic"))],
+        "break_even": [_as_text(value) for value in _as_list(sensitivity.get("break_even"))],
+        "most_sensitive_variable": _as_text(sensitivity.get("most_sensitive_variable"), "Datos de costos incompletos"),
+    }
+
     for key in ["missing_information", "questions_for_user_or_suppliers", "assumptions_and_limits", "calculation_warnings"]:
         result[key] = [_as_text(value) for value in _as_list(result.get(key))]
+
+    if PRELIMINARY_MISSING_INFO_NOTE not in result["missing_information"]:
+        result["missing_information"] = [PRELIMINARY_MISSING_INFO_NOTE, *result["missing_information"]]
+    if not result["missing_information"] or result["missing_information"] == [PRELIMINARY_MISSING_INFO_NOTE]:
+        result["missing_information"] = [PRELIMINARY_MISSING_INFO_NOTE, *DEFAULT_MISSING_INFORMATION]
+    if not result["questions_for_user_or_suppliers"]:
+        result["questions_for_user_or_suppliers"] = DEFAULT_SUPPLIER_QUESTIONS
+
+    if usage:
+        result["tokens_input"] = usage.get("tokens_input")
+        result["tokens_output"] = usage.get("tokens_output")
 
     return result
 
@@ -451,20 +588,22 @@ async def analyze_tco(
             "item_name": item_name,
             "analysis_type": analysis_type,
             "evaluation_horizon": evaluation_horizon,
-            "comparison_unit": comparison_unit,
+            "comparison_unit": comparison_unit or "Por compra",
             "currency": currency,
         }
     )
-    alternatives = parse_alternatives_json(alternatives_json)
+    fallback_alternatives = parse_alternatives_json(alternatives_json)
 
-    if not alternatives and not files:
+    written_context_values = [objective, general_context, additional_instructions]
+    has_written_context = any((value or "").strip() for value in written_context_values)
+    if not files and not has_written_context and not fallback_alternatives:
         raise HTTPException(
             status_code=400,
-            detail="Sube al menos una cotización/propuesta o ingresa datos de alternativas para analizar el TCO.",
+            detail="Ingresa contexto, instrucciones, datos escritos o sube documentos para generar el analisis TCO preliminar.",
         )
 
     if len(files) > 8:
-        raise HTTPException(status_code=400, detail="Puedes subir como máximo 8 archivos por análisis TCO.")
+        raise HTTPException(status_code=400, detail="Puedes subir como maximo 8 archivos por analisis TCO.")
 
     temp_paths: list[Path] = []
     documents: list[dict[str, Any]] = []
@@ -477,36 +616,33 @@ async def analyze_tco(
         for path, upload in zip(temp_paths, files):
             documents.append(build_document_summary(path, upload.filename or path.name))
 
-        matrix, totals, ranking, calculation_warnings = (
-            calculate_tco(alternatives, evaluation_horizon)
-            if alternatives
-            else ([], [], [], ["Análisis documental: no se recibieron alternativas manuales para cálculo Python previo."])
-        )
-        python_calculations = {
-            "tco_matrix": matrix,
-            "tco_totals": totals,
-            "ranking": ranking,
-            "sensitivity_analysis": build_sensitivity_from_totals(totals),
-            "calculation_warnings": calculation_warnings,
-        }
+        if fallback_alternatives:
+            documents.append(
+                {
+                    "file_name": "datos escritos por el usuario",
+                    "detected_type": "json",
+                    "relevant_findings": [json.dumps(fallback_alternatives, ensure_ascii=False, default=str)],
+                    "limitations": ["Datos manuales usados solo como fallback interno, no como formulario obligatorio."],
+                }
+            )
+
+        documents_for_prompt = trim_total_document_context(documents)
         prompt = build_user_prompt(
             title=title.strip(),
             item_name=item_name.strip(),
             analysis_type=analysis_type.strip(),
             evaluation_horizon=evaluation_horizon.strip(),
-            comparison_unit=comparison_unit.strip(),
+            comparison_unit=(comparison_unit or "Por compra").strip(),
             currency=currency.strip(),
-            purchase_volume=purchase_volume,
             objective=objective,
-            alternatives=alternatives,
             general_context=general_context,
             additional_instructions=additional_instructions,
-            documents=documents,
-            python_calculations=python_calculations,
+            documents=documents_for_prompt,
         )
+        image_parts = build_image_content_parts(temp_paths, files)
 
         try:
-            raw_result = await analyze_with_openai(prompt, SYSTEM_PROMPT)
+            raw_result = await analyze_tco_with_openai(prompt, image_parts)
         except HTTPException as exc:
             if exc.status_code >= 500:
                 raw_result = build_fallback_result(
@@ -514,11 +650,9 @@ async def analyze_tco(
                     item_name=item_name,
                     analysis_type=analysis_type,
                     evaluation_horizon=evaluation_horizon,
-                    comparison_unit=comparison_unit,
+                    comparison_unit=comparison_unit or "Por compra",
                     currency=currency,
-                    alternatives=alternatives,
-                    documents=documents,
-                    calculation_warnings=calculation_warnings,
+                    documents=documents_for_prompt,
                 )
             else:
                 raise
@@ -529,35 +663,28 @@ async def analyze_tco(
             item_name=item_name,
             analysis_type=analysis_type,
             evaluation_horizon=evaluation_horizon,
-            comparison_unit=comparison_unit,
+            comparison_unit=comparison_unit or "Por compra",
             currency=currency,
         )
         raw_result = sanitize_tco_result(raw_result)
         raw_result["supporting_documents_summary"] = [
-            SupportingDocumentSummary.model_validate(item).model_dump() for item in documents
+            SupportingDocumentSummary.model_validate(item).model_dump() for item in documents_for_prompt
         ]
-        if alternatives:
-            raw_result = merge_calculations(raw_result, alternatives, evaluation_horizon)
-        raw_result["detected_alternatives"] = raw_result.get("detected_alternatives") or build_detected_alternatives_from_documents(documents)
+        raw_result["detected_alternatives"] = raw_result.get("detected_alternatives") or build_detected_alternatives_from_documents(documents_for_prompt)
         quality = raw_result.get("extracted_data_quality") or {}
-        quality.setdefault("detected_alternatives_count", len(raw_result.get("detected_alternatives", [])))
-        quality.setdefault("documents_processed", len(documents))
-        quality.setdefault("confidence_level", "medium" if len(raw_result.get("detected_alternatives", [])) >= 2 else "low")
-        quality.setdefault("warnings", [])
-        if len(raw_result.get("detected_alternatives", [])) == 1:
+        quality["detected_alternatives_count"] = quality.get("detected_alternatives_count") or len(raw_result.get("detected_alternatives", []))
+        quality["documents_processed"] = len(files)
+        quality["confidence_level"] = quality.get("confidence_level") or ("medium" if len(raw_result.get("detected_alternatives", [])) >= 2 else "low")
+        quality["warnings"] = _as_list(quality.get("warnings"))
+        if len(raw_result.get("detected_alternatives", [])) <= 1:
             quality["warnings"] = [
                 *quality.get("warnings", []),
-                "Solo se detectó una alternativa. Para comparar TCO entre proveedores, sube al menos dos propuestas.",
-            ]
-            raw_result["missing_information"] = [
-                *raw_result.get("missing_information", []),
-                "Solo se detectó una alternativa. Para comparar TCO entre proveedores, sube al menos dos propuestas.",
+                "Analisis preliminar: se detecto una o ninguna alternativa. Para comparar TCO, agrega mas propuestas o cotizaciones.",
             ]
         raw_result["extracted_data_quality"] = quality
-        raw_result["sensitivity_analysis"] = build_sensitivity_from_totals(raw_result.get("tco_totals", []))
         raw_result.setdefault(
             "disclaimer",
-            "Este análisis TCO es una recomendación asistida por IA y debe ser validado por el comprador antes de tomar una decisión final.",
+            "Este analisis TCO es una recomendacion asistida por IA y debe ser validado por el comprador antes de tomar una decision final.",
         )
         raw_result["model_provider"] = "OpenAI"
         raw_result["model_name"] = settings.openai_model
@@ -567,10 +694,7 @@ async def analyze_tco(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=502,
-            detail="No se pudo generar el análisis TCO.",
-        ) from exc
+        raise HTTPException(status_code=502, detail="No se pudo generar el analisis TCO.") from exc
     finally:
         if settings.delete_temp_files:
             cleanup_files(temp_paths)

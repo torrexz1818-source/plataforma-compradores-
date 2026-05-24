@@ -35,6 +35,10 @@ class SupportingDocumentSummary(BaseModel):
 class DetectedAlternative(BaseModel):
     supplier_name: str
     source_file: str
+    detected_price: str | None = None
+    warranty: str | None = None
+    lead_time: str | None = None
+    detected_costs: list[str] = Field(default_factory=list)
     data_detected: list[str] = Field(default_factory=list)
     data_missing: list[str] = Field(default_factory=list)
     confidence_level: RiskLevel = "medium"
@@ -143,6 +147,7 @@ class TcoAnalysisResult(BaseModel):
     risk_analysis: list[RiskAnalysisItem] = Field(default_factory=list)
     sensitivity_analysis: SensitivityAnalysis
     strategic_recommendation: StrategicRecommendation
+    hidden_costs_detected: list[str] = Field(default_factory=list)
     detected_alternatives: list[DetectedAlternative] = Field(default_factory=list)
     extracted_data_quality: ExtractedDataQuality = Field(default_factory=ExtractedDataQuality)
     missing_information: list[str] = Field(default_factory=list)

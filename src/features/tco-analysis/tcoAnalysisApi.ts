@@ -66,9 +66,14 @@ export type TcoAnalysisResult = {
   risk_analysis: Array<Record<string, unknown>>;
   sensitivity_analysis: Record<string, unknown>;
   strategic_recommendation: Record<string, unknown>;
+  hidden_costs_detected?: string[];
   detected_alternatives?: Array<{
     supplier_name: string;
     source_file: string;
+    detected_price?: string | null;
+    warranty?: string | null;
+    lead_time?: string | null;
+    detected_costs?: string[];
     data_detected: string[];
     data_missing: string[];
     confidence_level?: 'low' | 'medium' | 'high';
