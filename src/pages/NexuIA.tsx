@@ -46,7 +46,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
 import { useProposalComparison } from '@/features/proposal-comparison/useProposalComparison';
 import {
-  useDownloadTermsPdf,
   useGenerateTermsOfReference,
   useTermsFormSchema,
 } from '@/features/terms-of-reference/useTermsOfReference';
@@ -54,10 +53,10 @@ import {
   validateTermsFiles,
   type TermsFormField,
 } from '@/features/terms-of-reference/termsOfReferenceApi';
-import { useDashboardCreator, useDownloadDashboardPdf } from '@/features/dashboard-creator/useDashboardCreator';
+import { useDashboardCreator } from '@/features/dashboard-creator/useDashboardCreator';
 import type { DashboardChart } from '@/features/dashboard-creator/dashboardCreatorApi';
-import { useDownloadTcoPdf, useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
-import { downloadAgentResultPdf } from '@/lib/agentPdf';
+import { useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
+import { downloadAgentResult, type AgentExportFormat } from '@/lib/agentPdf';
 import MonetizationPanel from '@/components/MonetizationPanel';
 
 const iconMap = {
@@ -145,13 +144,12 @@ const NexuIA = () => {
   const [feedbackComment, setFeedbackComment] = useState('');
   const [feedbackCorrection, setFeedbackCorrection] = useState('');
   const [selectedPdfMode, setSelectedPdfMode] = useState<AgentPdfMode>('standard_branded');
+  const [selectedExportFormat, setSelectedExportFormat] = useState<AgentExportFormat>('pdf');
+  const [isExportingResult, setIsExportingResult] = useState(false);
   const termsFormSchemaMutation = useTermsFormSchema();
   const termsGenerateMutation = useGenerateTermsOfReference();
-  const termsPdfMutation = useDownloadTermsPdf();
   const dashboardCreatorMutation = useDashboardCreator();
-  const dashboardPdfMutation = useDownloadDashboardPdf();
   const tcoAnalysisMutation = useTcoAnalysis();
-  const tcoPdfMutation = useDownloadTcoPdf();
   const [dashboardForm, setDashboardForm] = useState({
     title: '',
     objective: '',
@@ -249,9 +247,7 @@ const NexuIA = () => {
     setTermsFiles([]);
     termsFormSchemaMutation.reset();
     termsGenerateMutation.reset();
-    termsPdfMutation.reset();
     dashboardCreatorMutation.reset();
-    dashboardPdfMutation.reset();
     setDashboardForm({
       title: '',
       objective: '',
@@ -263,7 +259,6 @@ const NexuIA = () => {
     });
     setDashboardFiles([]);
     tcoAnalysisMutation.reset();
-    tcoPdfMutation.reset();
     setTcoGeneral({
       title: '',
       itemName: '',
@@ -619,25 +614,28 @@ const NexuIA = () => {
       });
   };
 
-  const buildPdfBrandingPayload = () => ({
-    company_name: pdfOptionsQuery.data?.branding.companyName,
-    logo_url: pdfOptionsQuery.data?.branding.logoUrl,
-    primary_color: pdfOptionsQuery.data?.branding.primaryColor,
-    footer_text: pdfOptionsQuery.data?.branding.footerText,
-    user_name: user?.fullName,
-  });
-
-  const ensurePdfModeAllowed = async () => {
+  const ensureExportModeAllowed = async () => {
     if (!selectedAgentKey) {
-      throw new Error('Selecciona un agente antes de descargar el PDF.');
+      throw new Error('Selecciona un agente antes de descargar el resultado.');
     }
 
     await validateAgentPdfMode({ agentKey: selectedAgentKey, pdfMode: selectedPdfMode });
   };
 
-  const renderPdfFormatSelector = () => (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-      <span>Formato de descarga</span>
+  const renderExportControls = (onDownload: () => void | Promise<void>) => (
+    <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
+      <span>Formato</span>
+      <select
+        value={selectedExportFormat}
+        onChange={(event) => setSelectedExportFormat(event.target.value as AgentExportFormat)}
+        className="h-9 rounded-full border border-border bg-background px-3 text-xs text-foreground"
+      >
+        <option value="pdf">PDF</option>
+        <option value="docx">Word</option>
+        <option value="pptx">PowerPoint</option>
+        <option value="xlsx">Excel</option>
+      </select>
+      <span>Plantilla</span>
       <select
         value={selectedPdfMode}
         onChange={(event) => setSelectedPdfMode(event.target.value as AgentPdfMode)}
@@ -647,7 +645,10 @@ const NexuIA = () => {
           <option key={mode.value} value={mode.value}>{mode.label}</option>
         ))}
       </select>
-      {availablePdfModes.length <= 1 ? <span>PDF personalizado disponible en plan premium.</span> : null}
+      <Button type="button" variant="outline" className="rounded-full" onClick={() => void onDownload()} disabled={isExportingResult}>
+        <Download className="mr-2 h-4 w-4" />
+        {isExportingResult ? 'Preparando...' : 'Descargar resultado'}
+      </Button>
     </div>
   );
 
@@ -826,30 +827,41 @@ const NexuIA = () => {
     );
   };
 
-  const handleDownloadTermsPdf = async () => {
-    if (!termsGenerateMutation.data) {
-      return;
-    }
-
+  const handleExportResult = async (input: { title: string; result: Record<string, unknown>; fileName: string; operationName: string }) => {
     try {
-      await ensurePdfModeAllowed();
+      setIsExportingResult(true);
+      await ensureExportModeAllowed();
+      await downloadAgentResult({
+        title: input.title,
+        agentName: selectedAgent?.name,
+        userName: user?.fullName,
+        result: input.result,
+        fileName: input.fileName,
+        format: selectedExportFormat,
+        pdfMode: selectedPdfMode,
+        pdfOptions: pdfOptionsQuery.data,
+      });
+      if (selectedAgent) {
+        logAgentUsage(selectedAgent.id, `${input.operationName} ${selectedExportFormat.toUpperCase()}`, input.result, selectedExportFormat === 'pdf');
+      }
     } catch (error) {
       toast({
-        title: 'Formato PDF no disponible',
-        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
+        title: 'No se pudo descargar el resultado.',
+        description: error instanceof Error ? error.message : 'Intenta nuevamente.',
         variant: 'destructive',
       });
-      return;
+    } finally {
+      setIsExportingResult(false);
     }
+  };
 
-    termsPdfMutation.mutate({ result: termsGenerateMutation.data, pdfMode: selectedPdfMode, branding: buildPdfBrandingPayload() }, {
-      onError: (error) => {
-        toast({
-          title: 'No se pudo descargar el PDF.',
-          description: error instanceof Error ? error.message : 'Intenta nuevamente.',
-          variant: 'destructive',
-        });
-      },
+  const handleDownloadTermsPdf = async () => {
+    if (!termsGenerateMutation.data) return;
+    await handleExportResult({
+      title: 'Término de referencia',
+      result: termsGenerateMutation.data as unknown as Record<string, unknown>,
+      fileName: 'termino-referencia-nodus-ia',
+      operationName: 'Descarga término de referencia',
     });
   };
 
@@ -956,126 +968,42 @@ const NexuIA = () => {
   };
 
   const handleDownloadTcoPdf = async () => {
-    if (!tcoAnalysisMutation.data) {
-      return;
-    }
-
-    try {
-      await ensurePdfModeAllowed();
-    } catch (error) {
-      toast({
-        title: 'Formato PDF no disponible',
-        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    tcoPdfMutation.mutate({ result: tcoAnalysisMutation.data, pdfMode: selectedPdfMode, branding: buildPdfBrandingPayload() }, {
-      onSuccess: () => {
-        if (selectedAgent) {
-          logAgentUsage(
-            selectedAgent.id,
-            'Descarga PDF Análisis de Costo Total / TCO',
-            tcoAnalysisMutation.data as unknown as Record<string, unknown>,
-            true,
-          );
-        }
-      },
-      onError: (error) => {
-        toast({
-          title: 'No se pudo descargar el PDF.',
-          description: error instanceof Error ? error.message : 'Intenta nuevamente.',
-          variant: 'destructive',
-        });
-      },
+    if (!tcoAnalysisMutation.data) return;
+    await handleExportResult({
+      title: 'Análisis de Costo Total / TCO',
+      result: tcoAnalysisMutation.data as unknown as Record<string, unknown>,
+      fileName: 'analisis-tco-nodus-ia',
+      operationName: 'Descarga análisis TCO',
     });
   };
 
   const handleDownloadDashboardPdf = async () => {
     if (!dashboardCreatorMutation.data) return;
-
-    try {
-      await ensurePdfModeAllowed();
-    } catch (error) {
-      toast({
-        title: 'Formato PDF no disponible',
-        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    dashboardPdfMutation.mutate(
-      { result: dashboardCreatorMutation.data, pdfMode: selectedPdfMode, branding: buildPdfBrandingPayload() },
-      {
-        onSuccess: () => {
-          if (selectedAgent) {
-            logAgentUsage(selectedAgent.id, 'Descarga PDF Creador de Dashboard', dashboardCreatorMutation.data as unknown as Record<string, unknown>, true);
-          }
-        },
-        onError: (error) => {
-          toast({
-            title: 'No se pudo descargar el PDF.',
-            description: error instanceof Error ? error.message : 'Intenta nuevamente.',
-            variant: 'destructive',
-          });
-        },
-      },
-    );
+    await handleExportResult({
+      title: dashboardCreatorMutation.data.dashboard_title || 'Dashboard generado',
+      result: dashboardCreatorMutation.data as unknown as Record<string, unknown>,
+      fileName: 'dashboard-nodus-ia',
+      operationName: 'Descarga dashboard',
+    });
   };
 
   const handleDownloadProposalPdf = async () => {
-    if (!proposalComparisonResult) {
-      return;
-    }
-
-    try {
-      await ensurePdfModeAllowed();
-    } catch (error) {
-      toast({
-        title: 'Formato PDF no disponible',
-        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    downloadAgentResultPdf({
+    if (!proposalComparisonResult) return;
+    await handleExportResult({
       title: 'Comparativos de propuestas de proveedores',
-      agentName: selectedAgent?.name,
-      userName: user?.fullName,
-      result: proposalComparisonResult,
-      fileName: 'comparativo-propuestas-nodus-ia.pdf',
-      pdfMode: selectedPdfMode,
-      pdfOptions: pdfOptionsQuery.data,
+      result: proposalComparisonResult as unknown as Record<string, unknown>,
+      fileName: 'comparativo-propuestas-nodus-ia',
+      operationName: 'Descarga comparativo de propuestas',
     });
   };
 
   const handleDownloadRunPdf = async () => {
-    if (!runMutation.data) {
-      return;
-    }
-
-    try {
-      await ensurePdfModeAllowed();
-    } catch (error) {
-      toast({
-        title: 'Formato PDF no disponible',
-        description: error instanceof Error ? error.message : 'No tienes permiso para descargar este formato.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    downloadAgentResultPdf({
+    if (!runMutation.data) return;
+    await handleExportResult({
       title: selectedAgent?.name ?? 'Resultado Nodus IA',
-      agentName: selectedAgent?.name,
-      userName: user?.fullName,
       result: runMutation.data.execution.outputData,
-      fileName: 'resultado-nodus-ia.pdf',
-      pdfMode: selectedPdfMode,
-      pdfOptions: pdfOptionsQuery.data,
+      fileName: 'resultado-nodus-ia',
+      operationName: 'Descarga resultado agente',
     });
   };
 
@@ -2120,13 +2048,7 @@ const NexuIA = () => {
                     <div className="rounded-[24px] border border-success/15 bg-success/15 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <p className="text-sm font-medium text-success-foreground">Resultado mas reciente</p>
-                        <div className="flex flex-col items-start gap-2 sm:items-end">
-                          {renderPdfFormatSelector()}
-                          <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadRunPdf}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Descargar PDF
-                          </Button>
-                        </div>
+                        {renderExportControls(handleDownloadRunPdf)}
                       </div>
                       <p className="mt-2 text-sm text-success-foreground">
                         {String(runMutation.data.execution.outputData.summary ?? 'Ejecucion completada')}
@@ -2148,19 +2070,7 @@ const NexuIA = () => {
                             {termsResult.executive_summary}
                           </p>
                         </div>
-                        <div className="flex flex-col items-start gap-2 sm:items-end">
-                          {renderPdfFormatSelector()}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="rounded-full"
-                            onClick={handleDownloadTermsPdf}
-                            disabled={termsPdfMutation.isPending}
-                          >
-                            <Download className="mr-2 h-4 w-4" />
-                            {termsPdfMutation.isPending ? 'Preparando PDF...' : 'Descargar PDF'}
-                          </Button>
-                        </div>
+                        {renderExportControls(handleDownloadTermsPdf)}
                       </div>
 
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -2277,13 +2187,7 @@ const NexuIA = () => {
                             </Badge>
                           </div>
                         </div>
-                        <div className="flex flex-col items-start gap-2 sm:items-end">
-                          {renderPdfFormatSelector()}
-                          <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadDashboardPdf} disabled={dashboardPdfMutation.isPending}>
-                            <Download className="mr-2 h-4 w-4" />
-                            {dashboardPdfMutation.isPending ? 'Generando PDF...' : 'Descargar PDF'}
-                          </Button>
-                        </div>
+                        {renderExportControls(handleDownloadDashboardPdf)}
                       </div>
 
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -2428,13 +2332,7 @@ const NexuIA = () => {
                             {tcoResult.executive_summary.final_recommendation}
                           </p>
                         </div>
-                        <div className="flex flex-col items-start gap-2 sm:items-end">
-                          {renderPdfFormatSelector()}
-                          <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadTcoPdf} disabled={tcoPdfMutation.isPending}>
-                            <Download className="mr-2 h-4 w-4" />
-                            {tcoPdfMutation.isPending ? 'Generando PDF...' : 'Descargar PDF'}
-                          </Button>
-                        </div>
+                        {renderExportControls(handleDownloadTcoPdf)}
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
@@ -2614,13 +2512,7 @@ const NexuIA = () => {
                             {proposalComparisonResult.executive_summary}
                           </p>
                         </div>
-                        <div className="flex flex-col items-start gap-2 sm:items-end">
-                          {renderPdfFormatSelector()}
-                          <Button type="button" variant="outline" className="rounded-full" onClick={handleDownloadProposalPdf}>
-                            <Download className="mr-2 h-4 w-4" />
-                            Descargar PDF
-                          </Button>
-                        </div>
+                        {renderExportControls(handleDownloadProposalPdf)}
                       </div>
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">

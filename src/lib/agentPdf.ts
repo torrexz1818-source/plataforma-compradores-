@@ -1,5 +1,23 @@
 import jsPDF from 'jspdf';
+import {
+  AlignmentType,
+  BorderStyle,
+  Document,
+  Footer,
+  Packer,
+  PageNumber,
+  Paragraph,
+  Table,
+  TableCell,
+  TableRow,
+  TextRun,
+  WidthType,
+} from 'docx';
+import pptxgen from 'pptxgenjs';
+import * as XLSX from 'xlsx';
 import type { AgentPdfMode, AgentPdfOptions } from '@/types';
+
+export type AgentExportFormat = 'pdf' | 'docx' | 'pptx' | 'xlsx';
 
 type PdfInput = {
   title: string;
@@ -9,6 +27,10 @@ type PdfInput = {
   fileName?: string;
   pdfMode?: AgentPdfMode;
   pdfOptions?: AgentPdfOptions;
+};
+
+export type AgentExportInput = PdfInput & {
+  format: AgentExportFormat;
 };
 
 type PdfContext = {
@@ -170,10 +192,53 @@ function shortText(value: unknown, max = 180) {
   return text.length > max ? `${text.slice(0, max - 1)}...` : text || 'No especificado';
 }
 
+function formatDate() {
+  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date());
+}
+
+function getDefaultFileName(input: PdfInput, extension: AgentExportFormat) {
+  const base = (input.fileName || input.title || 'resultado-nodus-ia')
+    .replace(/\.[a-z0-9]+$/i, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'resultado-nodus-ia';
+  return `${base}.${extension}`;
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function getFooter(mode: AgentPdfMode, options?: AgentPdfOptions) {
   if (mode === 'standard_branded') return 'Generado por Buyer Nodus - Nodus IA';
   if (mode === 'custom_brand') return options?.branding.footerText || `Generado para ${options?.branding.companyName || 'tu empresa'}`;
   return 'Documento generado por asistente de inteligencia artificial';
+}
+
+function getBrandName(mode: AgentPdfMode, options?: AgentPdfOptions) {
+  if (mode === 'white_label') return '';
+  if (mode === 'custom_brand') return options?.branding.companyName || 'Documento corporativo';
+  return 'Buyer Nodus';
+}
+
+function getFooterLeft(mode: AgentPdfMode, options?: AgentPdfOptions) {
+  if (mode === 'white_label') return '';
+  return getBrandName(mode, options) || 'Buyer Nodus';
+}
+
+function getFooterRight(mode: AgentPdfMode, options?: AgentPdfOptions) {
+  if (mode === 'white_label') return 'Documento generado';
+  if (mode === 'custom_brand') return options?.branding.footerText || `Generado para ${options?.branding.companyName || 'tu empresa'}`;
+  return 'Generado por Buyer Nodus';
 }
 
 function createContext(input: PdfInput): PdfContext {
@@ -199,8 +264,9 @@ function addFooter(ctx: PdfContext) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor('#64748b');
-  doc.text(getFooter(mode, options), marginX, pageHeight - 8);
-  doc.text(`Pagina ${doc.getNumberOfPages()}`, pageWidth - marginX, pageHeight - 8, { align: 'right' });
+  const left = getFooterLeft(mode, options);
+  if (left) doc.text(left, marginX, pageHeight - 8);
+  doc.text(`${getFooterRight(mode, options)} | Pagina ${doc.getNumberOfPages()}`, pageWidth - marginX, pageHeight - 8, { align: 'right' });
 }
 
 function ensurePage(ctx: PdfContext, needed = 12) {
@@ -248,7 +314,7 @@ function addHeader(ctx: PdfContext, input: PdfInput, subtitle?: string) {
         ? input.pdfOptions?.branding.companyName || 'Documento corporativo'
         : 'Reporte profesional';
   doc.text(`${brand} | ${input.agentName || input.title}`, ctx.marginX + 6, ctx.y + 17);
-  doc.text(new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()), ctx.marginX + 6, ctx.y + 23);
+  doc.text(`Fecha: ${formatDate()} | Formato: PDF`, ctx.marginX + 6, ctx.y + 23);
   ctx.y += 35;
   if (input.userName || input.pdfOptions?.branding.companyName || subtitle) {
     addText(ctx, `Usuario/empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}`, {
@@ -609,10 +675,282 @@ function addGenericPdf(input: PdfInput) {
   ctx.doc.save(input.fileName ?? 'resultado-nodus-ia.pdf');
 }
 
+function getObjective(result: Record<string, unknown>) {
+  return asText(result.objective ?? result.description ?? result.executive_summary ?? result.summary ?? result.final_recommendation, '');
+}
+
+function getExportSections(result: Record<string, unknown>) {
+  return orderedResultEntries(result).filter(([key]) => key !== 'disclaimer');
+}
+
+function rowsFromValue(value: unknown): Array<Record<string, unknown>> {
+  if (Array.isArray(value)) {
+    if (!value.length) return [];
+    if (value.every((item) => item && typeof item === 'object' && !Array.isArray(item))) {
+      return value.map((item) => {
+        const record = asRecord(item);
+        const normalized: Record<string, unknown> = {};
+        Object.entries(record)
+          .filter(([key, itemValue]) => !technicalKeys.has(key) && !isEmptyValue(itemValue))
+          .forEach(([key, itemValue]) => {
+            normalized[formatLabel(key)] = typeof itemValue === 'object' && itemValue !== null ? asText(itemValue) : itemValue;
+          });
+        return normalized;
+      });
+    }
+    return value.map((item, index) => ({ N: index + 1, Valor: asText(item) }));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .filter(([key, itemValue]) => !technicalKeys.has(key) && !isEmptyValue(itemValue))
+      .map(([key, itemValue]) => ({
+        Campo: formatLabel(key),
+        Valor: asText(itemValue),
+      }));
+  }
+
+  return [{ Valor: asText(value) }];
+}
+
+function normalizeSheetName(name: string, used: Set<string>) {
+  const clean = name.replace(/[\\/?*[\]:]/g, ' ').slice(0, 28).trim() || 'Hoja';
+  let candidate = clean;
+  let index = 2;
+  while (used.has(candidate)) {
+    candidate = `${clean.slice(0, 25)} ${index}`;
+    index += 1;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+function addMetadataSheet(workbook: XLSX.WorkBook, input: AgentExportInput, result: Record<string, unknown>) {
+  const mode = input.pdfMode ?? 'standard_branded';
+  const rows = [
+    ['Titulo', input.title],
+    ['Fecha de generacion', formatDate()],
+    ['Agente usado', input.agentName || input.title],
+    ['Usuario o empresa', input.userName || input.pdfOptions?.branding.companyName || 'No especificado'],
+    ['Objetivo o descripcion', getObjective(result) || 'No especificado'],
+    ['Formato generado', input.format.toUpperCase()],
+    ['Marca', getFooterLeft(mode, input.pdfOptions) || 'Sin logo'],
+    ['Pie', getFooterRight(mode, input.pdfOptions)],
+  ];
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet['!cols'] = [{ wch: 28 }, { wch: 90 }];
+  XLSX.utils.book_append_sheet(workbook, sheet, 'Resumen');
+}
+
+function downloadAgentResultXlsx(input: AgentExportInput) {
+  const result = asRecord(input.result);
+  const workbook = XLSX.utils.book_new();
+  addMetadataSheet(workbook, input, result);
+  const used = new Set<string>(['Resumen']);
+
+  getExportSections(result).forEach(([key, value]) => {
+    const rows = key === 'charts' ? chartRows(value) : rowsFromValue(value);
+    if (!rows.length) return;
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    const columns = Object.keys(rows[0] ?? {});
+    sheet['!cols'] = columns.map((column) => ({
+      wch: Math.min(Math.max(column.length + 6, 18), 55),
+    }));
+    XLSX.utils.book_append_sheet(workbook, sheet, normalizeSheetName(formatLabel(key), used));
+  });
+
+  XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+}
+
+function docxParagraph(text: string, options: { heading?: boolean; bold?: boolean; color?: string } = {}) {
+  return new Paragraph({
+    spacing: { after: options.heading ? 180 : 90 },
+    children: [
+      new TextRun({
+        text,
+        bold: Boolean(options.bold || options.heading),
+        color: options.color ?? (options.heading ? '09008B' : '1F2937'),
+        size: options.heading ? 26 : 20,
+      }),
+    ],
+  });
+}
+
+function docxTableFromRows(rows: Array<Record<string, unknown>>) {
+  const keys = Object.keys(rows[0] ?? {}).slice(0, 6);
+  if (!keys.length) return undefined;
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    rows: [
+      new TableRow({
+        tableHeader: true,
+        children: keys.map((key) => new TableCell({
+          shading: { fill: 'EEF2FF' },
+          borders: { bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CBD5E1' } },
+          children: [docxParagraph(key, { bold: true, color: '09008B' })],
+        })),
+      }),
+      ...rows.slice(0, 80).map((row) => new TableRow({
+        children: keys.map((key) => new TableCell({
+          children: [docxParagraph(shortText(row[key], 500))],
+        })),
+      })),
+    ],
+  });
+}
+
+async function downloadAgentResultDocx(input: AgentExportInput) {
+  const result = asRecord(input.result);
+  const mode = input.pdfMode ?? 'standard_branded';
+  const children: Array<Paragraph | Table> = [
+    docxParagraph(input.title, { heading: true }),
+    docxParagraph(`Fecha de generacion: ${formatDate()}`),
+    docxParagraph(`Agente usado: ${input.agentName || input.title}`),
+    docxParagraph(`Usuario o empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}`),
+    docxParagraph(`Formato generado: WORD / DOCX`),
+  ];
+  const objective = getObjective(result);
+  if (objective) children.push(docxParagraph(`Objetivo o descripcion: ${objective}`));
+
+  getExportSections(result).forEach(([key, value]) => {
+    children.push(docxParagraph(formatLabel(key), { heading: true }));
+    const rows = key === 'charts' ? chartRows(value) : rowsFromValue(value);
+    const table = docxTableFromRows(rows);
+    if (table) {
+      children.push(table);
+    } else {
+      formatValue(value).slice(0, 60).forEach((line) => children.push(docxParagraph(line)));
+    }
+  });
+
+  if (result.disclaimer) {
+    children.push(docxParagraph('Disclaimer', { heading: true }));
+    children.push(docxParagraph(asText(result.disclaimer)));
+  }
+
+  const footerLeft = getFooterLeft(mode, input.pdfOptions);
+  const footerRight = getFooterRight(mode, input.pdfOptions);
+  const doc = new Document({
+    sections: [{
+      footers: {
+        default: new Footer({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.LEFT,
+              children: [
+                new TextRun(footerLeft || ''),
+                new TextRun({ text: footerLeft ? '     ' : '' }),
+                new TextRun(footerRight),
+                new TextRun({ text: '     Pagina ' }),
+                new TextRun({ children: [PageNumber.CURRENT] }),
+              ],
+            }),
+          ],
+        }),
+      },
+      children,
+    }],
+  });
+  const blob = await Packer.toBlob(doc);
+  downloadBlob(blob, getDefaultFileName(input, 'docx'));
+}
+
+function addPptFooter(slide: pptxgen.Slide, input: AgentExportInput) {
+  const mode = input.pdfMode ?? 'standard_branded';
+  const left = getFooterLeft(mode, input.pdfOptions);
+  const right = getFooterRight(mode, input.pdfOptions);
+  if (left) slide.addText(left, { x: 0.35, y: 7.12, w: 3.2, h: 0.18, fontSize: 7, color: '64748B' });
+  slide.addText(right, { x: 8.9, y: 7.12, w: 3.8, h: 0.18, fontSize: 7, color: '64748B', align: 'right' });
+}
+
+function addPptTitle(slide: pptxgen.Slide, title: string, subtitle?: string) {
+  slide.background = { color: 'FFFFFF' };
+  slide.addText(title, { x: 0.5, y: 0.35, w: 12.3, h: 0.45, fontSize: 23, bold: true, color: '09008B', fit: 'shrink' });
+  if (subtitle) slide.addText(subtitle, { x: 0.52, y: 0.9, w: 11.8, h: 0.35, fontSize: 9, color: '64748B', fit: 'shrink' });
+}
+
+async function downloadAgentResultPptx(input: AgentExportInput) {
+  const result = asRecord(input.result);
+  const pptx = new pptxgen();
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'Buyer Nodus';
+  pptx.subject = input.agentName || input.title;
+  pptx.title = input.title;
+  pptx.company = getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Buyer Nodus';
+  pptx.theme = {
+    headFontFace: 'Aptos Display',
+    bodyFontFace: 'Aptos',
+    lang: 'es-PE',
+  };
+
+  let slide = pptx.addSlide();
+  slide.background = { color: 'FFFFFF' };
+  slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Reporte ejecutivo', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: '6B63D9' });
+  slide.addText(input.title, { x: 0.55, y: 1.05, w: 11.9, h: 1, fontSize: 30, bold: true, color: '09008B', fit: 'shrink' });
+  slide.addText(`Agente: ${input.agentName || input.title}\nFecha: ${formatDate()}\nUsuario/empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}\nFormato: POWERPOINT / PPTX`, {
+    x: 0.6,
+    y: 2.55,
+    w: 8.6,
+    h: 1.1,
+    fontSize: 13,
+    color: '334155',
+    breakLine: false,
+    fit: 'shrink',
+  });
+  const objective = getObjective(result);
+  if (objective) slide.addText(shortText(objective, 420), { x: 0.6, y: 4.1, w: 11.7, h: 1.1, fontSize: 14, color: '1F2937', fit: 'shrink' });
+  addPptFooter(slide, input);
+
+  getExportSections(result).slice(0, 18).forEach(([key, value]) => {
+    const rows = key === 'charts' ? chartRows(value) : rowsFromValue(value);
+    slide = pptx.addSlide();
+    addPptTitle(slide, formatLabel(key), 'Misma informacion generada por el agente en la plataforma.');
+
+    if (rows.length && Object.keys(rows[0] ?? {}).length <= 5) {
+      const keys = Object.keys(rows[0]).slice(0, 5);
+      slide.addTable(
+        [
+          keys.map((name) => ({ text: name, options: { bold: true, color: '09008B', fill: 'EEF2FF' } })),
+          ...rows.slice(0, 8).map((row) => keys.map((name) => ({ text: shortText(row[name], 120), options: { color: '334155' } }))),
+        ],
+        { x: 0.55, y: 1.35, w: 12.2, h: 5.3, border: { color: 'CBD5E1', pt: 0.5 }, fontSize: 8, valign: 'mid' },
+      );
+    } else {
+      slide.addText(formatValue(value).slice(0, 12).join('\n'), { x: 0.65, y: 1.35, w: 11.8, h: 5.3, fontSize: 13, color: '334155', fit: 'shrink', breakLine: false });
+    }
+    addPptFooter(slide, input);
+  });
+
+  if (result.disclaimer) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Disclaimer');
+    slide.addText(asText(result.disclaimer), { x: 0.65, y: 1.35, w: 11.8, h: 3.8, fontSize: 14, color: '334155', fit: 'shrink' });
+    addPptFooter(slide, input);
+  }
+
+  await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
+}
+
 export function downloadAgentResultPdf(input: PdfInput) {
   if (isProposalComparison(input.result)) {
     addProposalComparisonPdf(input);
     return;
   }
   addGenericPdf(input);
+}
+
+export async function downloadAgentResult(input: AgentExportInput) {
+  if (input.format === 'pdf') {
+    downloadAgentResultPdf({ ...input, fileName: getDefaultFileName(input, 'pdf') });
+    return;
+  }
+  if (input.format === 'docx') {
+    await downloadAgentResultDocx(input);
+    return;
+  }
+  if (input.format === 'pptx') {
+    await downloadAgentResultPptx(input);
+    return;
+  }
+  downloadAgentResultXlsx(input);
 }

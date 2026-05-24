@@ -200,35 +200,3 @@ export async function generateTermsOfReference(payload: GenerateTermsPayload): P
 
   return response.json() as Promise<TermsResult>;
 }
-
-export async function downloadTermsPdf(input: {
-  result: TermsResult;
-  pdfMode?: string;
-  branding?: Record<string, unknown>;
-}) {
-  let response: Response;
-  try {
-    response = await fetch(`${getAiEngineBaseUrl()}/agents/terms-of-reference/generate-pdf`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ document: input.result, pdf_mode: input.pdfMode, branding: input.branding }),
-    });
-  } catch (error) {
-    throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));
-  }
-
-  if (!response.ok) {
-    throw new Error(getFriendlyErrorMessage(await readError(response, 'No se pudo descargar el PDF.')));
-  }
-
-  const blob = await response.blob();
-  const contentDisposition = response.headers.get('Content-Disposition') || '';
-  const filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
-  const filename = filenameMatch?.[1] || 'termino_referencia.pdf';
-  const url = URL.createObjectURL(blob);
-  const link = window.document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}

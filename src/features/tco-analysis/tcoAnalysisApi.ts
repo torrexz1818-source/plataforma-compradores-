@@ -182,34 +182,3 @@ export async function analyzeTco(payload: AnalyzeTcoPayload): Promise<TcoAnalysi
 
   return response.json() as Promise<TcoAnalysisResult>;
 }
-
-export async function downloadTcoPdf(input: {
-  result: TcoAnalysisResult;
-  pdfMode?: string;
-  branding?: Record<string, unknown>;
-}) {
-  let response: Response;
-  try {
-    response = await fetch(`${getAiEngineBaseUrl()}/agents/tco-analysis/generate-pdf`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ result: input.result, pdf_mode: input.pdfMode, branding: input.branding }),
-    });
-  } catch (error) {
-    throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));
-  }
-
-  if (!response.ok) {
-    throw new Error(getFriendlyErrorMessage(await readError(response, 'No se pudo descargar el PDF.')));
-  }
-
-  const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'analisis-tco-nodus-ia.pdf';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
