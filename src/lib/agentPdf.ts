@@ -428,6 +428,37 @@ function chartRows(value: unknown) {
   });
 }
 
+function isDashboardResult(result: unknown) {
+  const data = asRecord(result);
+  return Boolean(data.dashboard_title && Array.isArray(data.kpis) && Array.isArray(data.charts) && Array.isArray(data.tables));
+}
+
+function dashboardTableRows(table: Record<string, unknown>) {
+  const columns = asArray(table.columns).map((item) => asText(item, '')).filter(Boolean);
+  return asArray(table.rows).map(asRecord).map((row) => {
+    const normalized: Record<string, unknown> = {};
+    columns.forEach((column) => {
+      normalized[column] = row[column] ?? '';
+    });
+    return normalized;
+  });
+}
+
+function dashboardChartDataRows(chart: Record<string, unknown>) {
+  return asArray(chart.data).map(asRecord).map((point) => ({
+    Grafico: chart.title,
+    Tipo: chart.type,
+    Etiqueta: point.label,
+    Valor: point.value,
+    Grupo: point.group ?? '',
+    Insight: chart.insight ?? '',
+  }));
+}
+
+function dashboardListRows(items: unknown[], valueKey = 'Valor') {
+  return items.map((item, index) => ({ N: index + 1, [valueKey]: asText(item) }));
+}
+
 function getRecommendedRanking(result: Record<string, unknown>) {
   const recommended = asText(result.recommended_supplier, '');
   const ranking = asArray(result.ranking).map(asRecord);
@@ -784,9 +815,67 @@ function addMetadataSheet(XLSX: XlsxModule, workbook: import('xlsx').WorkBook, i
   XLSX.utils.book_append_sheet(workbook, sheet, 'Resumen');
 }
 
+function appendJsonSheet(
+  XLSX: XlsxModule,
+  workbook: import('xlsx').WorkBook,
+  used: Set<string>,
+  name: string,
+  rows: Array<Record<string, unknown>>,
+) {
+  if (!rows.length) return;
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  const columns = Object.keys(rows[0] ?? {});
+  sheet['!cols'] = columns.map((column) => ({ wch: Math.min(Math.max(column.length + 8, 18), 60) }));
+  XLSX.utils.book_append_sheet(workbook, sheet, normalizeSheetName(name, used));
+}
+
+async function downloadDashboardResultXlsx(input: AgentExportInput, result: Record<string, unknown>) {
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.utils.book_new();
+  addMetadataSheet(XLSX, workbook, input, result);
+  const used = new Set<string>(['Resumen']);
+
+  appendJsonSheet(XLSX, workbook, used, 'KPIs', asArray(result.kpis).map(asRecord).map((kpi) => ({
+    KPI: kpi.title,
+    Valor: kpi.value,
+    Descripcion: kpi.description,
+    Logica: kpi.calculation_logic,
+    Fuente: kpi.source,
+    Confianza: kpi.confidence,
+  })));
+
+  appendJsonSheet(XLSX, workbook, used, 'Graficos data', asArray(result.charts).map(asRecord).flatMap(dashboardChartDataRows));
+
+  asArray(result.tables).map(asRecord).forEach((table) => {
+    appendJsonSheet(XLSX, workbook, used, asText(table.title, 'Tabla'), dashboardTableRows(table));
+  });
+
+  appendJsonSheet(XLSX, workbook, used, 'Insights', asArray(result.insights).map(asRecord).map((item) => ({
+    Insight: item.title,
+    Descripcion: item.description,
+    Impacto: item.impact,
+    Accion: item.recommended_action,
+  })));
+  appendJsonSheet(XLSX, workbook, used, 'Observaciones', asArray(result.observations).map(asRecord).map((item) => ({
+    Observacion: item.title,
+    Tipo: item.type,
+    Descripcion: item.description,
+  })));
+  appendJsonSheet(XLSX, workbook, used, 'Recomendaciones', dashboardListRows(asArray(result.recommendations), 'Recomendacion'));
+  appendJsonSheet(XLSX, workbook, used, 'Info faltante', dashboardListRows(asArray(result.missing_information), 'Informacion faltante'));
+  appendJsonSheet(XLSX, workbook, used, 'Calidad datos', dashboardListRows(asArray(asRecord(result.data_profile).data_quality_warnings), 'Advertencia'));
+  appendJsonSheet(XLSX, workbook, used, 'Archivos', asArray(result.source_files).map(asRecord));
+
+  XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+}
+
 async function downloadAgentResultXlsx(input: AgentExportInput) {
   const XLSX = await import('xlsx');
   const result = asRecord(input.result);
+  if (isDashboardResult(result)) {
+    await downloadDashboardResultXlsx(input, result);
+    return;
+  }
   const workbook = XLSX.utils.book_new();
   addMetadataSheet(XLSX, workbook, input, result);
   const used = new Set<string>(['Resumen']);
@@ -846,6 +935,88 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
   const docx = await import('docx');
   const result = asRecord(input.result);
   const mode = input.pdfMode ?? 'standard_branded';
+  if (isDashboardResult(result)) {
+    const children: DocxChild[] = [
+      docxParagraph(docx, asText(result.dashboard_title, input.title), { heading: true }),
+      docxParagraph(docx, `Fecha de generacion: ${formatDate()}`),
+      docxParagraph(docx, `Agente usado: ${input.agentName || input.title}`),
+      docxParagraph(docx, `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Tipo de datos: ${asText(result.data_type)}`),
+      docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
+      docxParagraph(docx, asText(result.executive_summary)),
+      docxParagraph(docx, 'Nivel de confianza', { heading: true }),
+      docxParagraph(docx, `${asText(result.confidence_level).toUpperCase()}: ${asText(result.confidence_reason)}`),
+      docxParagraph(docx, 'KPIs principales', { heading: true }),
+    ];
+
+    const kpiTable = docxTableFromRows(docx, asArray(result.kpis).map(asRecord).map((kpi) => ({
+      KPI: kpi.title,
+      Valor: kpi.value,
+      Descripcion: kpi.description,
+      Confianza: kpi.confidence,
+    })));
+    if (kpiTable) children.push(kpiTable);
+
+    children.push(docxParagraph(docx, 'Graficos generados', { heading: true }));
+    const chartTable = docxTableFromRows(docx, chartRows(result.charts));
+    if (chartTable) children.push(chartTable);
+
+    asArray(result.tables).map(asRecord).forEach((table) => {
+      children.push(docxParagraph(docx, asText(table.title, 'Tabla resumen'), { heading: true }));
+      if (table.description) children.push(docxParagraph(docx, asText(table.description)));
+      const nativeTable = docxTableFromRows(docx, dashboardTableRows(table));
+      if (nativeTable) children.push(nativeTable);
+    });
+
+    children.push(docxParagraph(docx, 'Observaciones', { heading: true }));
+    const observationTable = docxTableFromRows(docx, asArray(result.observations).map(asRecord).map((item) => ({
+      Observacion: item.title,
+      Tipo: item.type,
+      Descripcion: item.description,
+    })));
+    if (observationTable) children.push(observationTable);
+
+    children.push(docxParagraph(docx, 'Insights y recomendaciones', { heading: true }));
+    asArray(result.insights).map(asRecord).forEach((item) => {
+      children.push(docxParagraph(docx, `${asText(item.title)}: ${asText(item.description)} Accion: ${asText(item.recommended_action)}`));
+    });
+    asArray(result.recommendations).forEach((item) => children.push(docxParagraph(docx, `- ${asText(item)}`)));
+
+    children.push(docxParagraph(docx, 'Informacion faltante y calidad de datos', { heading: true }));
+    [...asArray(result.missing_information), ...asArray(asRecord(result.data_profile).data_quality_warnings)]
+      .forEach((item) => children.push(docxParagraph(docx, `- ${asText(item)}`)));
+
+    if (result.disclaimer) {
+      children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
+      children.push(docxParagraph(docx, asText(result.disclaimer)));
+    }
+
+    const footerLeft = getFooterLeft(mode, input.pdfOptions);
+    const footerRight = getFooterRight(mode, input.pdfOptions);
+    const doc = new docx.Document({
+      sections: [{
+        footers: {
+          default: new docx.Footer({
+            children: [
+              new docx.Paragraph({
+                alignment: docx.AlignmentType.LEFT,
+                children: [
+                  new docx.TextRun(footerLeft || ''),
+                  new docx.TextRun({ text: footerLeft ? '     ' : '' }),
+                  new docx.TextRun(footerRight),
+                  new docx.TextRun({ text: '     Pagina ' }),
+                  new docx.TextRun({ children: [docx.PageNumber.CURRENT] }),
+                ],
+              }),
+            ],
+          }),
+        },
+        children,
+      }],
+    });
+    const blob = await docx.Packer.toBlob(doc);
+    downloadBlob(blob, getDefaultFileName(input, 'docx'));
+    return;
+  }
   const children: DocxChild[] = [
     docxParagraph(docx, input.title, { heading: true }),
     docxParagraph(docx, `Fecha de generacion: ${formatDate()}`),
@@ -913,8 +1084,116 @@ function addPptTitle(slide: PptxSlide, title: string, subtitle?: string) {
   if (subtitle) slide.addText(subtitle, { x: 0.52, y: 0.9, w: 11.8, h: 0.35, fontSize: 9, color: '64748B', fit: 'shrink' });
 }
 
+function addPptRows(slide: PptxSlide, rows: Array<Record<string, unknown>>, options: { x?: number; y?: number; w?: number; h?: number; maxRows?: number } = {}) {
+  if (!rows.length) return;
+  const keys = Object.keys(rows[0]).slice(0, 5);
+  slide.addTable(
+    [
+      keys.map((name) => ({ text: name, options: { bold: true, color: '09008B', fill: 'EEF2FF' } })),
+      ...rows.slice(0, options.maxRows ?? 8).map((row) => keys.map((name) => ({ text: shortText(row[name], 120), options: { color: '334155' } }))),
+    ],
+    {
+      x: options.x ?? 0.55,
+      y: options.y ?? 1.35,
+      w: options.w ?? 12.2,
+      h: options.h ?? 5.3,
+      border: { color: 'CBD5E1', pt: 0.5 },
+      fontSize: 8,
+      valign: 'mid',
+    },
+  );
+}
+
+async function downloadDashboardResultPptx(input: AgentExportInput, result: Record<string, unknown>) {
+  const pptxgen = (await import('pptxgenjs')).default;
+  const pptx = new pptxgen();
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'Buyer Nodus';
+  pptx.subject = input.agentName || input.title;
+  pptx.title = asText(result.dashboard_title, input.title);
+  pptx.company = getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Buyer Nodus';
+  pptx.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'es-PE' };
+
+  let slide = pptx.addSlide();
+  slide.background = { color: 'FFFFFF' };
+  slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Dashboard ejecutivo', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: '6B63D9' });
+  slide.addText(asText(result.dashboard_title, input.title), { x: 0.55, y: 1.0, w: 11.9, h: 0.85, fontSize: 29, bold: true, color: '09008B', fit: 'shrink' });
+  slide.addText(shortText(result.executive_summary, 560), { x: 0.6, y: 2.15, w: 11.7, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
+  slide.addText(`Audiencia: ${asText(result.audience)}\nPeriodo: ${asText(result.period)}\nConfianza: ${asText(result.confidence_level)}\nTipo de datos: ${asText(result.data_type)}`, {
+    x: 0.65,
+    y: 3.85,
+    w: 5.2,
+    h: 1.1,
+    fontSize: 12,
+    color: '475569',
+    fit: 'shrink',
+  });
+  slide.addText(shortText(result.confidence_reason, 320), { x: 6.1, y: 3.85, w: 6.2, h: 1.1, fontSize: 11, color: '475569', fit: 'shrink' });
+  addPptFooter(slide, input);
+
+  const kpis = asArray(result.kpis).map(asRecord);
+  if (kpis.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'KPIs principales', 'Cards reconstruidas desde el mismo resultado del dashboard.');
+    kpis.slice(0, 8).forEach((kpi, index) => {
+      const col = index % 4;
+      const row = Math.floor(index / 4);
+      const x = 0.55 + col * 3.08;
+      const y = 1.35 + row * 2.25;
+      slide.addShape(pptx.ShapeType.roundRect, { x, y, w: 2.85, h: 1.85, rectRadius: 0.08, fill: { color: 'EEF2FF' }, line: { color: 'C7D2FE', pt: 0.7 } });
+      slide.addText(asText(kpi.title), { x: x + 0.14, y: y + 0.16, w: 2.55, h: 0.28, fontSize: 8, bold: true, color: '475569', fit: 'shrink' });
+      slide.addText(asText(kpi.value), { x: x + 0.14, y: y + 0.52, w: 2.55, h: 0.45, fontSize: 17, bold: true, color: '09008B', fit: 'shrink' });
+      slide.addText(shortText(kpi.description, 130), { x: x + 0.14, y: y + 1.02, w: 2.55, h: 0.48, fontSize: 7.2, color: '64748B', fit: 'shrink' });
+    });
+    addPptFooter(slide, input);
+  }
+
+  asArray(result.charts).map(asRecord).slice(0, 6).forEach((chart) => {
+    slide = pptx.addSlide();
+    addPptTitle(slide, asText(chart.title, 'Grafico'), `${asText(chart.type)} | ${asText(chart.confidence)} | ${shortText(chart.description, 140)}`);
+    addPptRows(slide, dashboardChartDataRows(chart), { x: 0.6, y: 1.35, w: 6.2, h: 4.7, maxRows: 9 });
+    slide.addText(shortText(chart.insight, 420), { x: 7.05, y: 1.45, w: 5.55, h: 1.4, fontSize: 13, color: '334155', fit: 'shrink' });
+    slide.addText('Datos del grafico reconstruidos desde el mismo resultado mostrado en plataforma.', { x: 7.05, y: 3.1, w: 5.55, h: 0.4, fontSize: 9, color: '64748B', fit: 'shrink' });
+    addPptFooter(slide, input);
+  });
+
+  asArray(result.tables).map(asRecord).slice(0, 5).forEach((table) => {
+    slide = pptx.addSlide();
+    addPptTitle(slide, asText(table.title, 'Tabla resumen'), shortText(table.description, 180));
+    addPptRows(slide, dashboardTableRows(table), { maxRows: 9 });
+    addPptFooter(slide, input);
+  });
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Insights y recomendaciones');
+  const insightLines = asArray(result.insights).map(asRecord).slice(0, 5).map((item) => `${asText(item.title)}: ${shortText(item.description, 160)} Accion: ${shortText(item.recommended_action, 120)}`);
+  const recommendationLines = asArray(result.recommendations).slice(0, 6).map((item) => `- ${shortText(item, 180)}`);
+  slide.addText([...insightLines, '', ...recommendationLines].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.25, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Informacion faltante y calidad de datos');
+  slide.addText([...asArray(result.missing_information), ...asArray(asRecord(result.data_profile).data_quality_warnings)].slice(0, 12).map((item) => `- ${shortText(item, 180)}`).join('\n') || 'Sin advertencias registradas.', {
+    x: 0.65,
+    y: 1.35,
+    w: 11.8,
+    h: 5.2,
+    fontSize: 12,
+    color: '334155',
+    fit: 'shrink',
+    breakLine: false,
+  });
+  addPptFooter(slide, input);
+
+  await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
+}
+
 async function downloadAgentResultPptx(input: AgentExportInput) {
   const result = asRecord(input.result);
+  if (isDashboardResult(result)) {
+    await downloadDashboardResultPptx(input, result);
+    return;
+  }
   const pptxgen = (await import('pptxgenjs')).default;
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_WIDE';
