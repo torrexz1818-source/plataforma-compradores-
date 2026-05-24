@@ -8,7 +8,7 @@ def build_basic_insights(profiled: dict[str, Any]) -> tuple[str, list[dict[str, 
     insights = list(profiled.get("insights", []))
     recommendations: list[str] = []
     has_rows = bool(profile["rows_detected"])
-    has_docs = bool(profiled.get("document_summaries"))
+    has_docs = any(item.get("detected_type") not in {"xlsx", "csv"} for item in profiled.get("document_summaries", []))
 
     if has_rows:
         recommendations.append("Validar que las columnas detectadas coincidan con el significado real del negocio antes de presentar el dashboard.")

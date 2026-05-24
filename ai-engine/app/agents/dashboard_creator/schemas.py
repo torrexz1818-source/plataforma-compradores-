@@ -118,6 +118,7 @@ class DashboardResult(BaseModel):
     data_type: str | None = None
     analysis_mode: AnalysisMode = "structured_data"
     confidence_level: Confidence = "medium"
+    confidence_reason: str | None = None
     executive_summary: str
     llm_used: bool = False
     data_understanding: DataUnderstanding

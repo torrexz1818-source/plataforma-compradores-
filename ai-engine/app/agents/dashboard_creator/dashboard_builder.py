@@ -22,6 +22,7 @@ def build_dashboard_result(
     latency_ms: int,
 ) -> dict[str, Any]:
     profile = profiled["profile"]
+    confidence_reason = profiled.get("confidence_reason")
     layout = [
         {"section": "Resumen ejecutivo", "component_type": "insight", "title": "Resumen ejecutivo", "priority": 1},
         {"section": "KPIs", "component_type": "kpi", "title": "KPIs principales", "priority": 2},
@@ -41,6 +42,7 @@ def build_dashboard_result(
         "data_type": data_type,
         "analysis_mode": profiled.get("analysis_mode", "structured_data"),
         "confidence_level": profiled.get("confidence_level", "medium"),
+        "confidence_reason": confidence_reason,
         "executive_summary": executive_summary,
         "llm_used": llm_used,
         "data_understanding": profiled.get("data_understanding", {}),

@@ -34,6 +34,44 @@ def _merge_unique(base: list[Any], additions: list[Any]) -> list[Any]:
     return merged
 
 
+def _merge_dashboard_items(base: list[dict[str, Any]], additions: list[dict[str, Any]], key: str | None = None, limit: int = 12) -> list[dict[str, Any]]:
+    seen = set()
+    merged: list[dict[str, Any]] = []
+    for item in [*base, *additions]:
+        if not isinstance(item, dict):
+            continue
+        marker = str(item.get(key)) if key and item.get(key) else str(item)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        merged.append(item)
+        if len(merged) >= limit:
+            break
+    return merged
+
+
+def _build_quality_observations(profiled: dict[str, Any]) -> list[dict[str, Any]]:
+    profile = profiled.get("profile", {})
+    observations: list[dict[str, Any]] = []
+    for warning in profile.get("data_quality_warnings", [])[:5]:
+        observations.append(
+            {
+                "title": "Advertencia de calidad de datos",
+                "description": str(warning),
+                "type": "data_quality",
+            }
+        )
+    if profiled.get("confidence_reason"):
+        observations.append(
+            {
+                "title": "Base de confianza",
+                "description": str(profiled["confidence_reason"]),
+                "type": "data_quality",
+            }
+        )
+    return observations
+
+
 def _normalize_llm_kpis(items: list[Any]) -> list[dict[str, Any]]:
     normalized = []
     for index, item in enumerate(items[:8], start=1):
@@ -177,6 +215,7 @@ async def generate_dashboard(
                 "type": "data_quality",
             }
         ]
+        observations = _merge_unique(observations, _build_quality_observations(profiled))
         missing_information = []
         llm_used = False
 
@@ -185,7 +224,9 @@ async def generate_dashboard(
         if not profiled["profile"]["date_columns"]:
             missing_information.append("No se detecto una columna de fecha o periodo para tendencias.")
 
-        should_use_llm = True
+        has_document_sources = any(item.get("detected_type") not in {"xlsx", "csv"} for item in profiled.get("source_files", []))
+        has_low_structure = profiled.get("data_understanding", {}).get("structure_level") in {"low", "medium"}
+        should_use_llm = use_llm_insights or has_document_sources or has_low_structure
 
         if should_use_llm:
             try:
@@ -219,9 +260,9 @@ async def generate_dashboard(
                 llm_kpis = _normalize_llm_kpis(_as_list(llm_result.get("kpis")))
                 llm_charts = _normalize_llm_charts(_as_list(llm_result.get("charts")))
                 llm_tables = _normalize_llm_tables(_as_list(llm_result.get("tables")))
-                profiled["kpis"] = llm_kpis
-                profiled["charts"] = llm_charts
-                profiled["tables"] = llm_tables
+                profiled["kpis"] = _merge_dashboard_items(profiled.get("kpis", []), llm_kpis, "title", 12)
+                profiled["charts"] = _merge_dashboard_items(profiled.get("charts", []), llm_charts, "chart_id", 8)
+                profiled["tables"] = _merge_dashboard_items(profiled.get("tables", []), llm_tables, "title", 6)
 
                 if isinstance(llm_result.get("insights"), list):
                     insights = _merge_unique(insights, _normalize_insights(llm_result["insights"]))

@@ -7,7 +7,7 @@ from typing import Any
 SYSTEM_PROMPT = """
 Actua como analista senior de compras, reporteria y business intelligence para procurement corporativo.
 
-Tu trabajo en este agente es LLM-first: extraes la informacion desde documentos y muestras tabulares compactas, la ordenas y la conviertes en un dashboard visual util.
+Tu trabajo en este agente es complementar los calculos confiables de Python y convertir informacion documental o parcialmente estructurada en un dashboard visual util.
 
 Recibiras:
 - contexto del usuario,
@@ -20,6 +20,7 @@ Debes:
 - extraer KPIs reales si estan escritos en los documentos o tablas,
 - crear graficos con puntos de datos que existan en el paquete,
 - crear tablas resumen con la misma informacion del documento,
+- respetar los KPIs, tablas y graficos calculados por Python cuando existan,
 - redactar resumen ejecutivo,
 - generar insights, observaciones y recomendaciones,
 - indicar informacion faltante y limitaciones.
@@ -68,6 +69,13 @@ def build_insight_prompt(
             "numeric_columns": profiled.get("profile", {}).get("numeric_columns", []),
             "category_columns": profiled.get("profile", {}).get("category_columns", []),
             "warnings": profiled.get("profile", {}).get("data_quality_warnings", [])[:12],
+        },
+        "python_dashboard_outputs": {
+            "kpis": profiled.get("kpis", [])[:12],
+            "charts": profiled.get("charts", [])[:8],
+            "tables": profiled.get("tables", [])[:6],
+            "insights": profiled.get("insights", [])[:8],
+            "suggested_filters": profiled.get("suggested_filters", []),
         },
         "document_sources": [
             {

@@ -25,6 +25,22 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import {
   getAgentDetail,
   getAgents,
   getMyAgentExecutions,
@@ -99,6 +115,7 @@ const dashboardLoadingSteps = [
   'Preparando dashboard',
   'Finalizando',
 ];
+const dashboardChartColors = ['#09008B', '#2563EB', '#16A34A', '#F59E0B', '#DC2626', '#7C3AED', '#0F766E', '#DB2777'];
 const termsGenerationSteps = [
   'Leyendo informacion',
   'Analizando requerimiento',
@@ -175,6 +192,7 @@ const NexuIA = () => {
     additionalContext: '',
   });
   const [dashboardFiles, setDashboardFiles] = useState<File[]>([]);
+  const [dashboardProgressStep, setDashboardProgressStep] = useState(0);
   const [tcoGeneral, setTcoGeneral] = useState({
     title: '',
     itemName: '',
@@ -274,6 +292,7 @@ const NexuIA = () => {
       additionalContext: '',
     });
     setDashboardFiles([]);
+    setDashboardProgressStep(0);
     tcoAnalysisMutation.reset();
     setTcoGeneral({
       title: '',
@@ -294,6 +313,19 @@ const NexuIA = () => {
     setFeedbackStars(5);
     setFeedbackType('me_sirvio');
   }, [routeAgentId]);
+
+  useEffect(() => {
+    if (!dashboardCreatorMutation.isPending) {
+      setDashboardProgressStep(0);
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setDashboardProgressStep((current) => Math.min(current + 1, dashboardLoadingSteps.length - 1));
+    }, 1100);
+
+    return () => window.clearInterval(intervalId);
+  }, [dashboardCreatorMutation.isPending]);
 
   const runMutation = useMutation({
     mutationFn: runAgent,
@@ -763,7 +795,7 @@ const NexuIA = () => {
         dataType: dashboardForm.dataType,
         visualizationFocus: dashboardForm.visualizationFocus,
         additionalContext: dashboardForm.additionalContext,
-        useLlmInsights: false,
+        useLlmInsights: true,
         files: dashboardFiles,
       },
       {
@@ -1531,7 +1563,125 @@ const NexuIA = () => {
   );
 
   const renderSimpleChart = (chart: DashboardChart) => {
-    const maxValue = Math.max(...chart.data.map((item) => Number(item.value) || 0), 1);
+    const chartData = chart.data
+      .slice(0, 12)
+      .map((item) => ({
+        name: item.label,
+        value: Number(item.value) || 0,
+        group: item.group,
+      }))
+      .filter((item) => item.name && Number.isFinite(item.value));
+    const maxValue = Math.max(...chartData.map((item) => item.value), 1);
+    const isCircular = chart.type === 'pie' || chart.type === 'donut';
+    const isLine = chart.type === 'line';
+    const isArea = chart.type === 'area';
+    const isBar = ['bar', 'horizontal_bar', 'stacked_bar'].includes(chart.type);
+    const renderChartBody = () => {
+      if (!chartData.length || chart.type === 'table' || chart.type === 'matrix' || chart.type === 'alert') {
+        return (
+          <div className="rounded-xl border border-dashed border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
+            No hay puntos numericos suficientes para graficar con precision. Revisa la tabla o el insight asociado.
+          </div>
+        );
+      }
+
+      if (isCircular) {
+        return (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={chart.type === 'donut' ? 58 : 0}
+                  outerRadius={96}
+                  paddingAngle={chart.type === 'donut' ? 2 : 0}
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`${entry.name}-${index}`} fill={dashboardChartColors[index % dashboardChartColors.length]} />
+                  ))}
+                </Pie>
+                <RechartsTooltip formatter={(value) => Number(value).toLocaleString('es-PE')} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      }
+
+      if (isLine || isArea) {
+        const Chart = isArea ? AreaChart : LineChart;
+        return (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <Chart data={chartData} margin={{ top: 8, right: 16, bottom: 16, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-18} textAnchor="end" height={52} />
+                <YAxis tick={{ fontSize: 11 }} width={56} />
+                <RechartsTooltip formatter={(value) => Number(value).toLocaleString('es-PE')} />
+                {isArea ? (
+                  <Area type="monotone" dataKey="value" stroke="#09008B" fill="#09008B" fillOpacity={0.18} strokeWidth={2.5} />
+                ) : (
+                  <Line type="monotone" dataKey="value" stroke="#09008B" strokeWidth={2.5} dot={{ r: 3 }} />
+                )}
+              </Chart>
+            </ResponsiveContainer>
+          </div>
+        );
+      }
+
+      if (isBar) {
+        return (
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={chartData}
+                layout={chart.type === 'horizontal_bar' ? 'vertical' : 'horizontal'}
+                margin={{ top: 8, right: 16, bottom: chart.type === 'horizontal_bar' ? 8 : 34, left: chart.type === 'horizontal_bar' ? 60 : 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                {chart.type === 'horizontal_bar' ? (
+                  <>
+                    <XAxis type="number" tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
+                  </>
+                ) : (
+                  <>
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-18} textAnchor="end" height={52} />
+                    <YAxis tick={{ fontSize: 11 }} width={56} />
+                  </>
+                )}
+                <RechartsTooltip formatter={(value) => Number(value).toLocaleString('es-PE')} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                  {chartData.map((entry, index) => (
+                    <Cell key={`${entry.name}-${index}`} fill={dashboardChartColors[index % dashboardChartColors.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      }
+
+      return (
+        <div className="space-y-3">
+          {chartData.slice(0, 10).map((item) => {
+            const width = `${Math.max(5, (item.value / maxValue) * 100)}%`;
+            return (
+              <div key={`${chart.chart_id}-${item.name}`} className="space-y-1">
+                <div className="flex items-center justify-between gap-3 text-xs">
+                  <span className="truncate text-foreground/80">{item.name}</span>
+                  <span className="shrink-0 text-muted-foreground">{item.value.toLocaleString('es-PE')}</span>
+                </div>
+                <div className="h-2.5 rounded-full bg-primary/10">
+                  <div className="h-2.5 rounded-full bg-primary" style={{ width }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
+    };
 
     return (
       <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -1550,22 +1700,7 @@ const NexuIA = () => {
             ) : null}
           </div>
         </div>
-        <div className="mt-4 space-y-3">
-          {chart.data.slice(0, 10).map((item) => {
-            const width = `${Math.max(5, (Number(item.value) / maxValue) * 100)}%`;
-            return (
-              <div key={`${chart.chart_id}-${item.label}`} className="space-y-1">
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="truncate text-foreground/80">{item.label}</span>
-                  <span className="shrink-0 text-muted-foreground">{Number(item.value).toLocaleString('es-PE')}</span>
-                </div>
-                <div className="h-2.5 rounded-full bg-primary/10">
-                  <div className="h-2.5 rounded-full bg-primary" style={{ width }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <div className="mt-4">{renderChartBody()}</div>
         <p className="mt-3 text-xs leading-5 text-muted-foreground/70">{chart.insight}</p>
       </div>
     );
@@ -1915,7 +2050,7 @@ const NexuIA = () => {
                             <div className="space-y-2 rounded-2xl border border-primary/15 bg-primary/5 p-4">
                               <p className="text-sm font-medium text-foreground">Paso 2 - Archivos de datos</p>
                               <p className="text-xs leading-5 text-muted-foreground/70">
-                                Sube Excel, CSV, PDF, imágenes, reportes o documentos con datos. El agente analizará la información y generará un dashboard visual con KPIs, tablas, gráficos e insights.
+                                Sube Excel, CSV, PDF, imágenes, reportes o documentos con datos. El agente unificará la información y generará un dashboard visual con KPIs, gráficos, tablas, insights y recomendaciones.
                               </p>
                               <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-white px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
                                 <Upload className="h-5 w-5 text-muted-foreground" />
@@ -2196,7 +2331,7 @@ const NexuIA = () => {
                         disabled={dashboardCreatorMutation.isPending}
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
-                        {dashboardCreatorMutation.isPending ? 'Analizando datos y creando dashboard…' : 'Crear dashboard'}
+                        {dashboardCreatorMutation.isPending ? 'Analizando archivos y construyendo dashboard…' : 'Crear dashboard'}
                       </Button>
                     ) : isTcoAnalysis ? (
                       <Button
@@ -2229,18 +2364,18 @@ const NexuIA = () => {
                         <Sparkles className="h-4 w-4 animate-pulse" />
                         <span>
                           {dashboardCreatorMutation.isPending
-                            ? 'Analizando datos y creando dashboard…'
+                            ? 'Analizando archivos y construyendo dashboard…'
                             : tcoAnalysisMutation.isPending
                               ? 'Analizando documentos y construyendo análisis TCO…'
                           : 'Nodus IA está trabajando en tu solicitud…'}
                         </span>
                       </div>
-                      <Progress value={dashboardCreatorMutation.isPending ? 68 : 72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+                      <Progress value={dashboardCreatorMutation.isPending ? ((dashboardProgressStep + 1) / dashboardLoadingSteps.length) * 100 : 72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
                       {dashboardCreatorMutation.isPending ? (
                         <div className="grid gap-2 sm:grid-cols-2">
                           {dashboardLoadingSteps.map((step, index) => (
-                            <div key={step} className="flex items-center gap-2 rounded-xl bg-white/70 px-3 py-2 text-xs text-primary/75">
-                              <span className={`h-2 w-2 rounded-full ${index <= 4 ? 'animate-pulse bg-primary' : 'bg-primary/25'}`} />
+                            <div key={step} className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${index <= dashboardProgressStep ? 'bg-white text-primary' : 'bg-white/60 text-primary/55'}`}>
+                              <span className={`h-2 w-2 rounded-full ${index <= dashboardProgressStep ? 'animate-pulse bg-primary' : 'bg-primary/25'}`} />
                               <span>{step}…</span>
                             </div>
                           ))}
@@ -2535,6 +2670,11 @@ const NexuIA = () => {
                               Estructura: {dashboardResult.data_understanding.structure_level}
                             </Badge>
                           </div>
+                          {dashboardResult.confidence_reason ? (
+                            <p className="mt-3 max-w-3xl text-xs leading-5 text-muted-foreground">
+                              {dashboardResult.confidence_reason}
+                            </p>
+                          ) : null}
                         </div>
                         {renderExportControls(handleDownloadDashboardPdf)}
                       </div>

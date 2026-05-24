@@ -34,6 +34,7 @@ export type DashboardResult = {
   data_type: string | null;
   analysis_mode: 'structured_data' | 'document_based' | 'mixed';
   confidence_level: 'low' | 'medium' | 'high';
+  confidence_reason?: string | null;
   executive_summary: string;
   llm_used: boolean;
   data_understanding: {

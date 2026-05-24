@@ -319,7 +319,7 @@ def _build_data_understanding(
 ) -> dict[str, Any]:
     source_types = sorted({str(item.get("detected_type") or "unknown") for item in source_files})
     has_structured = rows_detected > 0
-    has_documents = bool(document_summaries)
+    has_documents = any(item.get("detected_type") not in {"xlsx", "csv"} for item in document_summaries)
 
     if has_structured and has_documents:
         analysis_mode = "mixed"
@@ -331,12 +331,15 @@ def _build_data_understanding(
     if has_structured and numeric_columns and (category_columns or date_columns):
         structure_level = "high"
         confidence = "high"
+        confidence_reason = "Confianza alta porque se detectaron datos tabulares con columnas numericas y campos para segmentar o analizar tendencias."
     elif has_structured or any(item.get("relevant_findings") for item in document_summaries):
         structure_level = "medium"
         confidence = "medium"
+        confidence_reason = "Confianza media porque existe informacion util, pero faltan algunas columnas claras o parte del soporte viene de documentos extraidos."
     else:
         structure_level = "low"
         confidence = "low"
+        confidence_reason = "Confianza baja porque no se detecto una tabla estructurada suficiente y el resultado depende de texto extraido o informacion parcial."
 
     notes = []
     if has_structured:
@@ -351,6 +354,7 @@ def _build_data_understanding(
     return {
         "analysis_mode": analysis_mode,
         "confidence_level": confidence,
+        "confidence_reason": confidence_reason,
         "data_understanding": {
             "files_processed": len(source_files),
             "source_types": source_types,
@@ -362,13 +366,14 @@ def _build_data_understanding(
 
 
 def _build_document_only_outputs(document_summaries: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    if not document_summaries:
+    document_only_summaries = [item for item in document_summaries if item.get("detected_type") not in {"xlsx", "csv"}]
+    if not document_only_summaries:
         return [], [], []
 
     kpis = [
         {
             "title": "Documentos leidos",
-            "value": str(len(document_summaries)),
+            "value": str(len(document_only_summaries)),
             "description": "Archivos no tabulares procesados con MarkItDown/fallback documental.",
             "calculation_logic": "Conteo de documentos procesados.",
             "source": "python",
@@ -376,7 +381,7 @@ def _build_document_only_outputs(document_summaries: list[dict[str, Any]]) -> tu
         }
     ]
     rows = []
-    for doc in document_summaries:
+    for doc in document_only_summaries:
         rows.append(
             {
                 "Archivo": doc["file_name"],
@@ -623,6 +628,21 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                 "insight": "Permite detectar concentracion de gasto y dependencia por proveedor.",
             }
         )
+        if 2 <= len(top_suppliers) <= 8:
+            charts.append(
+                {
+                    "chart_id": "supplier_share",
+                    "title": "Participacion por proveedor",
+                    "type": "donut",
+                    "description": "Participacion relativa de los principales proveedores detectados.",
+                    "x_axis": supplier_col,
+                    "y_axis": amount_col,
+                    "data": top_suppliers,
+                    "data_source": "python_calculated",
+                    "confidence": "high",
+                    "insight": "Visualiza rapidamente que proveedores concentran la mayor parte del monto analizado.",
+                }
+            )
         tables.append(
             {
                 "title": "Resumen por proveedor",
@@ -661,7 +681,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
             {
                 "chart_id": "top_categories",
                 "title": "Monto por categoria",
-                "type": "horizontal_bar" if len(top_categories) > 6 else "bar",
+                "type": "horizontal_bar" if len(top_categories) > 6 else "pie" if 2 <= len(top_categories) <= 5 else "bar",
                 "description": "Distribucion de monto por categoria.",
                 "x_axis": category_col,
                 "y_axis": amount_col,
@@ -719,6 +739,37 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                             "recommended_action": "Validar causa del cambio y separar efecto precio, volumen o proveedor.",
                         }
                     )
+
+    if supplier_col and category_col and amount_col:
+        matrix_values = combined[[supplier_col, category_col, amount_col]].copy()
+        matrix_values[supplier_col] = matrix_values[supplier_col].astype(str).str.strip()
+        matrix_values[category_col] = matrix_values[category_col].astype(str).str.strip()
+        matrix_values[amount_col] = _to_numeric(matrix_values[amount_col])
+        matrix_values = matrix_values.dropna(subset=[supplier_col, category_col, amount_col])
+        if not matrix_values.empty:
+            pivot = (
+                matrix_values.groupby([supplier_col, category_col])[amount_col]
+                .sum()
+                .sort_values(ascending=False)
+                .head(12)
+            )
+            rows = [
+                {
+                    "Proveedor": str((index if isinstance(index, tuple) else (index, ""))[0]),
+                    "Categoria": str((index if isinstance(index, tuple) else ("", index))[1]),
+                    "Monto": _format_number(float(value)),
+                }
+                for index, value in pivot.items()
+            ]
+            tables.append(
+                {
+                    "title": "Matriz de concentracion proveedor-categoria",
+                    "description": "Cruce de proveedores y categorias con mayor monto detectado.",
+                    "source": "python",
+                    "columns": ["Proveedor", "Categoria", "Monto"],
+                    "rows": rows,
+                }
+            )
 
     if status_col and amount_col:
         top_status = _top_group(combined, status_col, amount_col, limit=8)
