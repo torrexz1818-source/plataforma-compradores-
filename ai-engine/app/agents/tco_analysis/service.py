@@ -244,6 +244,190 @@ def ensure_result_defaults(
     return result
 
 
+def _as_list(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _as_text(value: Any, default: str = "No especificado") -> str:
+    if value is None:
+        return default
+    if isinstance(value, (dict, list)):
+        text = json.dumps(value, ensure_ascii=False, default=str)
+    else:
+        text = str(value)
+    return text.strip() or default
+
+
+def _as_number(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text or text.lower() in {"no especificado", "n/a", "na", "null", "none"}:
+        return None
+    normalized = (
+        text.replace("S/", "")
+        .replace("$", "")
+        .replace("USD", "")
+        .replace("PEN", "")
+        .replace(",", "")
+        .strip()
+    )
+    try:
+        return float(normalized)
+    except ValueError:
+        return None
+
+
+def _normalize_level(value: Any, default: str = "medium") -> str:
+    text = str(value or "").strip().lower()
+    if text in {"low", "bajo", "baja"}:
+        return "low"
+    if text in {"medium", "medio", "media", "moderado", "moderada"}:
+        return "medium"
+    if text in {"high", "alto", "alta"}:
+        return "high"
+    return default
+
+
+def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
+    summary = result.get("executive_summary")
+    if not isinstance(summary, dict):
+        summary = {}
+    result["executive_summary"] = {
+        "best_alternative": _as_text(summary.get("best_alternative"), "No determinado"),
+        "why_it_wins": _as_text(summary.get("why_it_wins"), "No determinado"),
+        "estimated_saving_or_overcost": _as_text(summary.get("estimated_saving_or_overcost"), "No determinado"),
+        "main_risk": _as_text(summary.get("main_risk"), "Información incompleta"),
+        "final_recommendation": _as_text(summary.get("final_recommendation"), "Validar datos antes de decidir."),
+    }
+
+    data_used: list[dict[str, Any]] = []
+    for item in _as_list(result.get("data_used")):
+        if not isinstance(item, dict):
+            continue
+        data_used.append(
+            {
+                "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
+                "base_price": None if item.get("base_price") is None else _as_text(item.get("base_price")),
+                "quantity": None if item.get("quantity") is None else _as_text(item.get("quantity")),
+                "currency": None if item.get("currency") is None else _as_text(item.get("currency")),
+                "horizon": None if item.get("horizon") is None else _as_text(item.get("horizon")),
+                "origin": None if item.get("origin") is None else _as_text(item.get("origin")),
+                "destination": None if item.get("destination") is None else _as_text(item.get("destination")),
+                "incoterm": None if item.get("incoterm") is None else _as_text(item.get("incoterm")),
+                "lead_time": None if item.get("lead_time") is None else _as_text(item.get("lead_time")),
+                "key_assumptions": [_as_text(value) for value in _as_list(item.get("key_assumptions"))],
+            }
+        )
+    result["data_used"] = data_used
+
+    totals: list[dict[str, Any]] = []
+    for item in _as_list(result.get("tco_totals")):
+        if not isinstance(item, dict):
+            continue
+        totals.append(
+            {
+                "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
+                "initial_price": _as_number(item.get("initial_price")),
+                "total_tco": _as_number(item.get("total_tco")),
+                "tco_per_unit": _as_number(item.get("tco_per_unit")),
+                "tco_monthly": _as_number(item.get("tco_monthly")),
+                "tco_annual": _as_number(item.get("tco_annual")),
+                "risk_level": _normalize_level(item.get("risk_level")),
+                "main_hidden_costs": [_as_text(value) for value in _as_list(item.get("main_hidden_costs"))],
+            }
+        )
+    result["tco_totals"] = totals
+
+    ranking: list[dict[str, Any]] = []
+    for index, item in enumerate(_as_list(result.get("ranking")), start=1):
+        if not isinstance(item, dict):
+            continue
+        ranking.append(
+            {
+                "position": int(_as_number(item.get("position")) or index),
+                "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
+                "ranking_type": _as_text(item.get("ranking_type"), "Mejor balance"),
+                "total_tco": _as_number(item.get("total_tco")),
+                "reason": _as_text(item.get("reason"), "Ranking construido con la información disponible."),
+            }
+        )
+    result["ranking"] = ranking
+
+    interpretation = result.get("interpretation")
+    if not isinstance(interpretation, dict):
+        interpretation = {}
+    result["interpretation"] = {
+        "why_winner_wins": _as_text(interpretation.get("why_winner_wins"), "No determinado"),
+        "hidden_costs": [_as_text(value) for value in _as_list(interpretation.get("hidden_costs"))],
+        "cheap_but_risky_options": [_as_text(value) for value in _as_list(interpretation.get("cheap_but_risky_options"))],
+        "expensive_but_convenient_options": [_as_text(value) for value in _as_list(interpretation.get("expensive_but_convenient_options"))],
+        "conditions_that_change_decision": [_as_text(value) for value in _as_list(interpretation.get("conditions_that_change_decision"))],
+    }
+
+    risks: list[dict[str, Any]] = []
+    for item in _as_list(result.get("risk_analysis")):
+        if not isinstance(item, dict):
+            continue
+        risks.append(
+            {
+                "risk": _as_text(item.get("risk")),
+                "alternative": _as_text(item.get("alternative"), "General"),
+                "probability": None if item.get("probability") is None else _as_text(item.get("probability")),
+                "economic_impact": None if item.get("economic_impact") is None else _as_text(item.get("economic_impact")),
+                "expected_risk_cost": None if item.get("expected_risk_cost") is None else _as_text(item.get("expected_risk_cost")),
+                "level": _normalize_level(item.get("level")),
+                "mitigation": _as_text(item.get("mitigation"), "Validar y documentar mitigación."),
+            }
+        )
+    result["risk_analysis"] = risks
+
+    detected: list[dict[str, Any]] = []
+    for item in _as_list(result.get("detected_alternatives")):
+        if not isinstance(item, dict):
+            continue
+        detected.append(
+            {
+                "supplier_name": _as_text(item.get("supplier_name")),
+                "source_file": _as_text(item.get("source_file")),
+                "data_detected": [_as_text(value) for value in _as_list(item.get("data_detected"))],
+                "data_missing": [_as_text(value) for value in _as_list(item.get("data_missing"))],
+                "confidence_level": _normalize_level(item.get("confidence_level"), "low"),
+            }
+        )
+    result["detected_alternatives"] = detected
+
+    quality = result.get("extracted_data_quality")
+    if not isinstance(quality, dict):
+        quality = {}
+    result["extracted_data_quality"] = {
+        "detected_alternatives_count": int(_as_number(quality.get("detected_alternatives_count")) or len(detected)),
+        "documents_processed": int(_as_number(quality.get("documents_processed")) or 0),
+        "confidence_level": _normalize_level(quality.get("confidence_level"), "low"),
+        "warnings": [_as_text(value) for value in _as_list(quality.get("warnings"))],
+    }
+
+    recommendation = result.get("strategic_recommendation")
+    if not isinstance(recommendation, dict):
+        recommendation = {}
+    result["strategic_recommendation"] = {
+        "recommended_action": _as_text(recommendation.get("recommended_action"), "Pedir más información"),
+        "negotiation_points": [_as_text(value) for value in _as_list(recommendation.get("negotiation_points"))],
+        "next_steps": [_as_text(value) for value in _as_list(recommendation.get("next_steps"))],
+    }
+
+    for key in ["missing_information", "questions_for_user_or_suppliers", "assumptions_and_limits", "calculation_warnings"]:
+        result[key] = [_as_text(value) for value in _as_list(result.get(key))]
+
+    return result
+
+
 async def analyze_tco(
     *,
     title: str,
@@ -348,6 +532,7 @@ async def analyze_tco(
             comparison_unit=comparison_unit,
             currency=currency,
         )
+        raw_result = sanitize_tco_result(raw_result)
         raw_result["supporting_documents_summary"] = [
             SupportingDocumentSummary.model_validate(item).model_dump() for item in documents
         ]
