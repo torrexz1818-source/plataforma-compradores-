@@ -20,6 +20,17 @@ from app.document_processing.file_detector import detect_file_type, validate_all
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
 
 TERMS_MAX_FILES = 8
+REDUNDANT_FORM_FIELDS = {
+    "problem_to_solve",
+    "expected_benefit",
+    "non_execution_risk",
+    "areas_or_equipment",
+    "allowed_hours",
+    "supplier_conditions_extra",
+    "compliance_notes",
+    "requesting_area",
+    "request_owner",
+}
 
 
 def _parse_json_field(value: str | None, fallback: Any) -> Any:
@@ -42,6 +53,37 @@ def _normalize_form_schema(raw: dict[str, Any], initial_description: str) -> For
     raw.setdefault("recommended_safety_requirements", template["safety"])
     raw.setdefault("suggested_documents", template["documents"])
     raw.setdefault("notes_for_buyer", [])
+    compact_sections: list[dict[str, Any]] = []
+    has_observations = False
+    for section in raw["form_sections"]:
+        fields = []
+        for field in section.get("fields", []):
+            name = field.get("name")
+            if name in REDUNDANT_FORM_FIELDS:
+                continue
+            if name == "important_observations":
+                has_observations = True
+            fields.append(field)
+        if fields:
+            compact_sections.append({**section, "fields": fields[:6]})
+
+    for section in compact_sections:
+        normalized_title = (section.get("section_title") or "").lower()
+        if "objetivo" in normalized_title and not has_observations:
+            section["fields"].append(
+                {
+                    "name": "important_observations",
+                    "label": "Observaciones importantes",
+                    "type": "textarea",
+                    "required": False,
+                    "placeholder": "Agrega riesgos, restricciones, condiciones criticas, antecedentes, urgencia, impactos o puntos que el proveedor debe considerar.",
+                    "options": [],
+                }
+            )
+            has_observations = True
+            break
+
+    raw["form_sections"] = compact_sections
 
     if len(initial_description.split()) < 5:
         raw["notes_for_buyer"].append(
