@@ -255,7 +255,7 @@ const UserMenu = () => {
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
           {getInitials(user?.fullName)}
         </span>
-        <span className="hidden max-w-[140px] truncate sm:inline">{user?.fullName || 'Usuario'}</span>
+        <span className="hidden max-w-[140px] truncate lg:inline">{user?.fullName || 'Usuario'}</span>
       </button>
 
       {open ? (

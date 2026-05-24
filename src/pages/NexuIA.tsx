@@ -1154,7 +1154,7 @@ const NexuIA = () => {
   const renderTermsField = (field: TermsFormField) => {
     if (field.type === 'file') {
       return (
-        <div key={field.name} className="space-y-2">
+        <div key={field.name} className="min-w-0 space-y-2">
           <label className="text-sm font-medium text-foreground/80">{field.label}</label>
           <p className="text-xs leading-5 text-muted-foreground/70">
             Puedes subir planos con medidas, fichas técnicas, fotos, croquis, documentos previos,
@@ -1203,16 +1203,16 @@ const NexuIA = () => {
       return (
         <div key={field.name} className="space-y-2">
           <label className="text-sm font-medium text-foreground/80">{field.label}</label>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid min-w-0 gap-2 sm:grid-cols-2">
             {field.options.map((option) => (
-              <label key={option} className="flex items-center gap-2 rounded-xl border border-primary/15 bg-white px-3 py-2 text-sm text-foreground/80">
+              <label key={option} className="flex min-w-0 items-center gap-2 rounded-xl border border-primary/15 bg-white px-3 py-2 text-sm text-foreground/80">
                 <input
                   type="checkbox"
                   checked={termsSafetyRequirements.includes(option)}
                   onChange={() => handleToggleSafetyRequirement(option)}
                   className="h-4 w-4 rounded border-primary/25"
                 />
-                {option}
+                <span className="min-w-0 break-words">{option}</span>
               </label>
             ))}
           </div>
@@ -1230,12 +1230,12 @@ const NexuIA = () => {
 
     if (field.type === 'select') {
       return (
-        <div key={field.name} className="space-y-1.5">
+        <div key={field.name} className="min-w-0 space-y-1.5">
           <label className="text-sm font-medium text-foreground/80">{field.label}</label>
           <select
             value={termsFields[field.name] ?? ''}
             onChange={(event) => updateTermsField(field.name, event.target.value)}
-            className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground"
+            className="h-10 w-full min-w-0 rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground"
             required={field.required}
           >
             <option value="">Selecciona una opción</option>
@@ -1249,7 +1249,7 @@ const NexuIA = () => {
 
     const Control = field.type === 'textarea' ? Textarea : Input;
     return (
-      <div key={field.name} className="space-y-1.5">
+      <div key={field.name} className="min-w-0 space-y-1.5">
         <label className="text-sm font-medium text-foreground/80">
           {field.label}
           {field.required ? <span className="text-destructive"> *</span> : null}
@@ -1258,7 +1258,7 @@ const NexuIA = () => {
           value={termsFields[field.name] ?? ''}
           onChange={(event) => updateTermsField(field.name, event.target.value)}
           placeholder={field.placeholder}
-          className={field.type === 'textarea' ? 'min-h-[96px] rounded-2xl border-primary/15' : 'rounded-xl border-primary/15'}
+          className={field.type === 'textarea' ? 'min-h-[96px] min-w-0 rounded-2xl border-primary/15' : 'min-w-0 rounded-xl border-primary/15'}
           required={field.required}
         />
       </div>
@@ -1271,8 +1271,8 @@ const NexuIA = () => {
     const activeStatus = activeSection ? getTermsSectionStatus(termsCurrentStep - 1) : 'pending';
 
     return (
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+      <div className="min-w-0 space-y-4">
+        <div className="min-w-0 rounded-2xl border border-primary/15 bg-primary/5 p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-foreground">
@@ -1290,7 +1290,7 @@ const NexuIA = () => {
           </div>
           <Progress value={termsProgressPercent} className="mt-3 h-2 bg-white" />
           {termsFormSchema ? (
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            <div className="mt-3 flex max-w-full gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
               {['Necesidad inicial', ...termsSections.map((section) => section.section_title), 'Revision'].map((label, index) => {
                 const status = index === 0 ? 'completed' : index === termsTotalSteps - 1 ? (termsMissingRequired.length ? 'pending' : 'completed') : getTermsSectionStatus(index - 1);
                 return (
@@ -1298,13 +1298,13 @@ const NexuIA = () => {
                     key={`${label}-${index}`}
                     type="button"
                     onClick={() => setTermsCurrentStep(index)}
-                    className={`min-w-[150px] rounded-xl border px-3 py-2 text-left text-xs transition ${
+                    className={`w-[min(150px,70vw)] shrink-0 rounded-xl border px-3 py-2 text-left text-xs transition ${
                       index === termsCurrentStep
                         ? 'border-primary bg-white text-foreground shadow-sm'
                         : 'border-primary/10 bg-white/70 text-muted-foreground hover:bg-white'
                     }`}
                   >
-                    <span className="block font-medium">{label}</span>
+                    <span className="block truncate font-medium">{label}</span>
                     <span className="mt-1 block">
                       {status === 'completed' ? 'Completado' : status === 'recommended' ? 'Recomendado' : 'Pendiente'}
                     </span>
@@ -1316,7 +1316,7 @@ const NexuIA = () => {
         </div>
 
         {termsCurrentStep === 0 ? (
-          <div className="space-y-3 rounded-2xl border border-primary/15 bg-white p-4">
+          <div className="min-w-0 space-y-3 rounded-2xl border border-primary/15 bg-white p-3 sm:p-4">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground/80">
                 ¿Qué necesitas contratar o solicitar?
@@ -1325,13 +1325,13 @@ const NexuIA = () => {
                 value={termsInitialDescription}
                 onChange={(event) => setTermsInitialDescription(event.target.value)}
                 placeholder="Ejemplo: Necesito mantenimiento de luminarias en planta, reparación de paredes con humedad, servicio de limpieza de oficinas, compra de laptops..."
-                className="min-h-[112px] rounded-2xl border-primary/15"
+                className="min-h-[112px] min-w-0 rounded-2xl border-primary/15"
                 required
               />
             </div>
             <Button
               type="button"
-              className="rounded-full bg-primary hover:bg-primary"
+              className="w-full rounded-full bg-primary hover:bg-primary sm:w-auto"
               onClick={handleCreateTermsForm}
               disabled={termsFormSchemaMutation.isPending}
             >
@@ -1342,7 +1342,7 @@ const NexuIA = () => {
         ) : null}
 
         {termsFormSchema && activeSection ? (
-          <div className="space-y-4 rounded-2xl border border-primary/15 bg-white p-4">
+          <div className="min-w-0 space-y-4 rounded-2xl border border-primary/15 bg-white p-3 sm:p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-medium text-foreground">{activeSection.section_title}</p>
@@ -1354,35 +1354,35 @@ const NexuIA = () => {
                 {termsFormSchema.detected_category}
               </Badge>
             </div>
-            <div className="grid gap-3">
+            <div className="grid min-w-0 gap-3">
               {activeSection.fields.map((field) => renderTermsField(field))}
             </div>
           </div>
         ) : null}
 
         {termsFormSchema && isReviewStep ? (
-          <div className="space-y-4 rounded-2xl border border-primary/15 bg-white p-4">
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-xl bg-primary/5 p-3">
+          <div className="min-w-0 space-y-4 rounded-2xl border border-primary/15 bg-white p-3 sm:p-4">
+            <div className="grid min-w-0 gap-3 lg:grid-cols-3">
+              <div className="min-w-0 rounded-xl bg-primary/5 p-3">
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Categoria</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.detected_category}</p>
+                <p className="mt-1 break-words text-sm font-medium text-foreground">{termsFormSchema.detected_category}</p>
               </div>
-              <div className="rounded-xl bg-primary/5 p-3">
+              <div className="min-w-0 rounded-xl bg-primary/5 p-3">
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Tipo</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.requirement_type}</p>
+                <p className="mt-1 break-words text-sm font-medium text-foreground">{termsFormSchema.requirement_type}</p>
               </div>
-              <div className="rounded-xl bg-primary/5 p-3">
+              <div className="min-w-0 rounded-xl bg-primary/5 p-3">
                 <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Complejidad</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{termsFormSchema.complexity}</p>
+                <p className="mt-1 break-words text-sm font-medium text-foreground">{termsFormSchema.complexity}</p>
               </div>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-primary/15 p-3">
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              <div className="min-w-0 rounded-xl border border-primary/15 p-3">
                 <p className="text-sm font-medium text-foreground">Campos completos</p>
                 <p className="mt-2 text-2xl font-semibold text-foreground">{termsCompletedRequired}/{termsRequiredFields.length}</p>
                 <p className="mt-1 text-xs text-muted-foreground/70">Obligatorios para generar un TdR corporativo.</p>
               </div>
-              <div className="rounded-xl border border-primary/15 p-3">
+              <div className="min-w-0 rounded-xl border border-primary/15 p-3">
                 <p className="text-sm font-medium text-foreground">Documentos cargados</p>
                 <p className="mt-2 text-2xl font-semibold text-foreground">{termsFiles.length}</p>
                 <p className="mt-1 text-xs text-muted-foreground/70">Se usarán como contexto temporal.</p>
@@ -1418,15 +1418,15 @@ const NexuIA = () => {
             ) : null}
             <div className="rounded-xl border border-primary/15 bg-primary/5 p-3">
               <p className="text-sm font-medium text-foreground">Al generar también recibirás</p>
-              <div className="mt-3 grid gap-2 md:grid-cols-3">
+              <div className="mt-3 grid min-w-0 gap-2 lg:grid-cols-3">
                 {[
                   ['Bases sugeridas para licitación', 'Objeto, alcance, documentación solicitada, criterios de evaluación y advertencia de revisión interna/legal.'],
                   ['Correo para invitar proveedores', 'Asunto, cuerpo del correo, adjuntos sugeridos, plazo de respuesta y cierre profesional.'],
                   ['Proceso sugerido de licitación', 'Pasos para validar TdR, invitar proveedores, recibir consultas, comparar propuestas y adjudicar.'],
                 ].map(([title, description]) => (
-                  <div key={title} className="rounded-xl border border-primary/10 bg-white p-3">
-                    <p className="text-sm font-medium text-foreground">{title}</p>
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+                  <div key={title} className="min-w-0 rounded-xl border border-primary/10 bg-white p-3">
+                    <p className="break-words text-sm font-medium text-foreground">{title}</p>
+                    <p className="mt-1 break-words text-xs leading-5 text-muted-foreground">{description}</p>
                   </div>
                 ))}
               </div>
@@ -1711,27 +1711,27 @@ const NexuIA = () => {
   };
 
   return (
-    <div className="space-y-6 pb-8">
-      <section className="overflow-hidden rounded-[32px] border border-[#2e24ba]/15 bg-[linear-gradient(135deg,#1f1fae_0%,#3325b8_38%,#4f31cb_70%,#6844dc_100%)] shadow-[0_24px_60px_rgba(54,33,170,0.22)]">
-        <div className="grid gap-8 px-8 py-9 lg:grid-cols-[1.35fr_0.95fr] lg:items-center lg:px-8">
-          <div>
+    <div className="min-w-0 space-y-6 pb-8">
+      <section className="overflow-hidden rounded-2xl border border-[#2e24ba]/15 bg-[linear-gradient(135deg,#1f1fae_0%,#3325b8_38%,#4f31cb_70%,#6844dc_100%)] shadow-[0_24px_60px_rgba(54,33,170,0.22)] sm:rounded-[32px]">
+        <div className="grid min-w-0 gap-6 px-4 py-6 sm:px-6 sm:py-8 lg:grid-cols-[1.35fr_0.95fr] lg:items-center lg:px-8 lg:py-9">
+          <div className="min-w-0">
             <Badge
               variant="outline"
               className="border-white/20 bg-white/10 px-4 py-1 text-[13px] font-medium uppercase tracking-[0.24em] text-white backdrop-blur-sm"
             >
               Nodus IA
             </Badge>
-            <h1 className="mt-5 max-w-3xl text-4xl font-bold tracking-tight text-white md:text-5xl">
+            <h1 className="mt-5 max-w-3xl text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl">
               Buyer agentes
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-8 text-white/85 md:text-[1.1rem]">
+            <p className="mt-4 max-w-2xl text-base leading-7 text-white/85 md:text-[1.1rem] md:leading-8">
               Explora agentes especializados, activa automatizaciones y ejecuta flujos de compras
               en un entorno simple, visual y escalable para sourcing, riesgo, logistica y
               negociacion.
             </p>
           </div>
 
-          <div className="flex flex-col gap-4 lg:items-end lg:justify-center">
+          <div className="flex min-w-0 flex-col gap-4 lg:items-end lg:justify-center">
             <div className="grid w-full gap-3 sm:grid-cols-3 lg:max-w-[420px] lg:grid-cols-1">
               {marketplaceStats.map((item) => {
                 const Icon = item.icon;
@@ -1758,7 +1758,7 @@ const NexuIA = () => {
 
       {!isDetailView ? (
       <section className="space-y-6">
-        <Card className="border-primary/15 shadow-sm">
+        <Card className="min-w-0 border-primary/15 shadow-sm">
           <CardHeader>
             <CardTitle className="text-xl text-foreground">Marketplace de agentes IA</CardTitle>
             <CardDescription>
@@ -1776,7 +1776,7 @@ const NexuIA = () => {
               />
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid min-w-0 gap-4 md:grid-cols-2">
               {filteredAgents.map((agent) => {
                 const Icon = getAgentIcon(agent.icon);
                 const isSelected = selectedAgentId === agent.id;
@@ -1795,7 +1795,7 @@ const NexuIA = () => {
                     key={agent.id}
                     type="button"
                     onClick={() => navigate(`/nexu-ia/${agent.id}`)}
-                    className={`rounded-[26px] border p-5 text-left transition-all ${
+                    className={`min-w-0 rounded-[22px] border p-4 text-left transition-all sm:rounded-[26px] sm:p-5 ${
                       isSelected
                         ? 'border-primary/25 bg-[var(--gradient-soft)] shadow-md'
                         : status === 'active'
@@ -1815,8 +1815,8 @@ const NexuIA = () => {
                       </Badge>
                     </div>
 
-                    <h3 className="mt-4 text-lg font-medium text-foreground">{agent.name}</h3>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{agent.description}</p>
+                    <h3 className="mt-4 break-words text-lg font-medium text-foreground">{agent.name}</h3>
+                    <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">{agent.description}</p>
 
                     <div className="mt-4 rounded-2xl bg-primary/5 p-3">
                       <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
@@ -1858,15 +1858,15 @@ const NexuIA = () => {
           Regresar
         </button>
 
-        <div className="space-y-6">
-          <Card className="overflow-hidden border-primary/15 shadow-sm">
+        <div className="min-w-0 space-y-6">
+          <Card className="min-w-0 overflow-hidden border-primary/15 shadow-sm">
             <CardHeader className="border-b border-primary/10 bg-[var(--gradient-soft)]">
               <CardDescription>Vista detalle del agente</CardDescription>
-              <CardTitle className="text-xl text-foreground">
+              <CardTitle className="break-words text-lg text-foreground sm:text-xl">
                 {selectedAgent ? selectedAgent.name : 'Selecciona un agente'}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6 p-6">
+            <CardContent className="min-w-0 space-y-6 p-4 sm:p-6">
               {detailQuery.isLoading ? (
                 <p className="text-sm text-muted-foreground/70">Cargando detalle del agente...</p>
               ) : selectedAgent ? (
@@ -1899,10 +1899,10 @@ const NexuIA = () => {
                     </div>
                   ) : null}
 
-                  <p className="text-sm leading-6 text-muted-foreground">{selectedAgent.longDescription}</p>
+                  <p className="break-words text-sm leading-6 text-muted-foreground">{selectedAgent.longDescription}</p>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                  <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                    <div className="min-w-0 rounded-[20px] border border-primary/15 bg-primary/5 p-4 sm:rounded-[24px]">
                       <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Funcionalidades
                       </p>
@@ -1910,13 +1910,13 @@ const NexuIA = () => {
                         {selectedAgent.functionalities.map((item) => (
                           <div key={item} className="flex items-start gap-2 text-sm text-foreground/80">
                             <CheckCircle2 className="mt-0.5 h-4 w-4 text-success-foreground" />
-                            <span>{item}</span>
+                            <span className="min-w-0 break-words">{item}</span>
                           </div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                    <div className="min-w-0 rounded-[20px] border border-primary/15 bg-primary/5 p-4 sm:rounded-[24px]">
                       <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Beneficios
                       </p>
@@ -1924,15 +1924,15 @@ const NexuIA = () => {
                         {selectedAgent.benefits.map((item) => (
                           <div key={item} className="flex items-start gap-2 text-sm text-foreground/80">
                             <Sparkles className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                            <span>{item}</span>
+                            <span className="min-w-0 break-words">{item}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="rounded-[24px] border border-primary/15 p-4">
+                  <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                    <div className="min-w-0 rounded-[20px] border border-primary/15 p-3 sm:rounded-[24px] sm:p-4">
                       <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Inputs requeridos
                       </p>
@@ -2005,9 +2005,9 @@ const NexuIA = () => {
                                         key={`${file.name}-${file.size}`}
                                         className="flex items-center justify-between gap-3 rounded-xl bg-primary/5 px-3 py-2"
                                       >
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex min-w-0 items-center gap-2">
                                           <FileIcon className="h-4 w-4 text-muted-foreground" />
-                                          <span className="text-sm text-foreground/80">{file.name}</span>
+                                          <span className="truncate text-sm text-foreground/80">{file.name}</span>
                                         </div>
                                         <span className="text-xs text-muted-foreground/70">
                                           {(file.size / 1024 / 1024).toFixed(2)} MB
@@ -2251,24 +2251,24 @@ const NexuIA = () => {
                       </div>
                     </div>
 
-                    <div className="rounded-[24px] border border-primary/15 p-4">
+                    <div className="min-w-0 rounded-[20px] border border-primary/15 p-3 sm:rounded-[24px] sm:p-4">
                       <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Output esperado
                       </p>
                       <div className="mt-3 space-y-2">
                         {selectedAgent.outputs.map((item) => (
-                          <div key={item} className="flex items-start gap-2 text-sm text-foreground/80">
+                          <div key={item} className="flex min-w-0 items-start gap-2 text-sm text-foreground/80">
                             <ArrowRight className="mt-0.5 h-4 w-4 text-muted-foreground" />
-                            <span>{item}</span>
+                            <span className="min-w-0 break-words">{item}</span>
                           </div>
                         ))}
                       </div>
 
-                      <div className="mt-6 rounded-[20px] bg-primary/5 p-4">
+                      <div className="mt-6 min-w-0 rounded-[20px] bg-primary/5 p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                           Caso de uso principal
                         </p>
-                        <p className="mt-2 text-sm leading-6 text-foreground/80">{selectedAgent.useCase}</p>
+                        <p className="mt-2 break-words text-sm leading-6 text-foreground/80">{selectedAgent.useCase}</p>
                       </div>
                     </div>
                   </div>
