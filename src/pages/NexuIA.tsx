@@ -912,6 +912,7 @@ const NexuIA = () => {
       result: termsGenerateMutation.data as unknown as Record<string, unknown>,
       fileName: 'termino-referencia-nodus-ia',
       operationName: 'Descarga término de referencia',
+      captureElementId: 'terms-reference-export-view',
     });
   };
 
@@ -1023,6 +1024,7 @@ const NexuIA = () => {
       result: tcoAnalysisMutation.data as unknown as Record<string, unknown>,
       fileName: 'analisis-tco-nodus-ia',
       operationName: 'Descarga análisis TCO',
+      captureElementId: 'tco-analysis-export-view',
     });
   };
 
@@ -2407,7 +2409,7 @@ const NexuIA = () => {
                   {runMutation.data?.execution.agentId === selectedAgent.id ? renderAgentFeedbackPanel() : null}
 
                   {isTermsReference && termsResult ? (
-                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                    <div id="terms-reference-export-view" className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>
@@ -2415,7 +2417,7 @@ const NexuIA = () => {
                             {termsResult.executive_summary}
                           </p>
                         </div>
-                        {renderExportControls(handleDownloadTermsPdf)}
+                        <div data-export-hidden="true">{renderExportControls(handleDownloadTermsPdf)}</div>
                       </div>
 
                       <div className="grid gap-3 md:grid-cols-4">
@@ -2815,7 +2817,7 @@ const NexuIA = () => {
                   {isDashboardCreator && dashboardResult ? renderAgentFeedbackPanel() : null}
 
                   {isTcoAnalysis && tcoResult ? (
-                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                    <div id="tco-analysis-export-view" className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">A. Resumen ejecutivo</p>
@@ -2823,7 +2825,7 @@ const NexuIA = () => {
                             {tcoResult.executive_summary.final_recommendation}
                           </p>
                         </div>
-                        {renderExportControls(handleDownloadTcoPdf)}
+                        <div data-export-hidden="true">{renderExportControls(handleDownloadTcoPdf)}</div>
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">

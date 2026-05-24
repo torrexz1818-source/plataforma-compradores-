@@ -433,6 +433,11 @@ function isDashboardResult(result: unknown) {
   return Boolean(data.dashboard_title && Array.isArray(data.kpis) && Array.isArray(data.charts) && Array.isArray(data.tables));
 }
 
+function isTcoAnalysisResult(result: unknown) {
+  const data = asRecord(result);
+  return Boolean(data.analysis_title && data.tco_matrix && data.ranking && data.strategic_recommendation);
+}
+
 function dashboardTableRows(table: Record<string, unknown>) {
   const columns = asArray(table.columns).map((item) => asText(item, '')).filter(Boolean);
   return asArray(table.rows).map(asRecord).map((row) => {
@@ -457,6 +462,77 @@ function dashboardChartDataRows(chart: Record<string, unknown>) {
 
 function dashboardListRows(items: unknown[], valueKey = 'Valor') {
   return items.map((item, index) => ({ N: index + 1, [valueKey]: asText(item) }));
+}
+
+function tcoDetectedAlternativeRows(result: Record<string, unknown>) {
+  return asArray(result.detected_alternatives).map(asRecord).map((item) => ({
+    Proveedor: item.supplier_name,
+    Archivo: item.source_file,
+    Precio: item.detected_price,
+    Garantia: item.warranty,
+    Plazo: item.lead_time,
+    Costos: asArray(item.detected_costs).join(', '),
+    'Datos faltantes': asArray(item.data_missing).join(', '),
+    Confianza: item.confidence_level,
+  }));
+}
+
+function tcoDataUsedRows(result: Record<string, unknown>) {
+  return asArray(result.data_used).map(asRecord).map((item) => ({
+    Alternativa: item.alternative,
+    'Precio base': item.base_price,
+    Cantidad: item.quantity,
+    Moneda: item.currency,
+    Horizonte: item.horizon,
+    Origen: item.origin,
+    Destino: item.destination,
+    Incoterm: item.incoterm,
+    'Lead time': item.lead_time,
+    Supuestos: asArray(item.key_assumptions).join(' | '),
+  }));
+}
+
+function tcoMatrixRows(result: Record<string, unknown>) {
+  return asArray(result.tco_matrix).map(asRecord).map((row) => ({
+    Componente: row.cost_component,
+    ...asRecord(row.values),
+    Notas: row.notes,
+  }));
+}
+
+function tcoRankingRows(result: Record<string, unknown>) {
+  return asArray(result.ranking).map(asRecord).map((item) => ({
+    Posicion: item.position,
+    Alternativa: item.alternative,
+    Tipo: item.ranking_type,
+    TCO: item.total_tco,
+    Motivo: item.reason,
+  }));
+}
+
+function tcoTotalsRows(result: Record<string, unknown>) {
+  return asArray(result.tco_totals).map(asRecord).map((item) => ({
+    Alternativa: item.alternative,
+    'Precio inicial': item.initial_price,
+    'TCO total': item.total_tco,
+    'TCO unitario': item.tco_per_unit,
+    'TCO mensual': item.tco_monthly,
+    'TCO anual': item.tco_annual,
+    Riesgo: item.risk_level,
+    'Costos ocultos': asArray(item.main_hidden_costs).join(', '),
+  }));
+}
+
+function tcoRiskRows(result: Record<string, unknown>) {
+  return asArray(result.risk_analysis).map(asRecord).map((item) => ({
+    Riesgo: item.risk,
+    Alternativa: item.alternative,
+    Probabilidad: item.probability,
+    Impacto: item.economic_impact,
+    'Costo esperado': item.expected_risk_cost,
+    Nivel: item.level,
+    Mitigacion: item.mitigation,
+  }));
 }
 
 function getRecommendedRanking(result: Record<string, unknown>) {
@@ -631,6 +707,31 @@ function addAdditionalResultSections(ctx: PdfContext, result: Record<string, unk
 function isProposalComparison(result: unknown) {
   const data = asRecord(result);
   return Boolean(data.evaluation_matrix && data.ranking && data.suppliers && data.recommended_supplier);
+}
+
+function isTermsOfReferenceResult(result: unknown) {
+  const data = asRecord(result);
+  return Boolean(data.generated_document && data.tender_bases && data.supplier_invitation_email && data.tender_process);
+}
+
+function getTermsDocument(result: Record<string, unknown>) {
+  return asRecord(result.generated_document);
+}
+
+function getTermsGeneralData(result: Record<string, unknown>) {
+  return asRecord(getTermsDocument(result).general_data);
+}
+
+function getTermsTenderBases(result: Record<string, unknown>) {
+  return asRecord(result.tender_bases);
+}
+
+function getTermsEmail(result: Record<string, unknown>) {
+  return asRecord(result.supplier_invitation_email);
+}
+
+function termsListRows(items: unknown[], label = 'Detalle') {
+  return items.map((item, index) => ({ N: index + 1, [label]: asText(item) }));
 }
 
 function formatValue(value: unknown, depth = 0): string[] {
@@ -876,6 +977,82 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
     await downloadDashboardResultXlsx(input, result);
     return;
   }
+  if (isTcoAnalysisResult(result)) {
+    const workbook = XLSX.utils.book_new();
+    addMetadataSheet(XLSX, workbook, input, result);
+    const used = new Set<string>(['Resumen']);
+    appendJsonSheet(XLSX, workbook, used, 'Alternativas', tcoDetectedAlternativeRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Datos usados', tcoDataUsedRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Matriz TCO', tcoMatrixRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Totales TCO', tcoTotalsRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Ranking', tcoRankingRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Costos ocultos', dashboardListRows(asArray(result.hidden_costs_detected), 'Costo oculto'));
+    appendJsonSheet(XLSX, workbook, used, 'Riesgos', tcoRiskRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Info faltante', dashboardListRows(asArray(result.missing_information), 'Informacion faltante'));
+    appendJsonSheet(XLSX, workbook, used, 'Preguntas', dashboardListRows(asArray(result.questions_for_user_or_suppliers), 'Pregunta'));
+    appendJsonSheet(XLSX, workbook, used, 'Supuestos limites', dashboardListRows(asArray(result.assumptions_and_limits), 'Supuesto o limite'));
+    XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+    return;
+  }
+  if (isTermsOfReferenceResult(result)) {
+    const workbook = XLSX.utils.book_new();
+    addMetadataSheet(XLSX, workbook, input, result);
+    const used = new Set<string>(['Resumen']);
+    const document = getTermsDocument(result);
+    const general = getTermsGeneralData(result);
+    const bases = getTermsTenderBases(result);
+    const email = getTermsEmail(result);
+
+    appendJsonSheet(XLSX, workbook, used, 'Metricas', asArray(result.dashboard_metrics).map(asRecord));
+    appendJsonSheet(XLSX, workbook, used, 'Checklist', asArray(result.checklist).map(asRecord).map((item) => ({
+      Punto: item.label,
+      Estado: item.status,
+      Detalle: item.detail,
+    })));
+    appendJsonSheet(XLSX, workbook, used, 'Datos generales', Object.entries(general).map(([key, value]) => ({ Campo: formatLabel(key), Valor: asText(value) })));
+    appendJsonSheet(XLSX, workbook, used, 'Documento TdR', [
+      { Seccion: 'Objetivo', Contenido: document.objective },
+      { Seccion: 'Alcance', Contenido: document.scope },
+      { Seccion: 'Justificacion', Contenido: document.justification },
+      { Seccion: 'Caracteristicas tecnicas', Contenido: asArray(document.technical_characteristics).map(asText).join('\n') },
+      { Seccion: 'Actividades requeridas', Contenido: asArray(document.required_activities).map(asText).join('\n') },
+      { Seccion: 'Entregables', Contenido: asArray(document.final_deliverables).map(asText).join('\n') },
+      { Seccion: 'Requisitos de seguridad', Contenido: asArray(document.safety_requirements).map(asText).join('\n') },
+      { Seccion: 'Condiciones para proveedores', Contenido: asArray(document.supplier_conditions).map(asText).join('\n') },
+      { Seccion: 'Estructura informe final', Contenido: asArray(document.final_report_structure).map(asText).join('\n') },
+      { Seccion: 'Anexos sugeridos', Contenido: asArray(document.suggested_annexes).map(asText).join('\n') },
+    ]);
+    appendJsonSheet(XLSX, workbook, used, 'Bases licitacion', [
+      { Seccion: 'Objeto', Contenido: bases.object },
+      { Seccion: 'Alcance', Contenido: bases.scope },
+      { Seccion: 'Requisitos proveedor', Contenido: asArray(bases.minimum_supplier_requirements).map(asText).join('\n') },
+      { Seccion: 'Documentacion solicitada', Contenido: asArray(bases.requested_documentation).map(asText).join('\n') },
+      { Seccion: 'Criterios evaluacion', Contenido: asArray(bases.evaluation_criteria).map(asText).join('\n') },
+      { Seccion: 'Condiciones presentacion', Contenido: asArray(bases.proposal_submission_conditions).map(asText).join('\n') },
+      { Seccion: 'Plazo consultas', Contenido: bases.question_deadline },
+      { Seccion: 'Fecha limite propuestas', Contenido: bases.proposal_deadline },
+      { Seccion: 'Forma de envio', Contenido: bases.submission_method },
+      { Seccion: 'Criterios adjudicacion', Contenido: asArray(bases.award_criteria).map(asText).join('\n') },
+      { Seccion: 'Descalificacion', Contenido: asArray(bases.disqualification_conditions).map(asText).join('\n') },
+      { Seccion: 'Observaciones comprador', Contenido: asArray(bases.buyer_observations).map(asText).join('\n') },
+      { Seccion: 'Advertencia', Contenido: bases.disclaimer },
+    ]);
+    appendJsonSheet(XLSX, workbook, used, 'Correo proveedores', [
+      { Campo: 'Asunto', Valor: email.subject },
+      { Campo: 'Saludo', Valor: email.greeting },
+      { Campo: 'Cuerpo', Valor: email.body },
+      { Campo: 'Adjuntos', Valor: asArray(email.attached_documents).map(asText).join('\n') },
+      { Campo: 'Plazo respuesta', Valor: email.response_deadline },
+      { Campo: 'Contacto', Valor: email.contact_details },
+      { Campo: 'Cierre', Valor: email.closing },
+    ]);
+    appendJsonSheet(XLSX, workbook, used, 'Proceso licitacion', termsListRows(asArray(result.tender_process), 'Paso'));
+    appendJsonSheet(XLSX, workbook, used, 'Info faltante', termsListRows(asArray(result.missing_information), 'Informacion faltante'));
+    appendJsonSheet(XLSX, workbook, used, 'Recomendaciones', termsListRows(asArray(result.buyer_recommendations), 'Recomendacion'));
+    appendJsonSheet(XLSX, workbook, used, 'Documentos apoyo', asArray(result.supporting_documents_summary).map(asRecord));
+    XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+    return;
+  }
   const workbook = XLSX.utils.book_new();
   addMetadataSheet(XLSX, workbook, input, result);
   const used = new Set<string>(['Resumen']);
@@ -931,10 +1108,146 @@ function docxTableFromRows(docx: DocxModule, rows: Array<Record<string, unknown>
   });
 }
 
+function pushDocxList(docx: DocxModule, children: DocxChild[], title: string, items: unknown[]) {
+  children.push(docxParagraph(docx, title, { heading: true }));
+  const values = items.length ? items : ['No especificado'];
+  values.forEach((item) => children.push(docxParagraph(docx, `- ${asText(item)}`)));
+}
+
+async function downloadTermsOfReferenceDocx(input: AgentExportInput, result: Record<string, unknown>) {
+  const docx = await import('docx');
+  const document = getTermsDocument(result);
+  const general = getTermsGeneralData(result);
+  const bases = getTermsTenderBases(result);
+  const email = getTermsEmail(result);
+  const children: DocxChild[] = [
+    docxParagraph(docx, asText(result.title, input.title), { heading: true }),
+    docxParagraph(docx, `Informe ejecutivo editable | Fecha: ${formatDate()}`),
+    docxParagraph(docx, `Agente: ${input.agentName || input.title}`),
+    docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
+    docxParagraph(docx, asText(result.executive_summary)),
+  ];
+
+  const summaryTable = docxTableFromRows(docx, [
+    { Campo: 'Tipo', Valor: result.requirement_type },
+    { Campo: 'Categoria', Valor: result.category },
+    { Campo: 'Completitud', Valor: `${asText(result.completion_level)} (${asText(result.completion_score)}%)` },
+    { Campo: 'Riesgo', Valor: result.risk_level },
+    { Campo: 'Ubicacion', Valor: general.location },
+    { Campo: 'Fecha requerida', Valor: general.required_date },
+  ]);
+  if (summaryTable) children.push(summaryTable);
+
+  children.push(docxParagraph(docx, 'Termino de referencia', { heading: true }));
+  children.push(docxParagraph(docx, `Objetivo: ${asText(document.objective)}`));
+  children.push(docxParagraph(docx, `Alcance: ${asText(document.scope)}`));
+  children.push(docxParagraph(docx, `Justificacion: ${asText(document.justification)}`));
+  pushDocxList(docx, children, 'Caracteristicas tecnicas', asArray(document.technical_characteristics));
+  pushDocxList(docx, children, 'Actividades requeridas', asArray(document.required_activities));
+  pushDocxList(docx, children, 'Entregables', asArray(document.final_deliverables));
+  pushDocxList(docx, children, 'Requisitos de seguridad', asArray(document.safety_requirements));
+  pushDocxList(docx, children, 'Condiciones para proveedores', asArray(document.supplier_conditions));
+  pushDocxList(docx, children, 'Anexos sugeridos', asArray(document.suggested_annexes));
+
+  children.push(docxParagraph(docx, 'Checklist de calidad', { heading: true }));
+  const checklistTable = docxTableFromRows(docx, asArray(result.checklist).map(asRecord).map((item) => ({
+    Punto: item.label,
+    Estado: item.status,
+    Detalle: item.detail,
+  })));
+  if (checklistTable) children.push(checklistTable);
+
+  children.push(docxParagraph(docx, 'Bases sugeridas para licitacion', { heading: true }));
+  children.push(docxParagraph(docx, `Objeto: ${asText(bases.object)}`));
+  children.push(docxParagraph(docx, `Alcance: ${asText(bases.scope)}`));
+  pushDocxList(docx, children, 'Requisitos minimos del proveedor', asArray(bases.minimum_supplier_requirements));
+  pushDocxList(docx, children, 'Documentacion solicitada', asArray(bases.requested_documentation));
+  pushDocxList(docx, children, 'Criterios de evaluacion', asArray(bases.evaluation_criteria));
+  pushDocxList(docx, children, 'Condiciones de presentacion de propuestas', asArray(bases.proposal_submission_conditions));
+  pushDocxList(docx, children, 'Criterios de adjudicacion', asArray(bases.award_criteria));
+  pushDocxList(docx, children, 'Condiciones de descalificacion', asArray(bases.disqualification_conditions));
+  children.push(docxParagraph(docx, asText(bases.disclaimer)));
+
+  children.push(docxParagraph(docx, 'Correo sugerido para invitar proveedores', { heading: true }));
+  children.push(docxParagraph(docx, `Asunto: ${asText(email.subject)}`));
+  children.push(docxParagraph(docx, asText(email.greeting)));
+  children.push(docxParagraph(docx, asText(email.body)));
+  children.push(docxParagraph(docx, `Adjuntos: ${asArray(email.attached_documents).map(asText).join(', ') || 'No especificado'}`));
+  children.push(docxParagraph(docx, `Plazo de respuesta: ${asText(email.response_deadline)}`));
+  children.push(docxParagraph(docx, `Contacto: ${asText(email.contact_details)}`));
+  children.push(docxParagraph(docx, asText(email.closing)));
+
+  pushDocxList(docx, children, 'Proceso sugerido de licitacion', asArray(result.tender_process));
+  pushDocxList(docx, children, 'Informacion faltante', asArray(result.missing_information));
+  pushDocxList(docx, children, 'Recomendaciones accionables', asArray(result.buyer_recommendations));
+  children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
+  children.push(docxParagraph(docx, asText(result.disclaimer)));
+
+  const doc = new docx.Document({ sections: [{ children }] });
+  const blob = await docx.Packer.toBlob(doc);
+  downloadBlob(blob, getDefaultFileName(input, 'docx'));
+}
+
+async function downloadTcoResultDocx(input: AgentExportInput, result: Record<string, unknown>) {
+  const docx = await import('docx');
+  const summary = asRecord(result.executive_summary);
+  const recommendation = asRecord(result.strategic_recommendation);
+  const children: DocxChild[] = [
+    docxParagraph(docx, asText(result.analysis_title, input.title), { heading: true }),
+    docxParagraph(docx, `Informe ejecutivo editable | Fecha: ${formatDate()}`),
+    docxParagraph(docx, `Agente: ${input.agentName || input.title}`),
+    docxParagraph(docx, `Producto o servicio: ${asText(result.item_name)} | Horizonte: ${asText(result.evaluation_horizon)} | Moneda: ${asText(result.currency)}`),
+    docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
+    docxParagraph(docx, `Mejor alternativa preliminar: ${asText(summary.best_alternative)}`),
+    docxParagraph(docx, `Motivo: ${asText(summary.why_it_wins)}`),
+    docxParagraph(docx, `Ahorro o sobrecosto: ${asText(summary.estimated_saving_or_overcost)}`),
+    docxParagraph(docx, `Riesgo principal: ${asText(summary.main_risk)}`),
+    docxParagraph(docx, `Recomendacion final: ${asText(summary.final_recommendation)}`),
+  ];
+
+  [
+    ['Alternativas detectadas', tcoDetectedAlternativeRows(result)],
+    ['Datos usados', tcoDataUsedRows(result)],
+    ['Matriz TCO', tcoMatrixRows(result)],
+    ['Totales TCO', tcoTotalsRows(result)],
+    ['Ranking', tcoRankingRows(result)],
+    ['Riesgos', tcoRiskRows(result)],
+  ].forEach(([title, rows]) => {
+    children.push(docxParagraph(docx, String(title), { heading: true }));
+    const table = docxTableFromRows(docx, rows as Array<Record<string, unknown>>);
+    if (table) children.push(table);
+  });
+
+  pushDocxList(docx, children, 'Costos ocultos detectados', asArray(result.hidden_costs_detected));
+  children.push(docxParagraph(docx, 'Analisis de sensibilidad', { heading: true }));
+  formatValue(result.sensitivity_analysis).slice(0, 40).forEach((line) => children.push(docxParagraph(docx, line)));
+  children.push(docxParagraph(docx, 'Recomendacion estrategica', { heading: true }));
+  children.push(docxParagraph(docx, `Accion recomendada: ${asText(recommendation.recommended_action)}`));
+  pushDocxList(docx, children, 'Puntos de negociacion', asArray(recommendation.negotiation_points));
+  pushDocxList(docx, children, 'Siguientes pasos', asArray(recommendation.next_steps));
+  pushDocxList(docx, children, 'Informacion faltante', asArray(result.missing_information));
+  pushDocxList(docx, children, 'Preguntas sugeridas para proveedores', asArray(result.questions_for_user_or_suppliers));
+  pushDocxList(docx, children, 'Supuestos y limites', asArray(result.assumptions_and_limits));
+  children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
+  children.push(docxParagraph(docx, asText(result.disclaimer)));
+
+  const doc = new docx.Document({ sections: [{ children }] });
+  const blob = await docx.Packer.toBlob(doc);
+  downloadBlob(blob, getDefaultFileName(input, 'docx'));
+}
+
 async function downloadAgentResultDocx(input: AgentExportInput) {
   const docx = await import('docx');
   const result = asRecord(input.result);
   const mode = input.pdfMode ?? 'standard_branded';
+  if (isTermsOfReferenceResult(result)) {
+    await downloadTermsOfReferenceDocx(input, result);
+    return;
+  }
+  if (isTcoAnalysisResult(result)) {
+    await downloadTcoResultDocx(input, result);
+    return;
+  }
   if (isDashboardResult(result)) {
     const children: DocxChild[] = [
       docxParagraph(docx, asText(result.dashboard_title, input.title), { heading: true }),
@@ -1104,6 +1417,99 @@ function addPptRows(slide: PptxSlide, rows: Array<Record<string, unknown>>, opti
   );
 }
 
+async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Record<string, unknown>) {
+  const pptxgen = (await import('pptxgenjs')).default;
+  const pptx = new pptxgen();
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'Buyer Nodus';
+  pptx.subject = input.agentName || input.title;
+  pptx.title = asText(result.title, input.title);
+  pptx.company = getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Buyer Nodus';
+  pptx.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'es-PE' };
+
+  const document = getTermsDocument(result);
+  const bases = getTermsTenderBases(result);
+  const email = getTermsEmail(result);
+  let slide = pptx.addSlide();
+  addPptTitle(slide, asText(result.title, input.title), 'Deck nativo editable generado desde el termino de referencia.');
+  slide.addText(shortText(result.executive_summary, 520), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
+  slide.addText(`Tipo: ${asText(result.requirement_type)}\nCategoria: ${asText(result.category)}\nCompletitud: ${asText(result.completion_level)} (${asText(result.completion_score)}%)\nRiesgo: ${asText(result.risk_level)}`, {
+    x: 0.7,
+    y: 3.1,
+    w: 5.6,
+    h: 1.3,
+    fontSize: 12,
+    color: '475569',
+    fit: 'shrink',
+  });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Mini dashboard del requerimiento');
+  addPptRows(slide, asArray(result.dashboard_metrics).map(asRecord), { maxRows: 8 });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Termino de referencia', 'Objetivo, alcance, justificacion y datos clave.');
+  slide.addText(`Objetivo: ${shortText(document.objective, 330)}\n\nAlcance: ${shortText(document.scope, 420)}\n\nJustificacion: ${shortText(document.justification, 330)}`, {
+    x: 0.65,
+    y: 1.35,
+    w: 11.8,
+    h: 5.2,
+    fontSize: 12,
+    color: '334155',
+    fit: 'shrink',
+    breakLine: false,
+  });
+  addPptFooter(slide, input);
+
+  [
+    ['Actividades y entregables', [...asArray(document.required_activities).map((item) => `Actividad: ${asText(item)}`), ...asArray(document.final_deliverables).map((item) => `Entregable: ${asText(item)}`)]],
+    ['Seguridad y condiciones para proveedores', [...asArray(document.safety_requirements).map((item) => `Seguridad: ${asText(item)}`), ...asArray(document.supplier_conditions).map((item) => `Condicion: ${asText(item)}`)]],
+    ['Checklist de calidad', asArray(result.checklist).map((item) => `${asText(asRecord(item).label)} - ${asText(asRecord(item).status)}`)],
+  ].forEach(([title, items]) => {
+    slide = pptx.addSlide();
+    addPptTitle(slide, String(title));
+    slide.addText((items as string[]).slice(0, 12).map((item) => `- ${shortText(item, 170)}`).join('\n'), { x: 0.7, y: 1.35, w: 11.7, h: 5.2, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
+    addPptFooter(slide, input);
+  });
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Bases sugeridas para licitacion');
+  slide.addText(`Objeto: ${shortText(bases.object, 260)}\n\nAlcance: ${shortText(bases.scope, 320)}\n\nCriterios: ${asArray(bases.evaluation_criteria).map(asText).join(', ')}\n\nAdvertencia: ${shortText(bases.disclaimer, 220)}`, {
+    x: 0.65,
+    y: 1.35,
+    w: 11.8,
+    h: 5.2,
+    fontSize: 12,
+    color: '334155',
+    fit: 'shrink',
+    breakLine: false,
+  });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Correo sugerido para proveedores');
+  slide.addText(`Asunto: ${asText(email.subject)}\n\n${asText(email.greeting)}\n\n${shortText(email.body, 620)}\n\nAdjuntos: ${asArray(email.attached_documents).map(asText).join(', ')}\nPlazo: ${asText(email.response_deadline)}\nContacto: ${asText(email.contact_details)}\n\n${asText(email.closing)}`, {
+    x: 0.65,
+    y: 1.25,
+    w: 11.8,
+    h: 5.5,
+    fontSize: 11,
+    color: '334155',
+    fit: 'shrink',
+    breakLine: false,
+  });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Proceso sugerido de licitacion');
+  addPptRows(slide, termsListRows(asArray(result.tender_process), 'Paso'), { maxRows: 10 });
+  addPptFooter(slide, input);
+
+  await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
+}
+
 async function downloadDashboardResultPptx(input: AgentExportInput, result: Record<string, unknown>) {
   const pptxgen = (await import('pptxgenjs')).default;
   const pptx = new pptxgen();
@@ -1188,10 +1594,102 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
   await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
 }
 
+async function downloadTcoResultPptx(input: AgentExportInput, result: Record<string, unknown>) {
+  const pptxgen = (await import('pptxgenjs')).default;
+  const pptx = new pptxgen();
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'Buyer Nodus';
+  pptx.subject = input.agentName || input.title;
+  pptx.title = asText(result.analysis_title, input.title);
+  pptx.company = getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Buyer Nodus';
+  pptx.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'es-PE' };
+
+  const summary = asRecord(result.executive_summary);
+  const recommendation = asRecord(result.strategic_recommendation);
+  let slide = pptx.addSlide();
+  addPptTitle(slide, asText(result.analysis_title, input.title), 'Deck nativo editable de analisis TCO.');
+  slide.addText(shortText(summary.final_recommendation || summary.why_it_wins, 520), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
+  slide.addText(`Producto: ${asText(result.item_name)}\nHorizonte: ${asText(result.evaluation_horizon)}\nMoneda: ${asText(result.currency)}\nMejor alternativa: ${asText(summary.best_alternative)}`, {
+    x: 0.7,
+    y: 3.1,
+    w: 6.2,
+    h: 1.35,
+    fontSize: 12,
+    color: '475569',
+    fit: 'shrink',
+  });
+  slide.addText(`Riesgo principal: ${shortText(summary.main_risk, 180)}\nAhorro/sobrecosto: ${shortText(summary.estimated_saving_or_overcost, 180)}`, {
+    x: 7.1,
+    y: 3.1,
+    w: 5.4,
+    h: 1.35,
+    fontSize: 12,
+    color: '475569',
+    fit: 'shrink',
+  });
+  addPptFooter(slide, input);
+
+  [
+    ['Alternativas detectadas', tcoDetectedAlternativeRows(result)],
+    ['Matriz TCO', tcoMatrixRows(result)],
+    ['Ranking', tcoRankingRows(result)],
+    ['Riesgos', tcoRiskRows(result)],
+  ].forEach(([title, rows]) => {
+    slide = pptx.addSlide();
+    addPptTitle(slide, String(title), 'Informacion editable reconstruida desde el resultado mostrado en plataforma.');
+    addPptRows(slide, rows as Array<Record<string, unknown>>, { maxRows: 8 });
+    addPptFooter(slide, input);
+  });
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Costos ocultos y sensibilidad');
+  slide.addText([
+    'Costos ocultos detectados:',
+    ...asArray(result.hidden_costs_detected).slice(0, 8).map((item) => `- ${shortText(item, 140)}`),
+    '',
+    'Sensibilidad:',
+    ...formatValue(result.sensitivity_analysis).slice(0, 10),
+  ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Recomendacion estrategica');
+  slide.addText([
+    `Accion recomendada: ${shortText(recommendation.recommended_action, 160)}`,
+    '',
+    'Puntos de negociacion:',
+    ...asArray(recommendation.negotiation_points).slice(0, 6).map((item) => `- ${shortText(item, 160)}`),
+    '',
+    'Siguientes pasos:',
+    ...asArray(recommendation.next_steps).slice(0, 6).map((item) => `- ${shortText(item, 160)}`),
+  ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Informacion faltante y preguntas');
+  slide.addText([
+    ...asArray(result.missing_information).slice(0, 7).map((item) => `- ${shortText(item, 150)}`),
+    '',
+    'Preguntas para proveedores:',
+    ...asArray(result.questions_for_user_or_suppliers).slice(0, 7).map((item) => `- ${shortText(item, 150)}`),
+  ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
+  addPptFooter(slide, input);
+
+  await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
+}
+
 async function downloadAgentResultPptx(input: AgentExportInput) {
   const result = asRecord(input.result);
+  if (isTermsOfReferenceResult(result)) {
+    await downloadTermsOfReferencePptx(input, result);
+    return;
+  }
   if (isDashboardResult(result)) {
     await downloadDashboardResultPptx(input, result);
+    return;
+  }
+  if (isTcoAnalysisResult(result)) {
+    await downloadTcoResultPptx(input, result);
     return;
   }
   const pptxgen = (await import('pptxgenjs')).default;
