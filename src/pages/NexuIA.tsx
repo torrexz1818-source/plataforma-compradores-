@@ -424,7 +424,9 @@ const NexuIA = () => {
       { value: 'custom_brand' as const, label: 'PDF con mi logo', enabled: Boolean(modes?.customBrand) },
     ].filter((mode) => mode.enabled);
   }, [pdfOptionsQuery.data]);
+  const isAdminUser = user?.role === 'admin';
   const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
+  const canUseSelectedAgent = Boolean(selectedAgent) && (isAgentActive || (isAdminUser && selectedAgent?.status !== 'hidden'));
   const currentFeedbackRunId =
     selectedAgent?.id && runMutation.data?.execution.agentId === selectedAgent.id
       ? runMutation.data.execution.agentRunId
@@ -1541,17 +1543,19 @@ const NexuIA = () => {
                     </Badge>
                     <Badge
                       variant="outline"
-                      className={isAgentActive ? 'border-success/25 text-success-foreground' : 'border-destructive/20 text-destructive'}
+                      className={canUseSelectedAgent ? 'border-success/25 text-success-foreground' : 'border-destructive/20 text-destructive'}
                     >
                       {isAgentActive
                         ? 'Activo'
+                        : isAdminUser
+                          ? 'Disponible para admin'
                         : selectedAgent.status === 'coming_soon'
                           ? 'Proximamente'
                           : 'No disponible'}
                     </Badge>
                   </div>
 
-                  {!isAgentActive ? (
+                  {!canUseSelectedAgent ? (
                     <div className="rounded-2xl border border-primary/15 bg-muted/40 p-4 text-sm text-muted-foreground">
                       Este agente esta marcado como {selectedAgent.status === 'coming_soon' ? 'Proximamente' : 'no disponible'}.
                       La card se mantiene visible y bloqueada hasta que administracion lo active.
@@ -2034,7 +2038,7 @@ const NexuIA = () => {
                   ) : null}
 
                   <div className="flex flex-wrap gap-3">
-                    {!isAgentActive ? (
+                    {!canUseSelectedAgent ? (
                       <Button type="button" className="rounded-full" disabled>
                         <PlayCircle className="mr-2 h-4 w-4" />
                         {selectedAgent.status === 'coming_soon' ? 'Proximamente' : 'Agente bloqueado'}

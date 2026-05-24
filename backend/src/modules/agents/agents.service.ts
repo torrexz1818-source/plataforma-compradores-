@@ -627,7 +627,7 @@ export class AgentsService {
     if (user.role !== UserRole.BUYER && user.role !== UserRole.ADMIN) {
       throw new ForbiddenException('Nodus IA esta disponible para compradores');
     }
-    if (agent.status !== 'active') {
+    if (agent.status !== 'active' && user.role !== UserRole.ADMIN) {
       throw new ForbiddenException(agent.status === 'coming_soon' ? 'Este agente estara disponible proximamente' : 'Este agente no esta disponible');
     }
 
