@@ -15,6 +15,7 @@ type PdfInput = {
   fileName?: string;
   pdfMode?: AgentPdfMode;
   pdfOptions?: AgentPdfOptions;
+  captureElementId?: string;
 };
 
 export type AgentExportInput = PdfInput & {
@@ -667,6 +668,55 @@ function addGenericPdf(input: PdfInput) {
   ctx.doc.save(input.fileName ?? 'resultado-nodus-ia.pdf');
 }
 
+async function addCapturedDashboardPdf(input: PdfInput) {
+  if (!input.captureElementId) return false;
+  const element = document.getElementById(input.captureElementId);
+  if (!element) return false;
+
+  const { default: html2canvas } = await import('html2canvas');
+  const hiddenElements = Array.from(element.querySelectorAll<HTMLElement>('[data-export-hidden="true"]'));
+  hiddenElements.forEach((item) => {
+    item.dataset.previousDisplay = item.style.display;
+    item.style.display = 'none';
+  });
+
+  try {
+    const canvas = await html2canvas(element, {
+      backgroundColor: '#ffffff',
+      scale: Math.min(window.devicePixelRatio || 2, 2),
+      useCORS: true,
+      logging: false,
+    });
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 8;
+    const imgWidth = pageWidth - margin * 2;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const imgData = canvas.toDataURL('image/png');
+
+    let position = margin;
+    let remainingHeight = imgHeight;
+    doc.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
+    remainingHeight -= pageHeight - margin * 2;
+
+    while (remainingHeight > 0) {
+      doc.addPage();
+      position = margin - (imgHeight - remainingHeight);
+      doc.addImage(imgData, 'PNG', margin, position, imgWidth, imgHeight, undefined, 'FAST');
+      remainingHeight -= pageHeight - margin * 2;
+    }
+
+    doc.save(input.fileName ?? 'dashboard-nodus-ia.pdf');
+    return true;
+  } finally {
+    hiddenElements.forEach((item) => {
+      item.style.display = item.dataset.previousDisplay || '';
+      delete item.dataset.previousDisplay;
+    });
+  }
+}
+
 function getObjective(result: Record<string, unknown>) {
   return asText(result.objective ?? result.description ?? result.executive_summary ?? result.summary ?? result.final_recommendation, '');
 }
@@ -926,7 +976,11 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
   await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
 }
 
-export function downloadAgentResultPdf(input: PdfInput) {
+export async function downloadAgentResultPdf(input: PdfInput) {
+  if (input.captureElementId) {
+    const captured = await addCapturedDashboardPdf(input);
+    if (captured) return;
+  }
   if (isProposalComparison(input.result)) {
     addProposalComparisonPdf(input);
     return;
@@ -936,7 +990,7 @@ export function downloadAgentResultPdf(input: PdfInput) {
 
 export async function downloadAgentResult(input: AgentExportInput) {
   if (input.format === 'pdf') {
-    downloadAgentResultPdf({ ...input, fileName: getDefaultFileName(input, 'pdf') });
+    await downloadAgentResultPdf({ ...input, fileName: getDefaultFileName(input, 'pdf') });
     return;
   }
   if (input.format === 'docx') {

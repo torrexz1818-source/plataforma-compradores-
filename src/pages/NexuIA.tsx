@@ -876,7 +876,7 @@ const NexuIA = () => {
     );
   };
 
-  const handleExportResult = async (input: { title: string; result: Record<string, unknown>; fileName: string; operationName: string }) => {
+  const handleExportResult = async (input: { title: string; result: Record<string, unknown>; fileName: string; operationName: string; captureElementId?: string }) => {
     try {
       setIsExportingResult(true);
       await ensureExportModeAllowed();
@@ -889,6 +889,7 @@ const NexuIA = () => {
         format: selectedExportFormat,
         pdfMode: selectedPdfMode,
         pdfOptions: pdfOptionsQuery.data,
+        captureElementId: selectedExportFormat === 'pdf' ? input.captureElementId : undefined,
       });
       if (selectedAgent) {
         logAgentUsage(selectedAgent.id, `${input.operationName} ${selectedExportFormat.toUpperCase()}`, input.result, selectedExportFormat === 'pdf');
@@ -1032,6 +1033,7 @@ const NexuIA = () => {
       result: dashboardCreatorMutation.data as unknown as Record<string, unknown>,
       fileName: 'dashboard-nodus-ia',
       operationName: 'Descarga dashboard',
+      captureElementId: 'dashboard-creator-export-view',
     });
   };
 
@@ -2644,7 +2646,7 @@ const NexuIA = () => {
                   {isTermsReference && termsResult ? renderAgentFeedbackPanel() : null}
 
                   {isDashboardCreator && dashboardResult ? (
-                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                    <div id="dashboard-creator-export-view" className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">{dashboardResult.dashboard_title}</p>
@@ -2676,7 +2678,7 @@ const NexuIA = () => {
                             </p>
                           ) : null}
                         </div>
-                        {renderExportControls(handleDownloadDashboardPdf)}
+                        <div data-export-hidden="true">{renderExportControls(handleDownloadDashboardPdf)}</div>
                       </div>
 
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
