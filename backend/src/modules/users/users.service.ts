@@ -111,6 +111,8 @@ type ProfileViewNotificationRecord = {
 const DUPLICATE_EMAIL_MESSAGE =
   'Este correo ya está registrado. Inicia sesión o recupera tu contraseña.';
 
+const ADMIN_UNLIMITED_AI_CREDITS = 999999999;
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -283,6 +285,11 @@ export class UsersService {
 
   async getMonetizationOverview(userId: string) {
     const user = await this.requireActiveUser(userId);
+
+    if (user.role === UserRole.ADMIN) {
+      return this.getAdminUnlimitedMonetizationOverview(user);
+    }
+
     const membership = await this.ensureMembershipForUser(user.id);
     const audience = this.getMembershipAudience(user.role);
     const plan = getMembershipPlan(audience, membership.plan);
@@ -350,6 +357,16 @@ export class UsersService {
   }
 
   async consumeAiCredit(userId: string) {
+    const user = await this.requireActiveUser(userId);
+
+    if (user.role === UserRole.ADMIN) {
+      return {
+        allowed: true,
+        remainingCredits: ADMIN_UNLIMITED_AI_CREDITS,
+        overview: await this.getMonetizationOverview(userId),
+      };
+    }
+
     const membership = await this.normalizeCreditPeriod(await this.ensureMembershipForUser(userId));
     const available = membership.aiCreditsBalance ?? 0;
     if (available < 1) {
@@ -1346,6 +1363,48 @@ export class UsersService {
   private getIncludedAiCredits(role: UserRole, planKey: string) {
     const audience = this.getMembershipAudience(role);
     return getMembershipPlan(audience, planKey).aiCreditsMonthly ?? 0;
+  }
+
+  private getAdminUnlimitedMonetizationOverview(user: User) {
+    const premiumBuyerPlan = getMembershipPlan('buyer', 'premium');
+    const membership: MembershipRecord = {
+      userId: user.id,
+      userRole: UserRole.ADMIN,
+      plan: 'premium',
+      status: 'active',
+      adminApproved: true,
+      aiCreditsBalance: ADMIN_UNLIMITED_AI_CREDITS,
+      aiCreditsMonthlyIncluded: ADMIN_UNLIMITED_AI_CREDITS,
+      aiCreditsUsedThisPeriod: 0,
+      aiCreditsPeriod: this.currentCreditPeriod(),
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+
+    return {
+      membership: this.serializeMembership(membership),
+      currentPlan: {
+        ...premiumBuyerPlan,
+        name: 'Administrador ilimitado',
+        priceLabel: 'Ilimitado',
+        priceAmount: 0,
+        aiCreditsMonthly: ADMIN_UNLIMITED_AI_CREDITS,
+        limits: {
+          ...premiumBuyerPlan.limits,
+          aiCredits: 'ilimitado',
+        },
+      },
+      buyerPlans: buyerMembershipPlans,
+      supplierPlans: supplierMembershipPlans,
+      creditPacks: aiCreditPacks,
+      additionalServices,
+      entitlements: {
+        aiCreditsRemaining: ADMIN_UNLIMITED_AI_CREDITS,
+        aiCreditsMonthlyIncluded: ADMIN_UNLIMITED_AI_CREDITS,
+        aiCreditsUsedThisPeriod: 0,
+        agentBranding: 'custom_brand' as const,
+      },
+    };
   }
 
   private async normalizeCreditPeriod(membership: MembershipRecord) {

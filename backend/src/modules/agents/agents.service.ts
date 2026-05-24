@@ -526,8 +526,9 @@ export class AgentsService {
     const planAllowsWhiteLabel = plan === 'professional' || plan === 'premium';
     const planAllowsCustomBrand = plan === 'premium';
     const premiumActive = userSettings.premiumPdfStatus === 'active';
-    const userAllowsWhiteLabel = planAllowsWhiteLabel || (premiumActive && userSettings.whiteLabelPdfEnabled);
-    const userAllowsCustomBrand = planAllowsCustomBrand || (premiumActive && userSettings.customBrandPdfEnabled);
+    const isAdmin = user.role === UserRole.ADMIN;
+    const userAllowsWhiteLabel = isAdmin || planAllowsWhiteLabel || (premiumActive && userSettings.whiteLabelPdfEnabled);
+    const userAllowsCustomBrand = isAdmin || planAllowsCustomBrand || (premiumActive && userSettings.customBrandPdfEnabled);
     const modes = {
       standardBranded: userSettings.standardPdfEnabled && agentSettings.standardPdfEnabled,
       whiteLabel: userAllowsWhiteLabel && agentSettings.whiteLabelAvailable,

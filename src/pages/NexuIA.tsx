@@ -217,6 +217,7 @@ const NexuIA = () => {
   const monetizationQuery = useQuery({
     queryKey: ['monetization', 'mine'],
     queryFn: getMyMonetization,
+    enabled: user?.role !== 'admin',
   });
 
   useEffect(() => {
