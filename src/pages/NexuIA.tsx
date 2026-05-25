@@ -3039,6 +3039,10 @@ const NexuIA = () => {
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">Mejor alternativa</p>
                           <p className="mt-2 text-lg font-semibold text-foreground">{tcoResult.executive_summary.best_alternative}</p>
+                          <p className="mt-1 text-sm font-medium text-primary">
+                            Calificación: {tcoResult.executive_summary.best_alternative_score ?? 'No especificado'} / 100
+                            {tcoResult.executive_summary.best_alternative_score_label ? ` - ${tcoResult.executive_summary.best_alternative_score_label}` : ''}
+                          </p>
                           <p className="mt-2 text-sm leading-6 text-muted-foreground">{tcoResult.executive_summary.why_it_wins}</p>
                         </div>
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -3145,6 +3149,9 @@ const NexuIA = () => {
                             {tcoResult.ranking.map((item) => (
                               <div key={`${item.position}-${item.alternative}`} className="rounded-xl bg-primary/5 p-3">
                                 <p className="text-sm font-medium text-foreground">{item.position}. {item.alternative}</p>
+                                <p className="mt-1 text-sm font-semibold text-primary">
+                                  Calificación: {item.score ?? 'No especificado'} / 100{item.score_label ? ` - ${item.score_label}` : ''}
+                                </p>
                                 <p className="mt-1 text-sm text-muted-foreground">TCO: {item.total_tco ?? 'No especificado'}</p>
                                 <p className="mt-1 text-sm text-muted-foreground">{item.reason}</p>
                               </div>

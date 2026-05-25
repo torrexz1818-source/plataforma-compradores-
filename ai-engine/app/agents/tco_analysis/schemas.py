@@ -53,6 +53,8 @@ class ExtractedDataQuality(BaseModel):
 
 class ExecutiveSummary(BaseModel):
     best_alternative: str
+    best_alternative_score: float | None = None
+    best_alternative_score_label: str | None = None
     why_it_wins: str
     estimated_saving_or_overcost: str
     main_risk: str
@@ -94,6 +96,9 @@ class RankingItem(BaseModel):
     alternative: str
     ranking_type: str
     total_tco: float | None = None
+    score: float | None = None
+    score_label: str | None = None
+    score_breakdown: dict[str, float | int | str | None] = Field(default_factory=dict)
     reason: str
 
 

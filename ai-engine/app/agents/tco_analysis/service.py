@@ -287,6 +287,8 @@ def build_fallback_result(
         "currency": currency,
         "executive_summary": {
             "best_alternative": best,
+            "best_alternative_score": 60,
+            "best_alternative_score_label": "Regular",
             "why_it_wins": "Analisis preliminar construido con la informacion disponible. Falta interpretacion avanzada de OpenAI.",
             "estimated_saving_or_overcost": "No determinado",
             "main_risk": "Informacion incompleta",
@@ -307,6 +309,16 @@ def build_fallback_result(
                 "alternative": best,
                 "ranking_type": "Mejor alternativa estrategica",
                 "total_tco": None,
+                "score": 60,
+                "score_label": "Regular",
+                "score_breakdown": {
+                    "tco_cost_score": 50,
+                    "risk_score": 55,
+                    "warranty_support_score": 60,
+                    "availability_lead_time_score": 60,
+                    "data_confidence_score": 40,
+                    "weighted_formula": "35% TCO/costo, 25% riesgo, 20% garantia/soporte, 10% disponibilidad/lead time, 10% confianza de informacion",
+                },
                 "reason": "No hay suficientes datos numericos para ordenar por menor TCO. Se requiere validacion documental adicional.",
             }
         ] if detected else [],
@@ -363,6 +375,8 @@ def ensure_result_defaults(
         "executive_summary",
         {
             "best_alternative": "No determinado",
+            "best_alternative_score": None,
+            "best_alternative_score_label": "No determinado",
             "why_it_wins": "Falta informacion para definir una alternativa ganadora.",
             "estimated_saving_or_overcost": "No determinado",
             "main_risk": "Informacion incompleta",
@@ -416,6 +430,8 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
     summary = result.get("executive_summary") if isinstance(result.get("executive_summary"), dict) else {}
     result["executive_summary"] = {
         "best_alternative": _as_text(summary.get("best_alternative"), "No determinado"),
+        "best_alternative_score": _as_number(summary.get("best_alternative_score")),
+        "best_alternative_score_label": _as_text(summary.get("best_alternative_score_label"), "No determinado"),
         "why_it_wins": _as_text(summary.get("why_it_wins"), "No determinado"),
         "estimated_saving_or_overcost": _as_text(summary.get("estimated_saving_or_overcost"), "No determinado"),
         "main_risk": _as_text(summary.get("main_risk"), "Informacion incompleta"),
@@ -470,6 +486,9 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
             "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
             "ranking_type": _as_text(item.get("ranking_type"), "Mejor balance costo-beneficio"),
             "total_tco": _as_number(item.get("total_tco")),
+            "score": _as_number(item.get("score")),
+            "score_label": _as_text(item.get("score_label"), "No determinado"),
+            "score_breakdown": item.get("score_breakdown") if isinstance(item.get("score_breakdown"), dict) else {},
             "reason": _as_text(item.get("reason"), "Ranking preliminar construido con la informacion disponible."),
         }
         for index, item in enumerate(_as_list(result.get("ranking")), start=1)

@@ -20,6 +20,10 @@ Reglas obligatorias:
 - Todo supuesto debe empezar con la palabra "SUPUESTO".
 - No presentes supuestos como datos reales.
 - Si puedes estimar cualitativamente, explica que es preliminar y no numerico.
+- Siempre califica cada alternativa comparada con un puntaje de 0 a 100, aun si el analisis es preliminar.
+- La calificacion debe ponderar TCO/costo total 35%, riesgo 25%, garantia/soporte 20%, disponibilidad/lead time 10% y calidad/confianza de informacion 10%.
+- Si faltan datos numericos, no pongas score 0 por defecto: asigna un puntaje preliminar razonado segun la evidencia disponible y reduce la calificacion por baja confianza.
+- Incluye score_label con una escala ejecutiva: Excelente (90-100), Muy buena (80-89), Buena (70-79), Regular (60-69), Debil (<60).
 - Sugiere preguntas concretas para proveedores.
 - Devuelve exclusivamente JSON valido. No devuelvas markdown fuera del JSON.
 - Usa lenguaje ejecutivo, claro y profesional.
@@ -36,6 +40,8 @@ EXPECTED_JSON_SHAPE = {
     "currency": "string",
     "executive_summary": {
         "best_alternative": "string",
+        "best_alternative_score": 0,
+        "best_alternative_score_label": "Excelente|Muy buena|Buena|Regular|Debil",
         "why_it_wins": "string",
         "estimated_saving_or_overcost": "string",
         "main_risk": "string",
@@ -99,6 +105,16 @@ EXPECTED_JSON_SHAPE = {
             "alternative": "string",
             "ranking_type": "Menor TCO | Menor riesgo | Mejor balance costo-beneficio | Mejor alternativa estrategica",
             "total_tco": 0,
+            "score": 0,
+            "score_label": "Excelente|Muy buena|Buena|Regular|Debil",
+            "score_breakdown": {
+                "tco_cost_score": 0,
+                "risk_score": 0,
+                "warranty_support_score": 0,
+                "availability_lead_time_score": 0,
+                "data_confidence_score": 0,
+                "weighted_formula": "35% TCO/costo, 25% riesgo, 20% garantia/soporte, 10% disponibilidad/lead time, 10% confianza de informacion"
+            },
             "reason": "string",
         }
     ],
@@ -172,6 +188,8 @@ def build_user_prompt(
             "Extrae proveedor, marca/modelo, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas si aparece, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, riesgos y costos no incluidos.",
             "Construye matriz TCO con datos reales cuando existan y usa 'No especificado' cuando no existan.",
             "Genera ranking por menor TCO si hay numeros suficientes; si no, genera ranking preliminar por menor riesgo, mejor balance o mejor alternativa estrategica y explica la limitacion.",
+            "Califica cada alternativa de 0 a 100 usando la formula ponderada solicitada. Nunca devuelvas score 0 solo porque falten montos: si falta informacion, calcula una calificacion preliminar con penalizacion por confianza baja.",
+            "El primer lugar debe ser la alternativa con mayor score general, salvo que haya TCO numerico claramente menor y riesgo aceptable. Explica cualquier excepcion.",
             "Incluye costos ocultos, riesgos bajo/medio/alto, sensibilidad o explica que falta para hacerla.",
             "Incluye informacion faltante con la frase requerida y preguntas sugeridas para proveedores.",
             "No inventes costos ni variables reguladas. Cualquier hipotesis debe empezar con SUPUESTO.",

@@ -53,6 +53,8 @@ export type TcoAnalysisResult = {
   currency: string;
   executive_summary: {
     best_alternative: string;
+    best_alternative_score?: number | null;
+    best_alternative_score_label?: string | null;
     why_it_wins: string;
     estimated_saving_or_overcost: string;
     main_risk: string;
@@ -61,7 +63,16 @@ export type TcoAnalysisResult = {
   data_used: Array<Record<string, unknown>>;
   tco_matrix: Array<{ cost_component: string; values: Record<string, number | string | null>; notes?: string }>;
   tco_totals: Array<Record<string, unknown>>;
-  ranking: Array<{ position: number; alternative: string; ranking_type: string; total_tco?: number | null; reason: string }>;
+  ranking: Array<{
+    position: number;
+    alternative: string;
+    ranking_type: string;
+    total_tco?: number | null;
+    score?: number | null;
+    score_label?: string | null;
+    score_breakdown?: Record<string, unknown>;
+    reason: string;
+  }>;
   interpretation: Record<string, unknown>;
   risk_analysis: Array<Record<string, unknown>>;
   sensitivity_analysis: Record<string, unknown>;

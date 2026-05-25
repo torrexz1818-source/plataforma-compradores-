@@ -534,6 +534,8 @@ function tcoRankingRows(result: Record<string, unknown>) {
     Posicion: item.position,
     Alternativa: item.alternative,
     Tipo: item.ranking_type,
+    Calificacion: item.score,
+    Nivel: item.score_label,
     TCO: item.total_tco,
     Motivo: item.reason,
   }));
@@ -935,9 +937,9 @@ function addTcoAnalysisPdf(input: PdfInput) {
     addSection(ctx, 'Ranking comparativo');
     addTable(
       ctx,
-      ['Posicion', 'Alternativa', 'Tipo', 'TCO', 'Motivo'],
-      ranking.map((item) => [item.Posicion, item.Alternativa, item.Tipo, item.TCO, item.Motivo]),
-      [18, 38, 26, 28, ctx.maxWidth - 110],
+      ['Posicion', 'Alternativa', 'Calificacion', 'Nivel', 'TCO', 'Motivo'],
+      ranking.map((item) => [item.Posicion, item.Alternativa, item.Calificacion, item.Nivel, item.TCO, item.Motivo]),
+      [16, 34, 24, 24, 22, ctx.maxWidth - 120],
     );
   }
 
@@ -1507,6 +1509,7 @@ async function downloadTcoResultDocx(input: AgentExportInput, result: Record<str
     docxParagraph(docx, `Producto o servicio: ${asText(result.item_name)} | Horizonte: ${asText(result.evaluation_horizon)} | Moneda: ${asText(result.currency)}`),
     docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
     docxParagraph(docx, `Mejor alternativa preliminar: ${asText(summary.best_alternative)}`),
+    docxParagraph(docx, `Calificacion: ${asText(summary.best_alternative_score)} / 100 - ${asText(summary.best_alternative_score_label)}`),
     docxParagraph(docx, `Motivo: ${asText(summary.why_it_wins)}`),
     docxParagraph(docx, `Ahorro o sobrecosto: ${asText(summary.estimated_saving_or_overcost)}`),
     docxParagraph(docx, `Riesgo principal: ${asText(summary.main_risk)}`),
@@ -1912,7 +1915,7 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   let slide = pptx.addSlide();
   addPptTitle(slide, asText(result.analysis_title, input.title));
   slide.addText(asText(summary.final_recommendation || summary.why_it_wins), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
-  slide.addText(`Producto: ${asText(result.item_name)}\nHorizonte: ${asText(result.evaluation_horizon)}\nMoneda: ${asText(result.currency)}\nMejor alternativa: ${asText(summary.best_alternative)}`, {
+  slide.addText(`Producto: ${asText(result.item_name)}\nHorizonte: ${asText(result.evaluation_horizon)}\nMoneda: ${asText(result.currency)}\nMejor alternativa: ${asText(summary.best_alternative)}\nCalificacion: ${asText(summary.best_alternative_score)} / 100 - ${asText(summary.best_alternative_score_label)}`, {
     x: 0.7,
     y: 3.1,
     w: 6.2,
