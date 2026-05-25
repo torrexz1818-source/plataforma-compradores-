@@ -3072,6 +3072,7 @@ const NexuIA = () => {
                                   <th className="px-4 py-3 font-medium">Costos detectados</th>
                                   <th className="px-4 py-3 font-medium">Datos detectados</th>
                                   <th className="px-4 py-3 font-medium">Datos faltantes</th>
+                                  <th className="px-4 py-3 font-medium">Evidencia</th>
                                   <th className="px-4 py-3 font-medium">Confianza</th>
                                 </tr>
                               </thead>
@@ -3086,6 +3087,7 @@ const NexuIA = () => {
                                     <td className="px-4 py-3 text-muted-foreground">{item.detected_costs?.join(', ') || 'No especificado'}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{item.data_detected.join(', ') || 'No especificado'}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{item.data_missing.join(', ') || 'No especificado'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.source_evidence?.join(' | ') || 'No especificado'}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{item.confidence_level ?? 'medium'}</td>
                                   </tr>
                                 ))}
@@ -3153,6 +3155,9 @@ const NexuIA = () => {
                                   Calificación: {item.score ?? 'No especificado'} / 100{item.score_label ? ` - ${item.score_label}` : ''}
                                 </p>
                                 <p className="mt-1 text-sm text-muted-foreground">TCO: {item.total_tco ?? 'No especificado'}</p>
+                                {item.source_basis?.length ? (
+                                  <p className="mt-1 text-xs text-muted-foreground/80">Base: {item.source_basis.join(' | ')}</p>
+                                ) : null}
                                 <p className="mt-1 text-sm text-muted-foreground">{item.reason}</p>
                               </div>
                             ))}

@@ -71,6 +71,7 @@ export type TcoAnalysisResult = {
     score?: number | null;
     score_label?: string | null;
     score_breakdown?: Record<string, unknown>;
+    source_basis?: string[];
     reason: string;
   }>;
   interpretation: Record<string, unknown>;
@@ -85,6 +86,7 @@ export type TcoAnalysisResult = {
     warranty?: string | null;
     lead_time?: string | null;
     detected_costs?: string[];
+    source_evidence?: string[];
     data_detected: string[];
     data_missing: string[];
     confidence_level?: 'low' | 'medium' | 'high';

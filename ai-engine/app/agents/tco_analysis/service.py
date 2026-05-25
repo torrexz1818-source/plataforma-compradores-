@@ -119,6 +119,39 @@ def _normalize_level(value: Any, default: str = "medium") -> str:
     return default
 
 
+def _has_numeric_evidence_for_alternative(result: dict[str, Any], alternative: str) -> bool:
+    if not alternative:
+        return False
+
+    for total in _as_list(result.get("tco_totals")):
+        if not isinstance(total, dict):
+            continue
+        if _as_text(total.get("alternative") or total.get("supplier_name"), "") != alternative:
+            continue
+        for key in ["initial_price", "total_tco", "tco_per_unit", "tco_monthly", "tco_annual"]:
+            value = _as_number(total.get(key))
+            if value is not None and value != 0:
+                return True
+
+    for row in _as_list(result.get("tco_matrix")):
+        if not isinstance(row, dict) or not isinstance(row.get("values"), dict):
+            continue
+        value = _as_number(row["values"].get(alternative))
+        if value is not None and value != 0:
+            return True
+
+    for item in _as_list(result.get("data_used")):
+        if not isinstance(item, dict):
+            continue
+        if _as_text(item.get("alternative") or item.get("supplier_name"), "") != alternative:
+            continue
+        value = _as_number(item.get("base_price"))
+        if value is not None and value != 0:
+            return True
+
+    return False
+
+
 def compact_text_for_tco(text: str) -> tuple[str, list[str]]:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     relevant = [line for line in lines if any(term in line.lower() for term in RELEVANT_TERMS)]
@@ -209,6 +242,7 @@ def build_detected_alternatives_from_documents(documents: list[dict[str, Any]]) 
                 "detected_costs": data_detected,
                 "data_detected": data_detected,
                 "data_missing": DEFAULT_MISSING_INFORMATION,
+                "source_evidence": ["Deteccion preliminar basada en terminos encontrados en el documento; validar contra el PDF original."],
                 "confidence_level": "low",
             }
         )
@@ -319,6 +353,7 @@ def build_fallback_result(
                     "data_confidence_score": 40,
                     "weighted_formula": "35% TCO/costo, 25% riesgo, 20% garantia/soporte, 10% disponibilidad/lead time, 10% confianza de informacion",
                 },
+                "source_basis": ["Analisis preliminar sin montos numericos completos."],
                 "reason": "No hay suficientes datos numericos para ordenar por menor TCO. Se requiere validacion documental adicional.",
             }
         ] if detected else [],
@@ -485,10 +520,16 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
             "position": int(_as_number(item.get("position")) or index),
             "alternative": _as_text(item.get("alternative") or item.get("supplier_name")),
             "ranking_type": _as_text(item.get("ranking_type"), "Mejor balance costo-beneficio"),
-            "total_tco": _as_number(item.get("total_tco")),
+            "total_tco": (
+                None
+                if _as_number(item.get("total_tco")) == 0
+                and not _has_numeric_evidence_for_alternative(result, _as_text(item.get("alternative") or item.get("supplier_name"), ""))
+                else _as_number(item.get("total_tco"))
+            ),
             "score": _as_number(item.get("score")),
             "score_label": _as_text(item.get("score_label"), "No determinado"),
             "score_breakdown": item.get("score_breakdown") if isinstance(item.get("score_breakdown"), dict) else {},
+            "source_basis": [_as_text(value) for value in _as_list(item.get("source_basis"))],
             "reason": _as_text(item.get("reason"), "Ranking preliminar construido con la informacion disponible."),
         }
         for index, item in enumerate(_as_list(result.get("ranking")), start=1)
@@ -535,6 +576,7 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
             "detected_costs": [_as_text(value) for value in _as_list(item.get("detected_costs"))],
             "data_detected": [_as_text(value) for value in _as_list(item.get("data_detected"))],
             "data_missing": [_as_text(value) for value in _as_list(item.get("data_missing"))],
+            "source_evidence": [_as_text(value) for value in _as_list(item.get("source_evidence"))],
             "confidence_level": _normalize_level(item.get("confidence_level"), "low"),
         }
         for item in _as_list(result.get("detected_alternatives"))

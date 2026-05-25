@@ -502,6 +502,7 @@ function tcoDetectedAlternativeRows(result: Record<string, unknown>) {
     Plazo: item.lead_time,
     Costos: asArray(item.detected_costs).join(', '),
     'Datos faltantes': asArray(item.data_missing).join(', '),
+    Evidencia: asArray(item.source_evidence).join(' | '),
     Confianza: item.confidence_level,
   }));
 }
@@ -537,6 +538,7 @@ function tcoRankingRows(result: Record<string, unknown>) {
     Calificacion: item.score,
     Nivel: item.score_label,
     TCO: item.total_tco,
+    Base: asArray(item.source_basis).join(' | '),
     Motivo: item.reason,
   }));
 }

@@ -41,6 +41,7 @@ class DetectedAlternative(BaseModel):
     detected_costs: list[str] = Field(default_factory=list)
     data_detected: list[str] = Field(default_factory=list)
     data_missing: list[str] = Field(default_factory=list)
+    source_evidence: list[str] = Field(default_factory=list)
     confidence_level: RiskLevel = "medium"
 
 
@@ -99,6 +100,7 @@ class RankingItem(BaseModel):
     score: float | None = None
     score_label: str | None = None
     score_breakdown: dict[str, float | int | str | None] = Field(default_factory=dict)
+    source_basis: list[str] = Field(default_factory=list)
     reason: str
 
 
