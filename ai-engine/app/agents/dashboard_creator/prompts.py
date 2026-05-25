@@ -19,6 +19,7 @@ Recibiras:
 Debes:
 - extraer KPIs reales si estan escritos en los documentos o tablas,
 - crear graficos con puntos de datos que existan en el paquete,
+- crear leyendas claras para cada grafico con etiqueta y valor cuando aplique,
 - crear tablas resumen con la misma informacion del documento,
 - respetar los KPIs, tablas y graficos calculados por Python cuando existan,
 - redactar resumen ejecutivo,
@@ -113,6 +114,7 @@ def build_insight_prompt(
                     "x_axis": "string|null",
                     "y_axis": "string|null",
                     "data": [{"label": "string", "value": 0, "group": "string|null"}],
+                    "legend": [{"label": "string", "value": "string|null", "color": "string|null"}],
                     "data_source": "llm_structured|suggested",
                     "confidence": "low|medium|high",
                     "insight": "string",

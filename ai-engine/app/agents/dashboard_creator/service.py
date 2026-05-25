@@ -140,6 +140,15 @@ def _normalize_llm_charts(items: list[Any]) -> list[dict[str, Any]]:
                 "x_axis": item.get("x_axis"),
                 "y_axis": item.get("y_axis"),
                 "data": points,
+                "legend": [
+                    {
+                        "label": str(legend.get("label") or "")[:80],
+                        "value": str(legend.get("value"))[:80] if legend.get("value") is not None else None,
+                        "color": str(legend.get("color"))[:30] if legend.get("color") else None,
+                    }
+                    for legend in _as_list(item.get("legend"))[:12]
+                    if isinstance(legend, dict) and legend.get("label")
+                ],
                 "data_source": data_source,
                 "confidence": item.get("confidence") if item.get("confidence") in {"low", "medium", "high"} else "low",
                 "insight": str(item.get("insight") or "Validar datos fuente antes de presentar.")[:320],

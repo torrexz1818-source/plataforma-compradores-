@@ -15,6 +15,7 @@ export type DashboardChart = {
   x_axis: string | null;
   y_axis: string | null;
   data: Array<{ label: string; value: number; group?: string | null }>;
+  legend?: Array<{ label: string; value?: string | null; color?: string | null }>;
   data_source: 'python_calculated' | 'llm_structured' | 'suggested';
   confidence: 'low' | 'medium' | 'high';
   insight: string;

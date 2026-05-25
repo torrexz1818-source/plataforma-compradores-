@@ -1753,13 +1753,15 @@ const NexuIA = () => {
   const renderSimpleChart = (chart: DashboardChart) => {
     const chartData = chart.data
       .slice(0, 12)
-      .map((item) => ({
+      .map((item, index) => ({
         name: item.label,
         value: Number(item.value) || 0,
         group: item.group,
+        color: chart.legend?.find((legend) => legend.label === item.label)?.color || dashboardChartColors[index % dashboardChartColors.length],
       }))
       .filter((item) => item.name && Number.isFinite(item.value));
     const maxValue = Math.max(...chartData.map((item) => item.value), 1);
+    const totalValue = chartData.reduce((sum, item) => sum + item.value, 0);
     const isCircular = chart.type === 'pie' || chart.type === 'donut';
     const isLine = chart.type === 'line';
     const isArea = chart.type === 'area';
@@ -1787,7 +1789,7 @@ const NexuIA = () => {
                   paddingAngle={chart.type === 'donut' ? 2 : 0}
                 >
                   {chartData.map((entry, index) => (
-                    <Cell key={`${entry.name}-${index}`} fill={dashboardChartColors[index % dashboardChartColors.length]} />
+                    <Cell key={`${entry.name}-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
                 <RechartsTooltip formatter={(value) => Number(value).toLocaleString('es-PE')} />
@@ -1842,7 +1844,7 @@ const NexuIA = () => {
                 <RechartsTooltip formatter={(value) => Number(value).toLocaleString('es-PE')} />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                   {chartData.map((entry, index) => (
-                    <Cell key={`${entry.name}-${index}`} fill={dashboardChartColors[index % dashboardChartColors.length]} />
+                    <Cell key={`${entry.name}-${index}`} fill={entry.color} />
                   ))}
                 </Bar>
               </BarChart>
@@ -1870,6 +1872,26 @@ const NexuIA = () => {
         </div>
       );
     };
+    const renderChartLegend = () => {
+      if (!chartData.length) return null;
+      return (
+        <div className="mt-4 rounded-xl border border-primary/10 bg-primary/5 p-3">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">Leyenda</p>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {chartData.map((item) => {
+              const percentage = totalValue ? ` · ${((item.value / totalValue) * 100).toFixed(1)}%` : '';
+              return (
+                <div key={`${chart.chart_id}-legend-${item.name}`} className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
+                  <span className="truncate text-foreground/80">{item.name}</span>
+                  <span className="shrink-0">{item.value.toLocaleString('es-PE')}{percentage}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
 
     return (
       <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -1889,6 +1911,7 @@ const NexuIA = () => {
           </div>
         </div>
         <div className="mt-4">{renderChartBody()}</div>
+        {renderChartLegend()}
         <p className="mt-3 text-xs leading-5 text-muted-foreground/70">{chart.insight}</p>
       </div>
     );

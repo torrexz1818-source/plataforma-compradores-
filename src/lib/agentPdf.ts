@@ -435,11 +435,13 @@ function chartRows(value: unknown) {
       })
       .filter(Boolean)
       .join('; ');
+    const legend = dashboardChartLegendText(record);
     return {
       chart: record.title,
       type: record.type,
       source: record.data_source ?? record.source,
       confidence: record.confidence,
+      legend,
       data: points || 'Sin datos tabulares',
       insight: record.insight ?? record.description,
     };
@@ -474,12 +476,21 @@ function dashboardChartDataRows(chart: Record<string, unknown>) {
     Etiqueta: point.label,
     Valor: point.value,
     Grupo: point.group ?? '',
+    Leyenda: `${asText(point.label)}: ${asText(point.value)}`,
     Insight: chart.insight ?? '',
   }));
 }
 
 function dashboardListRows(items: unknown[], valueKey = 'Valor') {
   return items.map((item, index) => ({ N: index + 1, [valueKey]: asText(item) }));
+}
+
+function dashboardChartLegendText(chart: Record<string, unknown>) {
+  const explicitLegend = asArray(chart.legend).map(asRecord);
+  if (explicitLegend.length) {
+    return explicitLegend.map((item) => `${asText(item.label)}${item.value ? `: ${asText(item.value)}` : ''}`).join('; ');
+  }
+  return asArray(chart.data).map(asRecord).map((point) => `${asText(point.label)}: ${asText(point.value)}`).join('; ');
 }
 
 function tcoDetectedAlternativeRows(result: Record<string, unknown>) {
@@ -741,9 +752,9 @@ function addDashboardResultPdf(input: PdfInput) {
     addSection(ctx, 'Graficos y datos base');
     addTable(
       ctx,
-      ['Grafico', 'Tipo', 'Datos mostrados', 'Insight'],
-      chartRows(charts).map((row) => [row.chart, row.type, row.data, row.insight]),
-      [38, 24, 62, ctx.maxWidth - 124],
+      ['Grafico', 'Tipo', 'Leyenda', 'Datos mostrados', 'Insight'],
+      chartRows(charts).map((row) => [row.chart, row.type, row.legend, row.data, row.insight]),
+      [33, 20, 42, 48, ctx.maxWidth - 143],
     );
     addText(ctx, 'Los graficos se documentan con la misma data generada por el agente para que el reporte sea editable y auditable.', {
       size: 8.2,
@@ -1058,9 +1069,9 @@ function addValueBlock(ctx: PdfContext, key: string, value: unknown) {
     if (rows.length) {
       addTable(
         ctx,
-        ['Grafico', 'Tipo', 'Fuente', 'Confianza', 'Datos mostrados', 'Insight'],
-        rows.map((row) => [row.chart, row.type, row.source, row.confidence, row.data, row.insight]),
-        [28, 20, 24, 20, 55, ctx.maxWidth - 147],
+        ['Grafico', 'Tipo', 'Fuente', 'Confianza', 'Leyenda', 'Datos mostrados', 'Insight'],
+        rows.map((row) => [row.chart, row.type, row.source, row.confidence, row.legend, row.data, row.insight]),
+        [24, 16, 18, 17, 36, 44, ctx.maxWidth - 155],
       );
       addText(ctx, 'Los graficos del PDF usan la misma data generada para la plataforma; si no se puede dibujar el grafico exacto, se muestra una tabla equivalente.', {
         size: 8.2,

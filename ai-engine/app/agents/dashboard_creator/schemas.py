@@ -61,6 +61,12 @@ class ChartDataPoint(BaseModel):
     group: str | None = None
 
 
+class ChartLegendItem(BaseModel):
+    label: str
+    value: str | None = None
+    color: str | None = None
+
+
 class DashboardChart(BaseModel):
     chart_id: str
     title: str
@@ -69,6 +75,7 @@ class DashboardChart(BaseModel):
     x_axis: str | None = None
     y_axis: str | None = None
     data: list[ChartDataPoint] = Field(default_factory=list)
+    legend: list[ChartLegendItem] = Field(default_factory=list)
     data_source: ChartSource = "python_calculated"
     confidence: Confidence = "medium"
     insight: str
