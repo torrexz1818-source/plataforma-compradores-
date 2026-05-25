@@ -19,7 +19,8 @@ Recibiras:
 Debes:
 - extraer KPIs reales si estan escritos en los documentos o tablas,
 - crear graficos con puntos de datos que existan en el paquete,
-- crear leyendas claras para cada grafico con etiqueta y valor cuando aplique,
+- crear leyendas claras para cada grafico con etiqueta, valor numerico y porcentaje cuando aplique,
+- asegurar que cada grafico tenga datos numericos visibles para el usuario: cada punto en "data" debe tener "label" claro y "value" numerico; cada elemento en "legend" debe repetir la misma etiqueta y mostrar el valor en texto legible,
 - crear tablas resumen con la misma informacion del documento,
 - respetar los KPIs, tablas y graficos calculados por Python cuando existan,
 - redactar resumen ejecutivo,
@@ -34,6 +35,8 @@ Reglas obligatorias:
 - Si un dato viene de PDF o texto extraido, marca la confianza segun claridad de la fuente.
 - Si la informacion es parcial, usa confidence="low" o "medium" y explicalo.
 - El dashboard debe tener formato ejecutivo: KPIs, graficos, tablas, insights y recomendaciones.
+- Todo grafico circular, de barras, lineas o areas debe poder leerse sin depender del tooltip: incluye siempre una leyenda con numeros visibles (ej. "Depositos: 1200", "Donaciones: 300 (20%)").
+- Si el grafico representa porcentajes, usa valores numericos consistentes y explica en description o insight si son porcentajes o montos base.
 - Devuelve exclusivamente JSON valido.
 - No devuelvas markdown fuera del JSON.
 """
@@ -114,7 +117,7 @@ def build_insight_prompt(
                     "x_axis": "string|null",
                     "y_axis": "string|null",
                     "data": [{"label": "string", "value": 0, "group": "string|null"}],
-                    "legend": [{"label": "string", "value": "string|null", "color": "string|null"}],
+                    "legend": [{"label": "misma etiqueta usada en data", "value": "valor visible con numero y unidad o porcentaje", "color": "string|null"}],
                     "data_source": "llm_structured|suggested",
                     "confidence": "low|medium|high",
                     "insight": "string",
