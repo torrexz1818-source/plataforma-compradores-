@@ -314,14 +314,10 @@ function addHeader(ctx: PdfContext, input: PdfInput, subtitle?: string) {
         ? input.pdfOptions?.branding.companyName || 'Documento corporativo'
         : 'Reporte profesional';
   doc.text(`${brand} | ${input.agentName || input.title}`, ctx.marginX + 6, ctx.y + 17);
-  doc.text(`Fecha: ${formatDate()} | Formato: PDF`, ctx.marginX + 6, ctx.y + 23);
+  doc.text(`Fecha: ${formatDate()}`, ctx.marginX + 6, ctx.y + 23);
   ctx.y += 35;
-  if (input.userName || input.pdfOptions?.branding.companyName || subtitle) {
-    addText(ctx, `Usuario/empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}`, {
-      size: 9,
-      color: '#475569',
-    });
-    if (subtitle) addText(ctx, subtitle, { size: 9, color: '#475569', gap: 2 });
+  if (subtitle) {
+    addText(ctx, subtitle, { size: 9, color: '#475569', gap: 2 });
   }
 }
 
@@ -570,20 +566,20 @@ function addProposalComparisonPdf(input: PdfInput) {
   const ranking = asArray(result.ranking).map(asRecord);
   const recommended = getRecommendedRanking(result);
   const recommendedName = asText(result.recommended_supplier || recommended.supplier_name, 'No especificado');
-  const subtitle = `Servicio evaluado: ${asText(result.service)} | Objetivo: ${shortText(result.objective, 120)}`;
+  const subtitle = `Servicio evaluado: ${asText(result.service)} | Objetivo: ${asText(result.objective)}`;
 
   addHeader(ctx, input, subtitle);
   addCard(ctx, 'Resumen ejecutivo', [
     `Propuestas evaluadas: ${suppliers.length}`,
     `Proveedor recomendado: ${recommendedName}`,
-    `Motivo principal: ${shortText(recommended.reason || result.executive_summary, 210)}`,
-    `Riesgo principal: ${shortText(asArray(recommended.main_risks)[0] || asArray(result.global_risks)[0], 160)}`,
+    `Motivo principal: ${asText(recommended.reason || result.executive_summary)}`,
+    `Riesgo principal: ${asText(asArray(recommended.main_risks)[0] || asArray(result.global_risks)[0])}`,
   ]);
 
   addCard(ctx, 'Proveedor recomendado', [
     `${recommendedName}`,
     `Puntaje: ${asText(recommended.weighted_score ?? recommended.score, 'Sin puntaje')} / 5`,
-    `Por que gana: ${shortText(recommended.reason, 220)}`,
+    `Por que gana: ${asText(recommended.reason)}`,
   ], 'green');
   addBulletList(ctx, 'Fortalezas clave', asArray(recommended.main_strengths));
   addBulletList(ctx, 'Riesgos a validar', asArray(recommended.main_risks));
@@ -676,7 +672,7 @@ function addProposalComparisonPdf(input: PdfInput) {
   });
 
   addSection(ctx, 'Riesgos globales');
-  addCard(ctx, 'Alertas principales', asArray(result.global_risks).slice(0, 5).map((item) => `- ${shortText(item, 180)}`).join('\n') || 'Sin riesgos globales registrados.', 'amber');
+  addCard(ctx, 'Alertas principales', asArray(result.global_risks).map((item) => `- ${asText(item)}`).join('\n') || 'Sin riesgos globales registrados.', 'amber');
 
   addSection(ctx, 'Informacion faltante');
   addBulletList(ctx, 'Datos a solicitar o validar', asArray(result.missing_information), 8);
@@ -1089,7 +1085,7 @@ function addGenericPdf(input: PdfInput) {
   addHeader(ctx, input);
   const result = asRecord(input.result);
   const summary = result?.executive_summary ?? result?.summary ?? result?.final_recommendation;
-  if (summary) addCard(ctx, 'Resumen ejecutivo', formatValue(summary).slice(0, 5));
+  if (summary) addCard(ctx, 'Resumen ejecutivo', formatValue(summary));
 
   orderedResultEntries(result ?? {}).forEach(([key, value]) => {
     if (['executive_summary', 'summary', 'disclaimer'].includes(key)) return;
@@ -1206,16 +1202,11 @@ function normalizeSheetName(name: string, used: Set<string>) {
 }
 
 function addMetadataSheet(XLSX: XlsxModule, workbook: import('xlsx').WorkBook, input: AgentExportInput, result: Record<string, unknown>) {
-  const mode = input.pdfMode ?? 'standard_branded';
   const rows = [
     ['Titulo', input.title],
     ['Fecha de generacion', formatDate()],
-    ['Agente usado', input.agentName || input.title],
-    ['Usuario o empresa', input.userName || input.pdfOptions?.branding.companyName || 'No especificado'],
+    ['Agente', input.agentName || input.title],
     ['Objetivo o descripcion', getObjective(result) || 'No especificado'],
-    ['Formato generado', input.format.toUpperCase()],
-    ['Marca', getFooterLeft(mode, input.pdfOptions) || 'Sin logo'],
-    ['Pie', getFooterRight(mode, input.pdfOptions)],
   ];
   const sheet = XLSX.utils.aoa_to_sheet(rows);
   sheet['!cols'] = [{ wch: 28 }, { wch: 90 }];
@@ -1405,9 +1396,9 @@ function docxTableFromRows(docx: DocxModule, rows: Array<Record<string, unknown>
           children: [docxParagraph(docx, key, { bold: true, color: '09008B' })],
         })),
       }),
-      ...rows.slice(0, 80).map((row) => new docx.TableRow({
+      ...rows.map((row) => new docx.TableRow({
         children: keys.map((key) => new docx.TableCell({
-          children: [docxParagraph(docx, shortText(row[key], 500))],
+          children: [docxParagraph(docx, asText(row[key]))],
         })),
       })),
     ],
@@ -1639,9 +1630,7 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
   const children: DocxChild[] = [
     docxParagraph(docx, input.title, { heading: true }),
     docxParagraph(docx, `Fecha de generacion: ${formatDate()}`),
-    docxParagraph(docx, `Agente usado: ${input.agentName || input.title}`),
-    docxParagraph(docx, `Usuario o empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}`),
-    docxParagraph(docx, `Formato generado: WORD / DOCX`),
+    docxParagraph(docx, `Agente: ${input.agentName || input.title}`),
   ];
   const objective = getObjective(result);
   if (objective) children.push(docxParagraph(docx, `Objetivo o descripcion: ${objective}`));
@@ -1709,7 +1698,7 @@ function addPptRows(slide: PptxSlide, rows: Array<Record<string, unknown>>, opti
   slide.addTable(
     [
       keys.map((name) => ({ text: name, options: { bold: true, color: '09008B', fill: 'EEF2FF' } })),
-      ...rows.slice(0, options.maxRows ?? 8).map((row) => keys.map((name) => ({ text: shortText(row[name], 120), options: { color: '334155' } }))),
+      ...rows.slice(0, options.maxRows ?? 12).map((row) => keys.map((name) => ({ text: asText(row[name]), options: { color: '334155' } }))),
     ],
     {
       x: options.x ?? 0.55,
@@ -1737,8 +1726,8 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   const bases = getTermsTenderBases(result);
   const email = getTermsEmail(result);
   let slide = pptx.addSlide();
-  addPptTitle(slide, asText(result.title, input.title), 'Deck nativo editable generado desde el termino de referencia.');
-  slide.addText(shortText(result.executive_summary, 520), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
+  addPptTitle(slide, asText(result.title, input.title));
+  slide.addText(asText(result.executive_summary), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
   slide.addText(`Tipo: ${asText(result.requirement_type)}\nCategoria: ${asText(result.category)}\nCompletitud: ${asText(result.completion_level)} (${asText(result.completion_score)}%)\nRiesgo: ${asText(result.risk_level)}`, {
     x: 0.7,
     y: 3.1,
@@ -1757,7 +1746,7 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Termino de referencia', 'Objetivo, alcance, justificacion y datos clave.');
-  slide.addText(`Objetivo: ${shortText(document.objective, 330)}\n\nAlcance: ${shortText(document.scope, 420)}\n\nJustificacion: ${shortText(document.justification, 330)}`, {
+  slide.addText(`Objetivo: ${asText(document.objective)}\n\nAlcance: ${asText(document.scope)}\n\nJustificacion: ${asText(document.justification)}`, {
     x: 0.65,
     y: 1.35,
     w: 11.8,
@@ -1776,13 +1765,13 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   ].forEach(([title, items]) => {
     slide = pptx.addSlide();
     addPptTitle(slide, String(title));
-    slide.addText((items as string[]).slice(0, 12).map((item) => `- ${shortText(item, 170)}`).join('\n'), { x: 0.7, y: 1.35, w: 11.7, h: 5.2, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
+    slide.addText((items as string[]).map((item) => `- ${asText(item)}`).join('\n'), { x: 0.7, y: 1.35, w: 11.7, h: 5.2, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
     addPptFooter(slide, input);
   });
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Bases sugeridas para licitacion');
-  slide.addText(`Objeto: ${shortText(bases.object, 260)}\n\nAlcance: ${shortText(bases.scope, 320)}\n\nCriterios: ${asArray(bases.evaluation_criteria).map(asText).join(', ')}\n\nAdvertencia: ${shortText(bases.disclaimer, 220)}`, {
+  slide.addText(`Objeto: ${asText(bases.object)}\n\nAlcance: ${asText(bases.scope)}\n\nCriterios: ${asArray(bases.evaluation_criteria).map(asText).join(', ')}\n\nAdvertencia: ${asText(bases.disclaimer)}`, {
     x: 0.65,
     y: 1.35,
     w: 11.8,
@@ -1796,7 +1785,7 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Correo sugerido para proveedores');
-  slide.addText(`Asunto: ${asText(email.subject)}\n\n${asText(email.greeting)}\n\n${shortText(email.body, 620)}\n\nAdjuntos: ${asArray(email.attached_documents).map(asText).join(', ')}\nPlazo: ${asText(email.response_deadline)}\nContacto: ${asText(email.contact_details)}\n\n${asText(email.closing)}`, {
+  slide.addText(`Asunto: ${asText(email.subject)}\n\n${asText(email.greeting)}\n\n${asText(email.body)}\n\nAdjuntos: ${asArray(email.attached_documents).map(asText).join(', ')}\nPlazo: ${asText(email.response_deadline)}\nContacto: ${asText(email.contact_details)}\n\n${asText(email.closing)}`, {
     x: 0.65,
     y: 1.25,
     w: 11.8,
@@ -1830,7 +1819,7 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
   slide.background = { color: 'FFFFFF' };
   slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Dashboard ejecutivo', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: '6B63D9' });
   slide.addText(asText(result.dashboard_title, input.title), { x: 0.55, y: 1.0, w: 11.9, h: 0.85, fontSize: 29, bold: true, color: '09008B', fit: 'shrink' });
-  slide.addText(shortText(result.executive_summary, 560), { x: 0.6, y: 2.15, w: 11.7, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
+  slide.addText(asText(result.executive_summary), { x: 0.6, y: 2.15, w: 11.7, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
   slide.addText(`Audiencia: ${asText(result.audience)}\nPeriodo: ${asText(result.period)}\nConfianza: ${asText(result.confidence_level)}\nTipo de datos: ${asText(result.data_type)}`, {
     x: 0.65,
     y: 3.85,
@@ -1840,52 +1829,49 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
     color: '475569',
     fit: 'shrink',
   });
-  slide.addText(shortText(result.confidence_reason, 320), { x: 6.1, y: 3.85, w: 6.2, h: 1.1, fontSize: 11, color: '475569', fit: 'shrink' });
+  slide.addText(asText(result.confidence_reason), { x: 6.1, y: 3.85, w: 6.2, h: 1.1, fontSize: 11, color: '475569', fit: 'shrink' });
   addPptFooter(slide, input);
 
   const kpis = asArray(result.kpis).map(asRecord);
   if (kpis.length) {
     slide = pptx.addSlide();
-    addPptTitle(slide, 'KPIs principales', 'Cards reconstruidas desde el mismo resultado del dashboard.');
-    kpis.slice(0, 8).forEach((kpi, index) => {
-      const col = index % 4;
-      const row = Math.floor(index / 4);
-      const x = 0.55 + col * 3.08;
-      const y = 1.35 + row * 2.25;
-      slide.addShape(pptx.ShapeType.roundRect, { x, y, w: 2.85, h: 1.85, rectRadius: 0.08, fill: { color: 'EEF2FF' }, line: { color: 'C7D2FE', pt: 0.7 } });
-      slide.addText(asText(kpi.title), { x: x + 0.14, y: y + 0.16, w: 2.55, h: 0.28, fontSize: 8, bold: true, color: '475569', fit: 'shrink' });
-      slide.addText(asText(kpi.value), { x: x + 0.14, y: y + 0.52, w: 2.55, h: 0.45, fontSize: 17, bold: true, color: '09008B', fit: 'shrink' });
-      slide.addText(shortText(kpi.description, 130), { x: x + 0.14, y: y + 1.02, w: 2.55, h: 0.48, fontSize: 7.2, color: '64748B', fit: 'shrink' });
-    });
+    addPptTitle(slide, 'KPIs principales');
+    addPptRows(slide, kpis.map((kpi) => ({
+      KPI: kpi.title,
+      Valor: kpi.value,
+      Descripcion: kpi.description,
+      Fuente: kpi.source,
+      Confianza: kpi.confidence,
+    })), { maxRows: kpis.length });
     addPptFooter(slide, input);
   }
 
-  asArray(result.charts).map(asRecord).slice(0, 6).forEach((chart) => {
+  asArray(result.charts).map(asRecord).forEach((chart) => {
     slide = pptx.addSlide();
-    addPptTitle(slide, asText(chart.title, 'Grafico'), `${asText(chart.type)} | ${asText(chart.confidence)} | ${shortText(chart.description, 140)}`);
+    addPptTitle(slide, asText(chart.title, 'Grafico'), `${asText(chart.type)} | ${asText(chart.confidence)} | ${asText(chart.description)}`);
     addPptRows(slide, dashboardChartDataRows(chart), { x: 0.6, y: 1.35, w: 6.2, h: 4.7, maxRows: 9 });
-    slide.addText(shortText(chart.insight, 420), { x: 7.05, y: 1.45, w: 5.55, h: 1.4, fontSize: 13, color: '334155', fit: 'shrink' });
-    slide.addText('Datos del grafico reconstruidos desde el mismo resultado mostrado en plataforma.', { x: 7.05, y: 3.1, w: 5.55, h: 0.4, fontSize: 9, color: '64748B', fit: 'shrink' });
+    slide.addText(asText(chart.insight), { x: 7.05, y: 1.45, w: 5.55, h: 1.4, fontSize: 13, color: '334155', fit: 'shrink' });
     addPptFooter(slide, input);
   });
 
-  asArray(result.tables).map(asRecord).slice(0, 5).forEach((table) => {
+  asArray(result.tables).map(asRecord).forEach((table) => {
     slide = pptx.addSlide();
-    addPptTitle(slide, asText(table.title, 'Tabla resumen'), shortText(table.description, 180));
-    addPptRows(slide, dashboardTableRows(table), { maxRows: 9 });
+    addPptTitle(slide, asText(table.title, 'Tabla resumen'), asText(table.description, ''));
+    const rows = dashboardTableRows(table);
+    addPptRows(slide, rows, { maxRows: rows.length });
     addPptFooter(slide, input);
   });
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Insights y recomendaciones');
-  const insightLines = asArray(result.insights).map(asRecord).slice(0, 5).map((item) => `${asText(item.title)}: ${shortText(item.description, 160)} Accion: ${shortText(item.recommended_action, 120)}`);
-  const recommendationLines = asArray(result.recommendations).slice(0, 6).map((item) => `- ${shortText(item, 180)}`);
+  const insightLines = asArray(result.insights).map(asRecord).map((item) => `${asText(item.title)}: ${asText(item.description)} Accion: ${asText(item.recommended_action)}`);
+  const recommendationLines = asArray(result.recommendations).map((item) => `- ${asText(item)}`);
   slide.addText([...insightLines, '', ...recommendationLines].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.25, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Informacion faltante y calidad de datos');
-  slide.addText([...asArray(result.missing_information), ...asArray(asRecord(result.data_profile).data_quality_warnings)].slice(0, 12).map((item) => `- ${shortText(item, 180)}`).join('\n') || 'Sin advertencias registradas.', {
+  slide.addText([...asArray(result.missing_information), ...asArray(asRecord(result.data_profile).data_quality_warnings)].map((item) => `- ${asText(item)}`).join('\n') || 'Sin advertencias registradas.', {
     x: 0.65,
     y: 1.35,
     w: 11.8,
@@ -1913,8 +1899,8 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   const summary = asRecord(result.executive_summary);
   const recommendation = asRecord(result.strategic_recommendation);
   let slide = pptx.addSlide();
-  addPptTitle(slide, asText(result.analysis_title, input.title), 'Deck nativo editable de analisis TCO.');
-  slide.addText(shortText(summary.final_recommendation || summary.why_it_wins, 520), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
+  addPptTitle(slide, asText(result.analysis_title, input.title));
+  slide.addText(asText(summary.final_recommendation || summary.why_it_wins), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
   slide.addText(`Producto: ${asText(result.item_name)}\nHorizonte: ${asText(result.evaluation_horizon)}\nMoneda: ${asText(result.currency)}\nMejor alternativa: ${asText(summary.best_alternative)}`, {
     x: 0.7,
     y: 3.1,
@@ -1924,7 +1910,7 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
     color: '475569',
     fit: 'shrink',
   });
-  slide.addText(`Riesgo principal: ${shortText(summary.main_risk, 180)}\nAhorro/sobrecosto: ${shortText(summary.estimated_saving_or_overcost, 180)}`, {
+  slide.addText(`Riesgo principal: ${asText(summary.main_risk)}\nAhorro/sobrecosto: ${asText(summary.estimated_saving_or_overcost)}`, {
     x: 7.1,
     y: 3.1,
     w: 5.4,
@@ -1942,8 +1928,8 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
     ['Riesgos', tcoRiskRows(result)],
   ].forEach(([title, rows]) => {
     slide = pptx.addSlide();
-    addPptTitle(slide, String(title), 'Informacion editable reconstruida desde el resultado mostrado en plataforma.');
-    addPptRows(slide, rows as Array<Record<string, unknown>>, { maxRows: 8 });
+    addPptTitle(slide, String(title));
+    addPptRows(slide, rows as Array<Record<string, unknown>>, { maxRows: (rows as Array<Record<string, unknown>>).length });
     addPptFooter(slide, input);
   });
 
@@ -1951,7 +1937,7 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   addPptTitle(slide, 'Costos ocultos y sensibilidad');
   slide.addText([
     'Costos ocultos detectados:',
-    ...asArray(result.hidden_costs_detected).slice(0, 8).map((item) => `- ${shortText(item, 140)}`),
+    ...asArray(result.hidden_costs_detected).map((item) => `- ${asText(item)}`),
     '',
     'Sensibilidad:',
     ...formatValue(result.sensitivity_analysis).slice(0, 10),
@@ -1961,23 +1947,23 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   slide = pptx.addSlide();
   addPptTitle(slide, 'Recomendacion estrategica');
   slide.addText([
-    `Accion recomendada: ${shortText(recommendation.recommended_action, 160)}`,
+    `Accion recomendada: ${asText(recommendation.recommended_action)}`,
     '',
     'Puntos de negociacion:',
-    ...asArray(recommendation.negotiation_points).slice(0, 6).map((item) => `- ${shortText(item, 160)}`),
+    ...asArray(recommendation.negotiation_points).map((item) => `- ${asText(item)}`),
     '',
     'Siguientes pasos:',
-    ...asArray(recommendation.next_steps).slice(0, 6).map((item) => `- ${shortText(item, 160)}`),
+    ...asArray(recommendation.next_steps).map((item) => `- ${asText(item)}`),
   ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Informacion faltante y preguntas');
   slide.addText([
-    ...asArray(result.missing_information).slice(0, 7).map((item) => `- ${shortText(item, 150)}`),
+    ...asArray(result.missing_information).map((item) => `- ${asText(item)}`),
     '',
     'Preguntas para proveedores:',
-    ...asArray(result.questions_for_user_or_suppliers).slice(0, 7).map((item) => `- ${shortText(item, 150)}`),
+    ...asArray(result.questions_for_user_or_suppliers).map((item) => `- ${asText(item)}`),
   ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
   addPptFooter(slide, input);
 
@@ -2015,7 +2001,7 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
   slide.background = { color: 'FFFFFF' };
   slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Reporte ejecutivo', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: '6B63D9' });
   slide.addText(input.title, { x: 0.55, y: 1.05, w: 11.9, h: 1, fontSize: 30, bold: true, color: '09008B', fit: 'shrink' });
-  slide.addText(`Agente: ${input.agentName || input.title}\nFecha: ${formatDate()}\nUsuario/empresa: ${input.userName || input.pdfOptions?.branding.companyName || 'No especificado'}\nFormato: POWERPOINT / PPTX`, {
+  slide.addText(`Agente: ${input.agentName || input.title}\nFecha: ${formatDate()}`, {
     x: 0.6,
     y: 2.55,
     w: 8.6,
@@ -2026,10 +2012,10 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
     fit: 'shrink',
   });
   const objective = getObjective(result);
-  if (objective) slide.addText(shortText(objective, 420), { x: 0.6, y: 4.1, w: 11.7, h: 1.1, fontSize: 14, color: '1F2937', fit: 'shrink' });
+  if (objective) slide.addText(objective, { x: 0.6, y: 4.1, w: 11.7, h: 1.1, fontSize: 14, color: '1F2937', fit: 'shrink' });
   addPptFooter(slide, input);
 
-  getExportSections(result).slice(0, 18).forEach(([key, value]) => {
+  getExportSections(result).forEach(([key, value]) => {
     const rows = key === 'charts' ? chartRows(value) : rowsFromValue(value);
     slide = pptx.addSlide();
     addPptTitle(slide, formatLabel(key), 'Misma informacion generada por el agente en la plataforma.');
@@ -2039,7 +2025,7 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
       slide.addTable(
         [
           keys.map((name) => ({ text: name, options: { bold: true, color: '09008B', fill: 'EEF2FF' } })),
-          ...rows.slice(0, 8).map((row) => keys.map((name) => ({ text: shortText(row[name], 120), options: { color: '334155' } }))),
+          ...rows.map((row) => keys.map((name) => ({ text: asText(row[name]), options: { color: '334155' } }))),
         ],
         { x: 0.55, y: 1.35, w: 12.2, h: 5.3, border: { color: 'CBD5E1', pt: 0.5 }, fontSize: 8, valign: 'mid' },
       );
