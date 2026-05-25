@@ -169,11 +169,18 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function normalizeExtractedText(text: string) {
+  return text
+    .replace(/\s+/g, ' ')
+    .replace(/(?:\b[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]\s+){4,}[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]\b/g, (match) => match.replace(/\s+/g, ''))
+    .trim();
+}
+
 function asText(value: unknown, fallback = 'No especificado') {
   if (value === null || value === undefined || value === '') return fallback;
   if (Array.isArray(value)) return value.map((item) => asText(item, '')).filter(Boolean).join(', ') || fallback;
   if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
+  return normalizeExtractedText(String(value)) || fallback;
 }
 
 function isEmptyValue(value: unknown) {
@@ -336,7 +343,7 @@ function addCard(ctx: PdfContext, title: string, body: string | string[], tone: 
 }
 
 function addBulletList(ctx: PdfContext, title: string, items: unknown[], limit = 5) {
-  const values = items.map((item) => shortText(item, 170)).filter(Boolean).slice(0, limit);
+  const values = items.map((item) => asText(item, '')).filter(Boolean).slice(0, limit);
   if (!values.length) return;
   addText(ctx, title, { size: 9.2, bold: true, color: '#0f172a' });
   values.forEach((item) => addText(ctx, `- ${item}`, { size: 8.5, color: '#475569' }));
@@ -346,7 +353,9 @@ function addTable(ctx: PdfContext, headers: string[], rows: unknown[][], widths?
   if (!rows.length) return;
   const { doc } = ctx;
   const colWidths = widths ?? headers.map(() => ctx.maxWidth / headers.length);
-  const headerHeight = 8;
+  const headerHeight = 9;
+  const fontSize = 7.1;
+  const lineHeight = 3.7;
   const drawHeader = () => {
     ensurePage(ctx, headerHeight + 4);
     doc.setFillColor('#eef2ff');
@@ -365,26 +374,39 @@ function addTable(ctx: PdfContext, headers: string[], rows: unknown[][], widths?
 
   drawHeader();
   rows.forEach((row, rowIndex) => {
-    const cells = row.map((cell, index) => doc.splitTextToSize(shortText(cell, 220), colWidths[index] - 3));
-    const rowHeight = Math.max(8, ...cells.map((cell) => cell.length * 4.2 + 3));
-    if (ctx.y + rowHeight > ctx.pageHeight - 16) {
-      addFooter(ctx);
-      doc.addPage();
-      ctx.y = 16;
-      drawHeader();
+    const cells = row.map((cell, index) => doc.splitTextToSize(asText(cell, ''), Math.max(colWidths[index] - 3, 8)));
+    let offset = 0;
+    const maxLines = Math.max(...cells.map((cell) => cell.length), 1);
+
+    while (offset < maxLines) {
+      const availableHeight = ctx.pageHeight - 18 - ctx.y;
+      const availableLines = Math.max(Math.floor((availableHeight - 3) / lineHeight), 1);
+      const linesThisPage = Math.min(maxLines - offset, availableLines);
+      const rowHeight = Math.max(9, linesThisPage * lineHeight + 4);
+
+      if (ctx.y + rowHeight > ctx.pageHeight - 16) {
+        addFooter(ctx);
+        doc.addPage();
+        ctx.y = 16;
+        drawHeader();
+        continue;
+      }
+
+      doc.setFillColor(rowIndex % 2 ? '#f8fafc' : '#ffffff');
+      doc.setDrawColor('#e2e8f0');
+      doc.rect(ctx.marginX, ctx.y, ctx.maxWidth, rowHeight, 'FD');
+      let x = ctx.marginX;
+      cells.forEach((cell, index) => {
+        const visibleLines = cell.slice(offset, offset + linesThisPage);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(fontSize);
+        doc.setTextColor('#334155');
+        doc.text(visibleLines.length ? visibleLines : [''], x + 1.5, ctx.y + 5);
+        x += colWidths[index];
+      });
+      ctx.y += rowHeight;
+      offset += linesThisPage;
     }
-    doc.setFillColor(rowIndex % 2 ? '#f8fafc' : '#ffffff');
-    doc.setDrawColor('#e2e8f0');
-    doc.rect(ctx.marginX, ctx.y, ctx.maxWidth, rowHeight, 'FD');
-    let x = ctx.marginX;
-    cells.forEach((cell, index) => {
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.4);
-      doc.setTextColor('#334155');
-      doc.text(cell, x + 1.5, ctx.y + 5);
-      x += colWidths[index];
-    });
-    ctx.y += rowHeight;
   });
   ctx.y += 4;
 }
@@ -702,9 +724,9 @@ function addDashboardResultPdf(input: PdfInput) {
 
   addHeader(ctx, input, subtitle);
   addCard(ctx, 'Resumen ejecutivo', [
-    shortText(result.executive_summary, 360),
+    asText(result.executive_summary),
     `Tipo de datos: ${asText(result.data_type)}`,
-    `Confianza: ${asText(result.confidence_level)} - ${shortText(result.confidence_reason, 180)}`,
+    `Confianza: ${asText(result.confidence_level)} - ${asText(result.confidence_reason)}`,
   ]);
 
   const kpis = asArray(result.kpis).map(asRecord);
@@ -738,7 +760,7 @@ function addDashboardResultPdf(input: PdfInput) {
     addSection(ctx, 'Tablas del dashboard');
     tables.slice(0, 6).forEach((table) => {
       addText(ctx, asText(table.title, 'Tabla resumen'), { size: 9.5, bold: true, color: '#0f172a' });
-      if (table.description) addText(ctx, shortText(table.description, 220), { size: 8.5, color: '#64748b' });
+      if (table.description) addText(ctx, asText(table.description), { size: 8.5, color: '#64748b' });
       const rows = dashboardTableRows(table);
       const keys = Object.keys(rows[0] ?? {}).slice(0, 5);
       if (keys.length) {
@@ -782,7 +804,7 @@ function addDashboardResultPdf(input: PdfInput) {
   const qualityWarnings = asArray(dataProfile.data_quality_warnings);
   if (qualityWarnings.length || result.data_understanding || result.extracted_data_quality) {
     addSection(ctx, 'Calidad de datos');
-    if (result.data_understanding) addText(ctx, shortText(result.data_understanding, 360), { size: 8.7, color: '#334155' });
+    if (result.data_understanding) addText(ctx, asText(result.data_understanding), { size: 8.7, color: '#334155' });
     if (result.extracted_data_quality) addValueBlock(ctx, 'extracted_data_quality', result.extracted_data_quality);
     addBulletList(ctx, 'Advertencias de calidad', qualityWarnings, 8);
   }
@@ -827,6 +849,156 @@ function addDashboardResultPdf(input: PdfInput) {
   });
   addFooter(ctx);
   ctx.doc.save(input.fileName ?? 'dashboard-nodus-ia.pdf');
+}
+
+function addTcoAnalysisPdf(input: PdfInput) {
+  const result = asRecord(input.result);
+  const ctx = createContext(input);
+  const summary = asRecord(result.executive_summary);
+  const recommendation = asRecord(result.strategic_recommendation);
+  const subtitle = `Producto/servicio: ${asText(result.item_name)} | Horizonte: ${asText(result.evaluation_horizon)} | Moneda: ${asText(result.currency)}`;
+
+  addHeader(ctx, input, subtitle);
+  addCard(ctx, 'Resumen ejecutivo', [
+    `Mejor alternativa preliminar: ${asText(summary.best_alternative)}`,
+    `Motivo: ${asText(summary.why_it_wins)}`,
+    `Ahorro o sobrecosto: ${asText(summary.estimated_saving_or_overcost)}`,
+    `Riesgo principal: ${asText(summary.main_risk)}`,
+    `Recomendacion final: ${asText(summary.final_recommendation)}`,
+  ], 'green');
+
+  const documents = asArray(result.supporting_documents_summary).map(asRecord);
+  if (documents.length) {
+    addSection(ctx, 'Resumen de documentos procesados');
+    addTable(
+      ctx,
+      ['Archivo', 'Tipo detectado', 'Hallazgos relevantes', 'Limitaciones'],
+      documents.map((item) => [
+        item.file_name ?? item.name,
+        item.detected_type ?? item.type,
+        asArray(item.relevant_findings).map((finding) => asText(finding, '')).join('\n'),
+        asArray(item.limitations).map((limitation) => asText(limitation, '')).join('\n'),
+      ]),
+      [38, 24, 78, ctx.maxWidth - 140],
+    );
+  }
+
+  const alternatives = tcoDetectedAlternativeRows(result);
+  if (alternatives.length) {
+    addSection(ctx, 'Alternativas detectadas');
+    addTable(
+      ctx,
+      ['Proveedor', 'Archivo', 'Precio', 'Garantia', 'Plazo', 'Datos faltantes'],
+      alternatives.map((item) => [item.Proveedor, item.Archivo, item.Precio, item.Garantia, item.Plazo, item['Datos faltantes']]),
+      [34, 42, 24, 28, 24, ctx.maxWidth - 152],
+    );
+  }
+
+  const dataUsed = tcoDataUsedRows(result);
+  if (dataUsed.length) {
+    addSection(ctx, 'Datos usados por alternativa');
+    addTable(
+      ctx,
+      ['Alternativa', 'Precio base', 'Cantidad', 'Moneda', 'Horizonte', 'Supuestos'],
+      dataUsed.map((item) => [item.Alternativa, item['Precio base'], item.Cantidad, item.Moneda, item.Horizonte, item.Supuestos]),
+      [36, 26, 20, 20, 26, ctx.maxWidth - 128],
+    );
+  }
+
+  const matrix = tcoMatrixRows(result);
+  if (matrix.length) {
+    addSection(ctx, 'Matriz TCO comparativa');
+    const keys = Object.keys(matrix[0] ?? {}).slice(0, 6);
+    addTable(ctx, keys, matrix.map((row) => keys.map((key) => row[key])), keys.map(() => ctx.maxWidth / keys.length));
+  }
+
+  const totals = tcoTotalsRows(result);
+  if (totals.length) {
+    addSection(ctx, 'Totales TCO');
+    addTable(
+      ctx,
+      ['Alternativa', 'Precio inicial', 'TCO total', 'TCO unitario', 'Riesgo', 'Costos ocultos'],
+      totals.map((item) => [item.Alternativa, item['Precio inicial'], item['TCO total'], item['TCO unitario'], item.Riesgo, item['Costos ocultos']]),
+      [34, 25, 25, 25, 22, ctx.maxWidth - 131],
+    );
+  }
+
+  const ranking = tcoRankingRows(result);
+  if (ranking.length) {
+    addSection(ctx, 'Ranking comparativo');
+    addTable(
+      ctx,
+      ['Posicion', 'Alternativa', 'Tipo', 'TCO', 'Motivo'],
+      ranking.map((item) => [item.Posicion, item.Alternativa, item.Tipo, item.TCO, item.Motivo]),
+      [18, 38, 26, 28, ctx.maxWidth - 110],
+    );
+  }
+
+  const risks = tcoRiskRows(result);
+  if (risks.length) {
+    addSection(ctx, 'Analisis de riesgos');
+    addTable(
+      ctx,
+      ['Riesgo', 'Alternativa', 'Probabilidad', 'Impacto', 'Nivel', 'Mitigacion'],
+      risks.map((item) => [item.Riesgo, item.Alternativa, item.Probabilidad, item.Impacto, item.Nivel, item.Mitigacion]),
+      [34, 30, 24, 30, 20, ctx.maxWidth - 138],
+    );
+  }
+
+  if (result.interpretation) {
+    addSection(ctx, 'Interpretacion');
+    addValueBlock(ctx, 'interpretation', result.interpretation);
+  }
+
+  if (result.sensitivity_analysis) {
+    addSection(ctx, 'Analisis de sensibilidad');
+    addValueBlock(ctx, 'sensitivity_analysis', result.sensitivity_analysis);
+  }
+
+  addSection(ctx, 'Recomendacion estrategica');
+  addTable(
+    ctx,
+    ['Campo', 'Detalle'],
+    Object.entries(recommendation).map(([key, value]) => [formatLabel(key), asText(value)]),
+    [50, ctx.maxWidth - 50],
+  );
+
+  addSection(ctx, 'Validaciones pendientes');
+  addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 20);
+  addBulletList(ctx, 'Preguntas para usuario o proveedores', asArray(result.questions_for_user_or_suppliers), 20);
+  addBulletList(ctx, 'Supuestos y limites', asArray(result.assumptions_and_limits), 20);
+  addBulletList(ctx, 'Advertencias de calculo', asArray(result.calculation_warnings), 20);
+
+  addAdditionalResultSections(ctx, result, [
+    'analysis_title',
+    'item_name',
+    'evaluation_horizon',
+    'currency',
+    'executive_summary',
+    'supporting_documents_summary',
+    'detected_alternatives',
+    'data_used',
+    'tco_matrix',
+    'tco_totals',
+    'ranking',
+    'risk_analysis',
+    'interpretation',
+    'sensitivity_analysis',
+    'strategic_recommendation',
+    'missing_information',
+    'questions_for_user_or_suppliers',
+    'assumptions_and_limits',
+    'calculation_warnings',
+    'disclaimer',
+  ]);
+
+  addSection(ctx, 'Disclaimer');
+  addText(ctx, asText(result.disclaimer, 'Analisis generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos antes de tomar decisiones finales.'), {
+    size: 8.5,
+    color: '#64748b',
+  });
+  addFooter(ctx);
+  ctx.doc.save(input.fileName ?? 'analisis-tco-nodus-ia.pdf');
 }
 
 function addAdditionalResultSections(ctx: PdfContext, result: Record<string, unknown>, coveredKeys: string[]) {
@@ -1898,6 +2070,10 @@ export async function downloadAgentResultPdf(input: PdfInput) {
   }
   if (isDashboardResult(input.result)) {
     addDashboardResultPdf(input);
+    return;
+  }
+  if (isTcoAnalysisResult(input.result)) {
+    addTcoAnalysisPdf(input);
     return;
   }
   addGenericPdf(input);
