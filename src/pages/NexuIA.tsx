@@ -905,13 +905,197 @@ const NexuIA = () => {
     }
   };
 
+  const textValue = (value: unknown, fallback = 'No especificado') => {
+    if (value === null || value === undefined || value === '') return fallback;
+    if (Array.isArray(value)) return value.map((item) => textValue(item, '')).filter(Boolean).join('; ') || fallback;
+    if (typeof value === 'object') return JSON.stringify(value);
+    return String(value);
+  };
+
+  const listRows = (items: unknown[] | undefined, label = 'Detalle') =>
+    (items?.length ? items : ['No especificado']).map((item, index) => ({ N: index + 1, [label]: textValue(item) }));
+
+  const recordRows = (record: Record<string, unknown>) =>
+    Object.entries(record).map(([key, value]) => ({
+      Campo: key.replace(/_/g, ' '),
+      Valor: textValue(value),
+    }));
+
+  const dashboardTableRowsForExport = (table: { columns?: string[]; rows?: Array<Record<string, unknown>> }) => {
+    const columns = table.columns ?? [];
+    return (table.rows ?? []).map((row) => Object.fromEntries(columns.map((column) => [column, row[column] ?? ''])));
+  };
+
+  const buildTermsVisibleExport = (result: NonNullable<typeof termsGenerateMutation.data>) => ({
+    'Resumen ejecutivo': result.executive_summary,
+    'Datos principales': [
+      { Campo: 'Nombre', Valor: result.title },
+      { Campo: 'Tipo', Valor: result.requirement_type },
+      { Campo: 'Categoria', Valor: result.category },
+      { Campo: 'Completitud', Valor: `${result.completion_level ?? 'Media'}${result.completion_score ? ` (${result.completion_score}%)` : ''}` },
+    ],
+    'Metricas': result.dashboard_metrics?.length ? result.dashboard_metrics : [
+      { label: 'Riesgo informacion faltante', value: result.risk_level ?? 'Medio', status: 'warning' },
+      { label: 'Documentos cargados', value: String(result.supporting_documents_summary.length), status: 'neutral' },
+      { label: 'Entregables definidos', value: String(result.generated_document.final_deliverables.length), status: 'complete' },
+    ],
+    'Flujo del requerimiento': listRows(result.flow_steps?.length ? result.flow_steps : ['Necesidad', 'Alcance', 'Actividades', 'Entregables', 'Requisitos', 'Proveedor'], 'Paso'),
+    'Entregables para enviar a proveedores': [
+      { Entregable: 'Bases sugeridas para licitación', Detalle: result.tender_bases?.object ?? 'Objeto, alcance, requisitos, criterios y condiciones para solicitar propuestas.' },
+      { Entregable: 'Correo a proveedores', Detalle: result.supplier_invitation_email?.subject ?? 'Correo listo para copiar, ajustar y enviar.' },
+      { Entregable: 'Siguientes pasos de licitación', Detalle: (result.tender_process?.length ?? 0) > 0 ? `${result.tender_process?.length} pasos sugeridos desde validar el TdR hasta emitir OC o contrato.` : 'Flujo sugerido para invitar, resolver consultas, comparar propuestas y adjudicar.' },
+    ],
+    'Documento - Datos generales': listRows([
+      `Nombre: ${result.generated_document.general_data.requirement_name}`,
+      `Tipo: ${result.generated_document.general_data.requirement_type}`,
+      `Categoria: ${result.generated_document.general_data.category}`,
+      `Ubicacion: ${result.generated_document.general_data.location ?? 'No especificado'}`,
+      `Fecha requerida: ${result.generated_document.general_data.required_date ?? 'No especificado'}`,
+    ]),
+    'Documento - Objetivo': result.generated_document.objective,
+    'Documento - Alcance': result.generated_document.scope,
+    'Documento - Caracteristicas tecnicas': listRows(result.generated_document.technical_characteristics),
+    'Documento - Actividades requeridas': listRows(result.generated_document.required_activities),
+    'Documento - Entregables': listRows(result.generated_document.final_deliverables),
+    'Documento - Justificacion': result.generated_document.justification,
+    'Documento - Requisitos de seguridad': listRows(result.generated_document.safety_requirements),
+    'Documento - Condiciones para proveedores': listRows(result.generated_document.supplier_conditions),
+    'Documento - Estructura de informe final': listRows(result.generated_document.final_report_structure),
+    'Documento - Anexos sugeridos': listRows(result.generated_document.suggested_annexes),
+    'Checklist de calidad': result.checklist ?? [],
+    'Información que conviene completar antes de enviar': listRows(result.missing_information),
+    'Recomendaciones accionables': listRows(result.buyer_recommendations),
+    'Bases de licitación - Objeto y alcance': [
+      { Campo: 'Objeto', Valor: result.tender_bases?.object ?? 'No especificado' },
+      { Campo: 'Alcance', Valor: result.tender_bases?.scope ?? 'No especificado' },
+    ],
+    'Bases de licitación - Requisitos mínimos del proveedor': listRows(result.tender_bases?.minimum_supplier_requirements),
+    'Bases de licitación - Documentación solicitada': listRows(result.tender_bases?.requested_documentation),
+    'Bases de licitación - Criterios de evaluación': listRows(result.tender_bases?.evaluation_criteria),
+    'Bases de licitación - Condiciones de presentación': listRows(result.tender_bases?.proposal_submission_conditions),
+    'Bases de licitación - Criterios de adjudicación': listRows(result.tender_bases?.award_criteria),
+    'Bases de licitación - Condiciones de descalificación': listRows(result.tender_bases?.disqualification_conditions),
+    'Bases de licitación - Observaciones para compradores': listRows(result.tender_bases?.buyer_observations),
+    'Bases de licitación - Advertencia': result.tender_bases?.disclaimer ?? 'Estas bases son una guía inicial y deben ser revisadas por el área de compras, legal o responsable interno antes de enviarse.',
+    'Correo sugerido para invitar proveedores': [
+      { Campo: 'Asunto', Valor: result.supplier_invitation_email?.subject ?? 'Invitación a presentar propuesta' },
+      { Campo: 'Saludo', Valor: result.supplier_invitation_email?.greeting },
+      { Campo: 'Cuerpo', Valor: result.supplier_invitation_email?.body },
+      { Campo: 'Adjuntos', Valor: (result.supplier_invitation_email?.attached_documents ?? ['Termino de referencia']).join(', ') },
+      { Campo: 'Plazo', Valor: result.supplier_invitation_email?.response_deadline ?? 'No especificado' },
+      { Campo: 'Contacto', Valor: result.supplier_invitation_email?.contact_details ?? 'No especificado' },
+      { Campo: 'Cierre', Valor: result.supplier_invitation_email?.closing },
+    ],
+    'Proceso de licitación': listRows(result.tender_process?.length ? result.tender_process : [
+      'Revisar y ajustar el término de referencia con el usuario interno.',
+      'Enviar invitación a proveedores con bases y anexos.',
+      'Resolver consultas y consolidar respuestas.',
+      'Comparar propuestas y sustentar recomendación.',
+      'Emitir orden de compra o contrato según corresponda.',
+    ], 'Paso'),
+    'Documentos de apoyo leidos': result.supporting_documents_summary ?? [],
+    'Disclaimer': result.disclaimer,
+  });
+
+  const buildDashboardVisibleExport = (result: NonNullable<typeof dashboardCreatorMutation.data>) => ({
+    'Resumen ejecutivo': result.executive_summary,
+    'Información general': [
+      { Campo: 'Análisis', Valor: result.data_understanding.detected_analysis_type },
+      { Campo: 'Modo', Valor: result.analysis_mode },
+      { Campo: 'Confianza', Valor: result.confidence_level },
+      { Campo: 'Estructura', Valor: result.data_understanding.structure_level },
+      ...(result.confidence_reason ? [{ Campo: 'Motivo de confianza', Valor: result.confidence_reason }] : []),
+    ],
+    'KPIs principales': result.kpis,
+    'Notas sobre datos': listRows(result.data_understanding.notes),
+    'Archivos y documentos procesados': (result.document_summaries?.length ? result.document_summaries : result.source_files ?? []).map((file) => ({
+      Archivo: file.file_name,
+      Tipo: file.detected_type,
+      'Datos detectados': 'relevant_findings' in file ? file.relevant_findings.join(', ') : '',
+      Limitaciones: 'limitations' in file ? file.limitations.slice(0, 2).join('; ') : '',
+    })),
+    'Gráficos': result.charts.map((chart) => ({
+      Titulo: chart.title,
+      Descripcion: chart.description,
+      Tipo: chart.type,
+      Insight: chart.insight,
+      Datos: chart.data.slice(0, 12).map((point) => `${point.label}: ${point.value}`).join('; '),
+    })),
+    ...Object.fromEntries(result.tables.map((table) => [`Tabla - ${table.title}`, dashboardTableRowsForExport(table)])),
+    'Observaciones': result.observations,
+    'Insights': result.insights,
+    'Recomendaciones': listRows(result.recommendations),
+    'Perfil de datos': [
+      { Campo: 'Filas', Valor: result.data_profile.rows_detected },
+      { Campo: 'Columnas', Valor: result.data_profile.columns_detected },
+      { Campo: 'Archivos', Valor: result.data_profile.files_processed },
+    ],
+    'Advertencias de calidad': listRows(result.data_profile.data_quality_warnings),
+    'Filtros sugeridos e información faltante': listRows([...result.suggested_filters, ...result.missing_information]),
+    'Disclaimer': result.disclaimer,
+  });
+
+  const buildTcoVisibleExport = (result: NonNullable<typeof tcoAnalysisMutation.data>) => ({
+    'Resumen ejecutivo': [
+      { Campo: 'Recomendación final', Valor: result.executive_summary.final_recommendation },
+      { Campo: 'Mejor alternativa', Valor: result.executive_summary.best_alternative },
+      { Campo: 'Motivo', Valor: result.executive_summary.why_it_wins },
+      { Campo: 'Ahorro o sobrecosto', Valor: result.executive_summary.estimated_saving_or_overcost },
+      { Campo: 'Riesgo principal', Valor: result.executive_summary.main_risk },
+    ],
+    'Alternativas detectadas': result.detected_alternatives ?? [],
+    'Calidad de extracción': result.extracted_data_quality ? recordRows(result.extracted_data_quality as unknown as Record<string, unknown>) : [],
+    'Advertencias de extracción': listRows(result.extracted_data_quality?.warnings),
+    'Datos usados': result.data_used,
+    'Totales TCO': result.tco_totals,
+    'Matriz TCO': result.tco_matrix.map((row) => ({
+      Componente: row.cost_component,
+      ...row.values,
+      Notas: row.notes,
+    })),
+    'Ranking': result.ranking,
+    'Interpretación': recordRows(result.interpretation as unknown as Record<string, unknown>),
+    'Análisis de sensibilidad': recordRows(result.sensitivity_analysis as unknown as Record<string, unknown>),
+    'Recomendación estratégica': recordRows(result.strategic_recommendation as unknown as Record<string, unknown>),
+    'Costos ocultos detectados': listRows(result.hidden_costs_detected),
+    'Análisis de riesgos': result.risk_analysis,
+    'Preguntas o datos faltantes': listRows([...result.missing_information, ...result.questions_for_user_or_suppliers]),
+    'Supuestos y límites del análisis': listRows([...(result.assumptions_and_limits ?? []), ...(result.calculation_warnings ?? [])]),
+    'Documentos de apoyo leídos': result.supporting_documents_summary,
+    'Disclaimer': result.disclaimer,
+  });
+
+  const buildProposalVisibleExport = (result: NonNullable<typeof proposalComparisonResult>) => ({
+    'Resumen ejecutivo': result.executive_summary,
+    'Proveedor recomendado': result.recommended_supplier,
+    'Resumen ejecutivo comparativo': result.executive_comparison_table?.map((row) => ({ 'Dato clave': row.row_label, ...row.values })) ?? [],
+    'Matriz de evaluación comparativa': result.evaluation_matrix?.criteria.map((criterion) => ({
+      'N°': criterion.number,
+      Criterio: criterion.criterion,
+      'Peso %': criterion.weight_percent,
+      ...criterion.ratings,
+      Observaciones: criterion.observations,
+    })) ?? [],
+    'Nota de criterios': result.auto_generated_criteria_note,
+    'Puntaje ponderado total': result.evaluation_matrix?.weighted_totals ?? [],
+    'Guía de criterios': result.criteria_guide ?? [],
+    'Ranking': result.ranking,
+    'Tabla comparativa': result.comparison_table.map((row) => ({ Criterio: row.criterion, ...row.values, Comentario: row.comment })),
+    'Riesgos globales': listRows(result.global_risks),
+    'Información faltante': listRows(result.missing_information),
+    'Preguntas sugeridas': listRows(result.questions_for_suppliers),
+    'Recomendación final': result.final_recommendation,
+    'Disclaimer': result.disclaimer,
+  });
+
   const handleDownloadTermsPdf = async () => {
     if (!termsGenerateMutation.data) return;
     await handleExportResult({
       title: 'Término de referencia',
-      result: termsGenerateMutation.data as unknown as Record<string, unknown>,
+      result: buildTermsVisibleExport(termsGenerateMutation.data) as unknown as Record<string, unknown>,
       fileName: 'termino-referencia-nodus-ia',
       operationName: 'Descarga término de referencia',
+      captureElementId: 'terms-reference-export-view',
     });
   };
 
@@ -1020,9 +1204,10 @@ const NexuIA = () => {
     if (!tcoAnalysisMutation.data) return;
     await handleExportResult({
       title: 'Análisis de Costo Total / TCO',
-      result: tcoAnalysisMutation.data as unknown as Record<string, unknown>,
+      result: buildTcoVisibleExport(tcoAnalysisMutation.data) as unknown as Record<string, unknown>,
       fileName: 'analisis-tco-nodus-ia',
       operationName: 'Descarga análisis TCO',
+      captureElementId: 'tco-analysis-export-view',
     });
   };
 
@@ -1030,9 +1215,10 @@ const NexuIA = () => {
     if (!dashboardCreatorMutation.data) return;
     await handleExportResult({
       title: dashboardCreatorMutation.data.dashboard_title || 'Dashboard generado',
-      result: dashboardCreatorMutation.data as unknown as Record<string, unknown>,
+      result: buildDashboardVisibleExport(dashboardCreatorMutation.data) as unknown as Record<string, unknown>,
       fileName: 'dashboard-nodus-ia',
       operationName: 'Descarga dashboard',
+      captureElementId: 'dashboard-creator-export-view',
     });
   };
 
@@ -1040,9 +1226,10 @@ const NexuIA = () => {
     if (!proposalComparisonResult) return;
     await handleExportResult({
       title: 'Comparativos de propuestas de proveedores',
-      result: proposalComparisonResult as unknown as Record<string, unknown>,
+      result: buildProposalVisibleExport(proposalComparisonResult) as unknown as Record<string, unknown>,
       fileName: 'comparativo-propuestas-nodus-ia',
       operationName: 'Descarga comparativo de propuestas',
+      captureElementId: 'proposal-comparison-export-view',
     });
   };
 
@@ -3009,7 +3196,7 @@ const NexuIA = () => {
                   {isTcoAnalysis && tcoResult ? renderAgentFeedbackPanel() : null}
 
                   {isQuoteComparator && proposalComparisonResult ? (
-                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                    <div id="proposal-comparison-export-view" className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>

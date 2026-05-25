@@ -2050,18 +2050,6 @@ export async function downloadAgentResultPdf(input: PdfInput) {
     const captured = await addCapturedDashboardPdf(input);
     if (captured) return;
   }
-  if (isProposalComparison(input.result)) {
-    addProposalComparisonPdf(input);
-    return;
-  }
-  if (isDashboardResult(input.result)) {
-    addDashboardResultPdf(input);
-    return;
-  }
-  if (isTcoAnalysisResult(input.result)) {
-    addTcoAnalysisPdf(input);
-    return;
-  }
   addGenericPdf(input);
 }
 
