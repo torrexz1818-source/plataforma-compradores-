@@ -1117,6 +1117,157 @@ function addGenericPdf(input: PdfInput) {
   ctx.doc.save(input.fileName ?? 'resultado-nodus-ia.pdf');
 }
 
+function addTermsOfReferencePdf(input: PdfInput) {
+  const result = asRecord(input.result);
+  const ctx = createContext(input);
+  const document = getTermsDocument(result);
+  const general = getTermsGeneralData(result);
+  const bases = getTermsTenderBases(result);
+  const email = getTermsEmail(result);
+  const subtitle = `Tipo: ${asText(result.requirement_type)} | Categoria: ${asText(result.category)} | Riesgo: ${asText(result.risk_level)}`;
+
+  addHeader(ctx, input, subtitle);
+  addCard(ctx, 'Resumen ejecutivo', [
+    asText(result.executive_summary),
+    `Completitud: ${asText(result.completion_level)} (${asText(result.completion_score)}%)`,
+    `Ubicacion: ${asText(general.location)} | Fecha requerida: ${asText(general.required_date)}`,
+  ]);
+
+  const metrics = asArray(result.dashboard_metrics).map(asRecord);
+  if (metrics.length) {
+    addSection(ctx, 'Metricas del requerimiento');
+    addTable(
+      ctx,
+      ['Metrica', 'Valor', 'Estado'],
+      metrics.map((item) => [item.label ?? item.metric, item.value, item.status]),
+      [70, 45, ctx.maxWidth - 115],
+    );
+  }
+
+  addSection(ctx, 'Documento generado');
+  addTable(
+    ctx,
+    ['Campo', 'Contenido'],
+    [
+      ['Nombre', general.requirement_name ?? result.title],
+      ['Tipo', general.requirement_type ?? result.requirement_type],
+      ['Categoria', general.category ?? result.category],
+      ['Ubicacion', general.location],
+      ['Fecha requerida', general.required_date],
+      ['Objetivo', document.objective],
+      ['Alcance', document.scope],
+      ['Justificacion', document.justification],
+    ],
+    [42, ctx.maxWidth - 42],
+  );
+  addBulletList(ctx, 'Caracteristicas tecnicas', asArray(document.technical_characteristics), 30);
+  addBulletList(ctx, 'Actividades requeridas', asArray(document.required_activities), 30);
+  addBulletList(ctx, 'Entregables finales', asArray(document.final_deliverables), 30);
+  addBulletList(ctx, 'Requisitos de seguridad', asArray(document.safety_requirements), 30);
+  addBulletList(ctx, 'Condiciones para proveedores', asArray(document.supplier_conditions), 30);
+  addBulletList(ctx, 'Estructura de informe final', asArray(document.final_report_structure), 30);
+  addBulletList(ctx, 'Anexos sugeridos', asArray(document.suggested_annexes), 30);
+
+  const checklist = asArray(result.checklist).map(asRecord);
+  if (checklist.length) {
+    addSection(ctx, 'Checklist de calidad');
+    addTable(
+      ctx,
+      ['Punto', 'Estado', 'Detalle'],
+      checklist.map((item) => [item.label, item.status, item.detail]),
+      [52, 26, ctx.maxWidth - 78],
+    );
+  }
+
+  addSection(ctx, 'Bases sugeridas para licitacion');
+  addTable(
+    ctx,
+    ['Seccion', 'Contenido'],
+    [
+      ['Objeto', bases.object],
+      ['Alcance', bases.scope],
+      ['Requisitos minimos del proveedor', asArray(bases.minimum_supplier_requirements).map(asText).join('\n')],
+      ['Documentacion solicitada', asArray(bases.requested_documentation).map(asText).join('\n')],
+      ['Criterios de evaluacion', asArray(bases.evaluation_criteria).map(asText).join('\n')],
+      ['Condiciones de presentacion', asArray(bases.proposal_submission_conditions).map(asText).join('\n')],
+      ['Plazo de consultas', bases.question_deadline],
+      ['Fecha limite de propuestas', bases.proposal_deadline],
+      ['Forma de envio', bases.submission_method],
+      ['Criterios de adjudicacion', asArray(bases.award_criteria).map(asText).join('\n')],
+      ['Condiciones de descalificacion', asArray(bases.disqualification_conditions).map(asText).join('\n')],
+      ['Observaciones para compradores', asArray(bases.buyer_observations).map(asText).join('\n')],
+      ['Advertencia', bases.disclaimer],
+    ],
+    [50, ctx.maxWidth - 50],
+  );
+
+  addSection(ctx, 'Correo sugerido para proveedores');
+  addTable(
+    ctx,
+    ['Campo', 'Contenido'],
+    [
+      ['Asunto', email.subject],
+      ['Saludo', email.greeting],
+      ['Cuerpo', email.body],
+      ['Adjuntos', asArray(email.attached_documents).map(asText).join(', ')],
+      ['Plazo de respuesta', email.response_deadline],
+      ['Contacto', email.contact_details],
+      ['Cierre', email.closing],
+    ],
+    [38, ctx.maxWidth - 38],
+  );
+
+  addSection(ctx, 'Proceso y acciones');
+  addBulletList(ctx, 'Flujo del requerimiento', asArray(result.flow_steps), 30);
+  addBulletList(ctx, 'Proceso sugerido de licitacion', asArray(result.tender_process), 30);
+  addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 30);
+  addBulletList(ctx, 'Recomendaciones accionables', asArray(result.buyer_recommendations), 30);
+
+  const supportDocs = asArray(result.supporting_documents_summary).map(asRecord);
+  if (supportDocs.length) {
+    addSection(ctx, 'Documentos de apoyo leidos');
+    addTable(
+      ctx,
+      ['Archivo', 'Tipo', 'Hallazgos', 'Limitaciones'],
+      supportDocs.map((item) => [
+        item.file_name ?? item.name,
+        item.detected_type ?? item.type,
+        asArray(item.relevant_findings).map(asText).join('\n'),
+        asArray(item.limitations).map(asText).join('\n'),
+      ]),
+      [42, 24, 64, ctx.maxWidth - 130],
+    );
+  }
+
+  addAdditionalResultSections(ctx, result, [
+    'title',
+    'requirement_type',
+    'category',
+    'completion_level',
+    'completion_score',
+    'risk_level',
+    'executive_summary',
+    'dashboard_metrics',
+    'generated_document',
+    'checklist',
+    'tender_bases',
+    'supplier_invitation_email',
+    'flow_steps',
+    'tender_process',
+    'missing_information',
+    'buyer_recommendations',
+    'supporting_documents_summary',
+    'disclaimer',
+  ]);
+  addSection(ctx, 'Disclaimer');
+  addText(ctx, asText(result.disclaimer, 'Documento generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos antes de tomar decisiones finales.'), {
+    size: 8.5,
+    color: '#64748b',
+  });
+  addFooter(ctx);
+  ctx.doc.save(input.fileName ?? 'termino-referencia-nodus-ia.pdf');
+}
+
 async function addCapturedDashboardPdf(input: PdfInput) {
   if (!input.captureElementId) return false;
   const element = document.getElementById(input.captureElementId);
@@ -1316,6 +1467,7 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
     const email = getTermsEmail(result);
 
     appendJsonSheet(XLSX, workbook, used, 'Metricas', asArray(result.dashboard_metrics).map(asRecord));
+    appendJsonSheet(XLSX, workbook, used, 'Flujo requerimiento', termsListRows(asArray(result.flow_steps), 'Paso'));
     appendJsonSheet(XLSX, workbook, used, 'Checklist', asArray(result.checklist).map(asRecord).map((item) => ({
       Punto: item.label,
       Estado: item.status,
@@ -1450,6 +1602,15 @@ async function downloadTermsOfReferenceDocx(input: AgentExportInput, result: Rec
   ]);
   if (summaryTable) children.push(summaryTable);
 
+  children.push(docxParagraph(docx, 'Metricas del requerimiento', { heading: true }));
+  const metricsTable = docxTableFromRows(docx, asArray(result.dashboard_metrics).map(asRecord).map((item) => ({
+    Metrica: item.label ?? item.metric,
+    Valor: item.value,
+    Estado: item.status,
+  })));
+  if (metricsTable) children.push(metricsTable);
+  pushDocxList(docx, children, 'Flujo del requerimiento', asArray(result.flow_steps));
+
   children.push(docxParagraph(docx, 'Termino de referencia', { heading: true }));
   children.push(docxParagraph(docx, `Objetivo: ${asText(document.objective)}`));
   children.push(docxParagraph(docx, `Alcance: ${asText(document.scope)}`));
@@ -1478,6 +1639,7 @@ async function downloadTermsOfReferenceDocx(input: AgentExportInput, result: Rec
   pushDocxList(docx, children, 'Condiciones de presentacion de propuestas', asArray(bases.proposal_submission_conditions));
   pushDocxList(docx, children, 'Criterios de adjudicacion', asArray(bases.award_criteria));
   pushDocxList(docx, children, 'Condiciones de descalificacion', asArray(bases.disqualification_conditions));
+  pushDocxList(docx, children, 'Observaciones para compradores', asArray(bases.buyer_observations));
   children.push(docxParagraph(docx, asText(bases.disclaimer)));
 
   children.push(docxParagraph(docx, 'Correo sugerido para invitar proveedores', { heading: true }));
@@ -1492,6 +1654,14 @@ async function downloadTermsOfReferenceDocx(input: AgentExportInput, result: Rec
   pushDocxList(docx, children, 'Proceso sugerido de licitacion', asArray(result.tender_process));
   pushDocxList(docx, children, 'Informacion faltante', asArray(result.missing_information));
   pushDocxList(docx, children, 'Recomendaciones accionables', asArray(result.buyer_recommendations));
+  children.push(docxParagraph(docx, 'Documentos de apoyo leidos', { heading: true }));
+  const supportDocsTable = docxTableFromRows(docx, asArray(result.supporting_documents_summary).map(asRecord).map((item) => ({
+    Archivo: item.file_name ?? item.name,
+    Tipo: item.detected_type ?? item.type,
+    Hallazgos: asArray(item.relevant_findings).map(asText).join('\n'),
+    Limitaciones: asArray(item.limitations).map(asText).join('\n'),
+  })));
+  if (supportDocsTable) children.push(supportDocsTable);
   children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
   children.push(docxParagraph(docx, asText(result.disclaimer)));
 
@@ -1761,6 +1931,11 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
+  addPptTitle(slide, 'Flujo del requerimiento');
+  addPptRows(slide, termsListRows(asArray(result.flow_steps), 'Paso'), { maxRows: 12 });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
   addPptTitle(slide, 'Termino de referencia', 'Objetivo, alcance, justificacion y datos clave.');
   slide.addText(`Objetivo: ${asText(document.objective)}\n\nAlcance: ${asText(document.scope)}\n\nJustificacion: ${asText(document.justification)}`, {
     x: 0.65,
@@ -1775,8 +1950,10 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   addPptFooter(slide, input);
 
   [
+    ['Caracteristicas tecnicas', asArray(document.technical_characteristics)],
     ['Actividades y entregables', [...asArray(document.required_activities).map((item) => `Actividad: ${asText(item)}`), ...asArray(document.final_deliverables).map((item) => `Entregable: ${asText(item)}`)]],
     ['Seguridad y condiciones para proveedores', [...asArray(document.safety_requirements).map((item) => `Seguridad: ${asText(item)}`), ...asArray(document.supplier_conditions).map((item) => `Condicion: ${asText(item)}`)]],
+    ['Estructura de informe y anexos', [...asArray(document.final_report_structure).map((item) => `Informe: ${asText(item)}`), ...asArray(document.suggested_annexes).map((item) => `Anexo: ${asText(item)}`)]],
     ['Checklist de calidad', asArray(result.checklist).map((item) => `${asText(asRecord(item).label)} - ${asText(asRecord(item).status)}`)],
   ].forEach(([title, items]) => {
     slide = pptx.addSlide();
@@ -1800,6 +1977,18 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
+  addPptTitle(slide, 'Requisitos y condiciones de licitacion');
+  addPptRows(slide, [
+    ...termsListRows(asArray(bases.minimum_supplier_requirements), 'Requisito'),
+    ...termsListRows(asArray(bases.requested_documentation), 'Documentacion'),
+    ...termsListRows(asArray(bases.proposal_submission_conditions), 'Condicion'),
+    ...termsListRows(asArray(bases.award_criteria), 'Criterio'),
+    ...termsListRows(asArray(bases.disqualification_conditions), 'Descalificacion'),
+    ...termsListRows(asArray(bases.buyer_observations), 'Observacion'),
+  ], { maxRows: 12 });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
   addPptTitle(slide, 'Correo sugerido para proveedores');
   slide.addText(`Asunto: ${asText(email.subject)}\n\n${asText(email.greeting)}\n\n${asText(email.body)}\n\nAdjuntos: ${asArray(email.attached_documents).map(asText).join(', ')}\nPlazo: ${asText(email.response_deadline)}\nContacto: ${asText(email.contact_details)}\n\n${asText(email.closing)}`, {
     x: 0.65,
@@ -1817,6 +2006,27 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   addPptTitle(slide, 'Proceso sugerido de licitacion');
   addPptRows(slide, termsListRows(asArray(result.tender_process), 'Paso'), { maxRows: 10 });
   addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Faltantes y recomendaciones');
+  addPptRows(slide, [
+    ...termsListRows(asArray(result.missing_information), 'Informacion faltante'),
+    ...termsListRows(asArray(result.buyer_recommendations), 'Recomendacion'),
+  ], { maxRows: 12 });
+  addPptFooter(slide, input);
+
+  const supportDocs = asArray(result.supporting_documents_summary).map(asRecord);
+  if (supportDocs.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Documentos de apoyo leidos');
+    addPptRows(slide, supportDocs.map((item) => ({
+      Archivo: item.file_name ?? item.name,
+      Tipo: item.detected_type ?? item.type,
+      Hallazgos: asArray(item.relevant_findings).map(asText).join('; '),
+      Limitaciones: asArray(item.limitations).map(asText).join('; '),
+    })), { maxRows: 8 });
+    addPptFooter(slide, input);
+  }
 
   await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
 }
@@ -2062,6 +2272,22 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
 }
 
 export async function downloadAgentResultPdf(input: PdfInput) {
+  if (isTermsOfReferenceResult(input.result)) {
+    addTermsOfReferencePdf(input);
+    return;
+  }
+  if (isTcoAnalysisResult(input.result)) {
+    addTcoAnalysisPdf(input);
+    return;
+  }
+  if (isDashboardResult(input.result)) {
+    addDashboardResultPdf(input);
+    return;
+  }
+  if (isProposalComparison(input.result)) {
+    addProposalComparisonPdf(input);
+    return;
+  }
   if (input.captureElementId) {
     const captured = await addCapturedDashboardPdf(input);
     if (captured) return;

@@ -1092,10 +1092,9 @@ const NexuIA = () => {
     if (!termsGenerateMutation.data) return;
     await handleExportResult({
       title: 'Término de referencia',
-      result: buildTermsVisibleExport(termsGenerateMutation.data) as unknown as Record<string, unknown>,
+      result: termsGenerateMutation.data as unknown as Record<string, unknown>,
       fileName: 'termino-referencia-nodus-ia',
       operationName: 'Descarga término de referencia',
-      captureElementId: 'terms-reference-export-view',
     });
   };
 
