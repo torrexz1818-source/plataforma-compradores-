@@ -1662,64 +1662,200 @@ function appendAoaSheet(
 }
 
 async function downloadDashboardResultXlsx(input: AgentExportInput, result: Record<string, unknown>) {
-  const XLSX = await import('xlsx');
-  const workbook = XLSX.utils.book_new();
-  const used = new Set<string>();
   const technicalResult = result;
   result = buildPublicDashboardResult(result);
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Buyer Nodus';
+  workbook.created = new Date();
+  workbook.modified = new Date();
   const executiveSummary = asRecord(result.executiveSummary);
   const businessKpis = dashboardBusinessKpis(result);
   const charts = asArray(result.charts).map(asRecord);
   const tables = asArray(result.tables).map(asRecord);
+  const primary = '0E109E';
+  const secondary = '5A31D5';
+  const danger = 'F3313F';
+  const success = 'B2EB4A';
+  const borderColor = 'CBD5E1';
+  const textColor = '0F172A';
 
-  appendAoaSheet(XLSX, workbook, used, 'Resumen Ejecutivo', [
-    ['BUYER NODUS', 'Dashboard ejecutivo de compras'],
-    ['Titulo', asText(result.dashboard_title, input.title)],
-    ['Fecha de generacion', formatDate()],
-    ['Audiencia', asText(result.audience)],
-    ['Periodo', asText(result.period)],
-    [],
-    ['Resumen ejecutivo', dashboardBusinessText(executiveSummary.information_found, asText(result.executive_summary))],
-    ['Analisis construido', dashboardBusinessText(executiveSummary.analysis_built, 'Reporte ejecutivo generado a partir de los archivos cargados.')],
-    [],
-    ['KPIs principales', 'Valor', 'Interpretacion'],
-    ...businessKpis.slice(0, 8).map((kpi) => [dashboardBusinessText(kpi.title), asText(kpi.value), dashboardBusinessText(kpi.description)]),
-    [],
-    ['Hallazgos principales'],
-    ...asArray(result.findings).map(asRecord).slice(0, 6).map((item) => [dashboardBusinessText(item.title), dashboardBusinessText(item.description)]),
-    [],
-    ['Recomendaciones'],
-    ...asArray(result.recommendations).slice(0, 8).map((item, index) => [`${index + 1}.`, asText(item)]),
-    [],
-    ['Disclaimer', DASHBOARD_CREATOR_DISCLAIMER],
-  ], [26, 42, 70]);
+  const styleHeader = (row: import('exceljs').Row, fill = primary) => {
+    row.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+      cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+      cell.alignment = { vertical: 'middle', wrapText: true };
+      cell.border = { bottom: { style: 'thin', color: { argb: borderColor } } };
+    });
+  };
+  const styleTable = (worksheet: import('exceljs').Worksheet, headerRow = 1) => {
+    styleHeader(worksheet.getRow(headerRow));
+    worksheet.views = [{ state: 'frozen', ySplit: headerRow }];
+    worksheet.columns.forEach((column) => {
+      let width = 14;
+      column.eachCell?.({ includeEmpty: false }, (cell) => {
+        width = Math.max(width, Math.min(String(cell.value ?? '').length + 4, 48));
+        cell.alignment = { vertical: 'top', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'E2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
+          left: { style: 'thin', color: { argb: 'E2E8F0' } },
+          right: { style: 'thin', color: { argb: 'E2E8F0' } },
+        };
+      });
+      column.width = width;
+    });
+  };
+  const addRowsSheet = (name: string, rows: Array<Record<string, unknown>>) => {
+    if (!rows.length) return undefined;
+    const worksheet = workbook.addWorksheet(name.slice(0, 31));
+    const keys = Object.keys(rows[0] ?? {});
+    worksheet.addRow(keys);
+    rows.forEach((row) => worksheet.addRow(keys.map((key) => row[key] ?? '')));
+    styleTable(worksheet);
+    worksheet.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + Math.min(keys.length, 26))}1` };
+    return worksheet;
+  };
+  const addSectionTitle = (worksheet: import('exceljs').Worksheet, rowNumber: number, title: string, fill = primary) => {
+    worksheet.mergeCells(rowNumber, 1, rowNumber, 6);
+    const cell = worksheet.getCell(rowNumber, 1);
+    cell.value = title;
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+    cell.font = { bold: true, color: { argb: 'FFFFFF' }, size: 12 };
+    cell.alignment = { vertical: 'middle' };
+  };
+  const barText = (value: unknown, max: number) => {
+    const numeric = Number(value) || 0;
+    const length = Math.max(1, Math.round((numeric / Math.max(max, 1)) * 18));
+    return '█'.repeat(length);
+  };
 
-  appendJsonSheet(XLSX, workbook, used, 'KPIs', businessKpis.map((kpi) => ({
+  const summary = workbook.addWorksheet('Resumen Ejecutivo', { views: [{ showGridLines: false }] });
+  summary.columns = [{ width: 22 }, { width: 24 }, { width: 24 }, { width: 24 }, { width: 24 }, { width: 42 }];
+  summary.mergeCells('A1:F1');
+  summary.getCell('A1').value = 'BUYER NODUS | Dashboard ejecutivo de compras';
+  summary.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primary } };
+  summary.getCell('A1').font = { bold: true, color: { argb: 'FFFFFF' }, size: 15 };
+  summary.getCell('A1').alignment = { vertical: 'middle' };
+  summary.getRow(1).height = 26;
+  summary.mergeCells('A3:F3');
+  summary.getCell('A3').value = asText(result.dashboard_title, input.title);
+  summary.getCell('A3').font = { bold: true, color: { argb: textColor }, size: 20 };
+  summary.getCell('A4').value = 'Fecha';
+  summary.getCell('B4').value = formatDate();
+  summary.getCell('C4').value = 'Audiencia';
+  summary.getCell('D4').value = asText(result.audience);
+  summary.getCell('E4').value = 'Periodo';
+  summary.getCell('F4').value = asText(result.period);
+  ['A4', 'C4', 'E4'].forEach((address) => {
+    summary.getCell(address).font = { bold: true, color: { argb: primary } };
+  });
+
+  addSectionTitle(summary, 6, 'KPIs principales', secondary);
+  businessKpis.slice(0, 6).forEach((kpi, index) => {
+    const startCol = 1 + (index % 3) * 2;
+    const startRow = 8 + Math.floor(index / 3) * 4;
+    summary.mergeCells(startRow, startCol, startRow, startCol + 1);
+    summary.mergeCells(startRow + 1, startCol, startRow + 1, startCol + 1);
+    summary.mergeCells(startRow + 2, startCol, startRow + 2, startCol + 1);
+    summary.getCell(startRow, startCol).value = dashboardBusinessText(kpi.title);
+    summary.getCell(startRow + 1, startCol).value = asText(kpi.value);
+    summary.getCell(startRow + 2, startCol).value = dashboardBusinessText(kpi.description);
+    [startRow, startRow + 1, startRow + 2].forEach((row) => {
+      for (let col = startCol; col <= startCol + 1; col += 1) {
+        const cell = summary.getCell(row, col);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F8FAFC' } };
+        cell.border = {
+          top: { style: 'thin', color: { argb: borderColor } },
+          bottom: { style: 'thin', color: { argb: borderColor } },
+          left: { style: 'thin', color: { argb: borderColor } },
+          right: { style: 'thin', color: { argb: borderColor } },
+        };
+        cell.alignment = { vertical: 'middle', wrapText: true };
+      }
+    });
+    summary.getCell(startRow, startCol).font = { bold: true, color: { argb: primary }, size: 10 };
+    summary.getCell(startRow + 1, startCol).font = { bold: true, color: { argb: textColor }, size: 16 };
+    summary.getCell(startRow + 2, startCol).font = { color: { argb: '475569' }, size: 9 };
+  });
+
+  addSectionTitle(summary, 17, 'Resumen ejecutivo', primary);
+  summary.mergeCells('A18:F19');
+  summary.getCell('A18').value = dashboardBusinessText(executiveSummary.information_found, asText(result.executive_summary));
+  summary.getCell('A18').alignment = { wrapText: true, vertical: 'top' };
+  addSectionTitle(summary, 21, 'Hallazgos y recomendaciones', secondary);
+  let rowIndex = 22;
+  asArray(result.findings).map(asRecord).slice(0, 4).forEach((item) => {
+    summary.getCell(rowIndex, 1).value = dashboardBusinessText(item.title);
+    summary.getCell(rowIndex, 2).value = dashboardBusinessText(item.description);
+    summary.mergeCells(rowIndex, 2, rowIndex, 6);
+    rowIndex += 1;
+  });
+  asArray(result.recommendations).slice(0, 5).forEach((item, index) => {
+    summary.getCell(rowIndex, 1).value = `Accion ${index + 1}`;
+    summary.getCell(rowIndex, 2).value = asText(item);
+    summary.mergeCells(rowIndex, 2, rowIndex, 6);
+    rowIndex += 1;
+  });
+  addSectionTitle(summary, rowIndex + 1, 'Disclaimer', primary);
+  summary.mergeCells(rowIndex + 2, 1, rowIndex + 3, 6);
+  summary.getCell(rowIndex + 2, 1).value = DASHBOARD_CREATOR_DISCLAIMER;
+  summary.getCell(rowIndex + 2, 1).alignment = { wrapText: true, vertical: 'top' };
+
+  addRowsSheet('KPIs', businessKpis.map((kpi) => ({
     KPI: kpi.title,
     Valor: kpi.value,
     Unidad: kpi.unit,
     Descripcion: kpi.description,
   })));
 
-  appendJsonSheet(XLSX, workbook, used, 'Graficos', charts.flatMap(dashboardChartDataRows));
-  appendJsonSheet(XLSX, workbook, used, 'Indicadores Calculados', businessKpis);
-  appendJsonSheet(XLSX, workbook, used, 'Datos Procesados', charts.flatMap(dashboardChartDataRows));
-
-  tables.forEach((table) => {
-    appendJsonSheet(XLSX, workbook, used, asText(table.title, 'Tabla'), dashboardTableRows(table));
+  const chartSheet = workbook.addWorksheet('Graficos', { views: [{ showGridLines: false }] });
+  chartSheet.columns = [{ width: 34 }, { width: 34 }, { width: 16 }, { width: 34 }, { width: 60 }];
+  let chartRow = 1;
+  charts.slice(0, 6).forEach((chart) => {
+    addSectionTitle(chartSheet, chartRow, asText(chart.title, 'Grafico'), primary);
+    chartRow += 1;
+    const rows = dashboardChartDataRows(chart);
+    const max = Math.max(...rows.map((row) => Number(row.Valor) || 0), 1);
+    const header = chartSheet.addRow(['Grafico', 'Etiqueta', 'Valor', 'Visual', 'Interpretacion']);
+    styleHeader(header, secondary);
+    rows.slice(0, 12).forEach((row) => {
+      const excelRow = chartSheet.addRow([row.Grafico, row.Etiqueta, row.Valor, barText(row.Valor, max), dashboardBusinessText(chart.insight)]);
+      excelRow.getCell(4).font = { color: { argb: primary }, bold: true };
+    });
+    chartRow = chartSheet.rowCount + 2;
   });
+  styleTable(chartSheet, 2);
 
-  appendJsonSheet(XLSX, workbook, used, 'Insights', asArray(result.insights).map(asRecord).map((item) => ({
-    Insight: item.title,
-    Descripcion: item.description,
-    Impacto: item.impact,
-    Accion: item.recommended_action,
-  })));
-  appendJsonSheet(XLSX, workbook, used, 'Hallazgos y Recomendaciones', [
+  addRowsSheet('Indicadores Calculados', businessKpis);
+  addRowsSheet('Datos Procesados', charts.flatMap(dashboardChartDataRows));
+
+  const tablesSheet = workbook.addWorksheet('Tablas Ejecutivas', { views: [{ showGridLines: false }] });
+  tablesSheet.columns = [{ width: 28 }, { width: 28 }, { width: 22 }, { width: 22 }, { width: 22 }, { width: 22 }];
+  let tableRow = 1;
+  tables.forEach((table) => {
+    const rows = dashboardTableRows(table);
+    if (!rows.length) return;
+    addSectionTitle(tablesSheet, tableRow, asText(table.title, 'Tabla ejecutiva'), primary);
+    tableRow += 1;
+    const keys = Object.keys(rows[0]).slice(0, 6);
+    styleHeader(tablesSheet.addRow(keys), secondary);
+    rows.slice(0, 25).forEach((row) => tablesSheet.addRow(keys.map((key) => row[key])));
+    tableRow = tablesSheet.rowCount + 2;
+  });
+  styleTable(tablesSheet, 2);
+
+  addRowsSheet('Hallazgos y Recomendaciones', [
     ...asArray(result.findings).map(asRecord).map((item) => ({
       Tipo: 'Hallazgo',
       Titulo: item.title,
       Descripcion: item.description,
+    })),
+    ...asArray(result.insights).map(asRecord).map((item) => ({
+      Tipo: 'Insight',
+      Titulo: item.title,
+      Descripcion: item.description,
+      Accion: item.recommended_action,
     })),
     ...asArray(result.recommendations).map((item) => ({
       Tipo: 'Recomendacion',
@@ -1727,11 +1863,18 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
       Descripcion: asText(item),
     })),
   ]);
-  appendJsonSheet(XLSX, workbook, used, 'Recomendaciones', dashboardListRows(asArray(result.recommendations), 'Recomendacion'));
-  appendJsonSheet(XLSX, workbook, used, 'Disclaimer', [{ Disclaimer: DASHBOARD_CREATOR_DISCLAIMER }]);
-  appendJsonSheet(XLSX, workbook, used, 'Tecnico - DataProfile', asArray(asRecord(technicalResult.dataProfile || technicalResult.data_profile).columns).map(asRecord));
+  addRowsSheet('Insights', asArray(result.insights).map(asRecord).map((item) => ({
+    Insight: item.title,
+    Descripcion: item.description,
+    Impacto: item.impact,
+    Accion: item.recommended_action,
+  })));
+  addRowsSheet('Recomendaciones', dashboardListRows(asArray(result.recommendations), 'Recomendacion'));
+  addRowsSheet('Disclaimer', [{ Disclaimer: DASHBOARD_CREATOR_DISCLAIMER }]);
+  addRowsSheet('Tecnico - DataProfile', asArray(asRecord(technicalResult.dataProfile || technicalResult.data_profile).columns).map(asRecord));
 
-  XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+  const buffer = await workbook.xlsx.writeBuffer();
+  downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), getDefaultFileName(input, 'xlsx'));
 }
 
 async function downloadAgentResultXlsx(input: AgentExportInput) {
@@ -1916,6 +2059,38 @@ function docxKpiCards(docx: DocxModule, kpis: Record<string, unknown>[]): import
   return new docx.Table({ width: { size: 100, type: docx.WidthType.PERCENTAGE }, rows });
 }
 
+function docxDashboardCover(docx: DocxModule, result: Record<string, unknown>, input: AgentExportInput): import('docx').Table {
+  return new docx.Table({
+    width: { size: 100, type: docx.WidthType.PERCENTAGE },
+    rows: [
+      new docx.TableRow({
+        children: [
+          new docx.TableCell({
+            shading: { fill: '0E109E' },
+            margins: { top: 360, bottom: 360, left: 360, right: 360 },
+            children: [
+              docxParagraph(docx, 'BUYER NODUS', { bold: true, color: 'FFFFFF' }),
+              docxParagraph(docx, asText(result.dashboard_title, input.title), { heading: true, color: 'FFFFFF' }),
+              docxParagraph(docx, `Dashboard ejecutivo de compras | ${formatDate()}`, { color: 'FFFFFF' }),
+            ],
+          }),
+        ],
+      }),
+      new docx.TableRow({
+        children: [
+          new docx.TableCell({
+            shading: { fill: 'F8FAFC' },
+            margins: { top: 180, bottom: 180, left: 240, right: 240 },
+            children: [
+              docxParagraph(docx, `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Tipo de datos: ${asText(result.data_type)}`, { color: '334155' }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
 function dashboardChartVisualRows(chart: Record<string, unknown>) {
   const rows = dashboardChartDataRows(chart).slice(0, 10);
   const max = Math.max(...rows.map((row) => Number(row.Valor) || 0), 1);
@@ -1925,7 +2100,7 @@ function dashboardChartVisualRows(chart: Record<string, unknown>) {
     return {
       Segmento: row.Etiqueta,
       Valor: row.Valor,
-      Visual: '█'.repeat(barLength),
+      Visual: String.fromCharCode(0x2588).repeat(barLength),
     };
   });
 }
@@ -2123,9 +2298,7 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     const charts = asArray(result.charts).map(asRecord);
     const tables = asArray(result.tables).map(asRecord);
     const children: DocxChild[] = [
-      docxParagraph(docx, asText(result.dashboard_title, input.title), { heading: true }),
-      docxParagraph(docx, `Buyer Nodus | Fecha de generacion: ${formatDate()}`),
-      docxParagraph(docx, `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Tipo de datos: ${asText(result.data_type)}`),
+      docxDashboardCover(docx, result, input),
       docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
       docxParagraph(docx, dashboardBusinessText(executiveSummary.information_found, asText(result.executive_summary))),
       docxParagraph(docx, dashboardBusinessText(executiveSummary.analysis_built, 'Reporte ejecutivo generado a partir de los archivos cargados.')),
@@ -2157,7 +2330,7 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     });
     asArray(result.recommendations).forEach((item) => children.push(docxParagraph(docx, `- ${asText(item)}`)));
 
-    children.push(docxParagraph(docx, 'Hallazgos con evidencia', { heading: true }));
+    children.push(docxParagraph(docx, 'Hallazgos ejecutivos', { heading: true }));
     const findingsTable = docxTableFromRows(docx, asArray(result.findings).map(asRecord).map((item) => ({
       Hallazgo: dashboardBusinessText(item.title),
       Descripcion: dashboardBusinessText(item.description),
@@ -2780,3 +2953,4 @@ export async function downloadAgentResult(input: AgentExportInput) {
   }
   await downloadAgentResultXlsx(input);
 }
+
