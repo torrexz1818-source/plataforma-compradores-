@@ -1,5 +1,4 @@
 import ReactECharts from 'echarts-for-react';
-import { Badge } from '@/components/ui/badge';
 import type { DashboardChart, DashboardResult } from '../dashboardCreatorApi';
 import { businessText, formatValue, getVisualConfig } from './dashboardUtils';
 
@@ -111,10 +110,6 @@ export function DashboardChartRenderer({ chart, result }: Props) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-950">{businessText(chart.title, 'Grafico ejecutivo')}</p>
           <p className="mt-1 text-xs leading-5 text-slate-600">{businessText(chart.description)}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="outline" className="border-slate-200 text-slate-600">{chart.type}</Badge>
-          {chart.confidence === 'low' ? <Badge variant="outline" className="border-[#F3313F]/30 bg-[#F3313F]/5 text-[#F3313F]">baja confianza</Badge> : null}
         </div>
       </div>
       <div className="mt-4 h-[330px]">

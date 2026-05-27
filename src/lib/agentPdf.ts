@@ -226,8 +226,45 @@ function dashboardBusinessFindings(result: Record<string, unknown>) {
   ));
 }
 
+function cleanPublicKpi(kpi: Record<string, unknown>) {
+  return {
+    title: kpi.title,
+    value: kpi.value,
+    unit: kpi.unit,
+    description: dashboardBusinessText(kpi.description),
+  };
+}
+
+function cleanPublicChart(chart: Record<string, unknown>) {
+  return {
+    chart_id: chart.chart_id,
+    title: chart.title,
+    type: chart.type,
+    description: dashboardBusinessText(chart.description),
+    x_axis: chart.x_axis,
+    y_axis: chart.y_axis,
+    data: chart.data,
+    colors: chart.colors,
+    legend: chart.legend,
+    insight: dashboardBusinessText(chart.insight),
+  };
+}
+
+function cleanPublicTable(table: Record<string, unknown>) {
+  return {
+    title: table.title,
+    description: dashboardBusinessText(table.description),
+    columns: table.columns,
+    rows: table.rows,
+  };
+}
+
 const dashboardPublicKeyBlocklist = new Set([
   'objective',
+  'metadata',
+  'confidence_level',
+  'confidence_reason',
+  'analysis_type',
   'analysis_mode',
   'data_profile',
   'dataProfile',
@@ -251,13 +288,16 @@ function buildPublicDashboardResult(result: Record<string, unknown>) {
   Object.entries(result).forEach(([key, value]) => {
     if (!dashboardPublicKeyBlocklist.has(key)) cleaned[key] = value;
   });
-  cleaned.kpis = dashboardBusinessKpis(result);
-  cleaned.charts = asArray(result.charts).map(asRecord).filter((chart) => chart.data && dashboardBusinessText(chart.title)).slice(0, 8);
+  cleaned.kpis = dashboardBusinessKpis(result).map(cleanPublicKpi);
+  cleaned.charts = asArray(result.charts).map(asRecord).filter((chart) => chart.data && dashboardBusinessText(chart.title)).slice(0, 8).map(cleanPublicChart);
   cleaned.tables = asArray(result.tables).map(asRecord).filter((table) => {
     const title = dashboardBusinessText(table.title);
     return title && !/documentos procesados|archivos procesados|calidad|data\s*profile|datos faltantes|analisis no calculables/i.test(title);
-  }).slice(0, 4);
-  cleaned.findings = dashboardBusinessFindings(result);
+  }).slice(0, 4).map(cleanPublicTable);
+  cleaned.findings = dashboardBusinessFindings(result).map((item) => ({
+    title: item.title,
+    description: dashboardBusinessText(item.description),
+  }));
   cleaned.recommendations = dashboardBusinessList(asArray(result.recommendations), 8);
   cleaned.insights = asArray(result.insights).map(asRecord).filter((item) => dashboardBusinessText(item.title) || dashboardBusinessText(item.description)).slice(0, 8);
   return cleaned;
@@ -622,12 +662,8 @@ function dashboardTableRows(table: Record<string, unknown>) {
 function dashboardChartDataRows(chart: Record<string, unknown>) {
   return asArray(chart.data).map(asRecord).map((point) => ({
     Grafico: chart.title,
-    Tipo: chart.type,
     Etiqueta: point.label,
     Valor: point.value,
-    Grupo: point.group ?? '',
-    Leyenda: `${asText(point.label)}: ${asText(point.value)}`,
-    Insight: chart.insight ?? '',
   }));
 }
 
@@ -943,7 +979,7 @@ function addDashboardResultPdf(input: PdfInput) {
   const result = buildPublicDashboardResult(asRecord(input.result));
   const ctx = createContext(input);
   ctx.primaryColor = '#0E109E';
-  const subtitle = `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Confianza: ${asText(result.confidence_level)}`;
+  const subtitle = `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)}`;
   const metadata = asRecord(result.metadata);
   const executiveSummary = asRecord(result.executiveSummary);
 
@@ -952,7 +988,6 @@ function addDashboardResultPdf(input: PdfInput) {
     dashboardBusinessText(executiveSummary.information_found, asText(result.executive_summary)),
     dashboardBusinessText(executiveSummary.analysis_built, 'Reporte ejecutivo generado a partir de los archivos cargados, con indicadores calculados segun la informacion disponible.'),
     `Tipo de datos: ${asText(result.data_type)}`,
-    `Confianza: ${asText(result.confidence_level)} - ${asText(result.confidence_reason)}`,
     `Reporte: ${asText(metadata.report_name, asText(result.dashboard_title))}`,
   ]);
 
@@ -961,9 +996,9 @@ function addDashboardResultPdf(input: PdfInput) {
     addDashboardKpiCards(ctx, kpis);
     addTable(
       ctx,
-      ['KPI', 'Valor', 'Unidad', 'Estado'],
-      kpis.map((kpi) => [dashboardBusinessText(kpi.title), kpi.value, kpi.unit, kpi.status ?? kpi.confidence]),
-      [50, 34, 28, ctx.maxWidth - 112],
+      ['Indicador', 'Valor', 'Interpretacion breve'],
+      kpis.map((kpi) => [dashboardBusinessText(kpi.title), kpi.value, dashboardBusinessText(kpi.description)]),
+      [46, 34, ctx.maxWidth - 80],
     );
   }
 
@@ -971,12 +1006,6 @@ function addDashboardResultPdf(input: PdfInput) {
   if (charts.length) {
     addSection(ctx, 'Graficos principales');
     charts.slice(0, 5).forEach((chart) => addDashboardChartVisual(ctx, chart));
-    addTable(
-      ctx,
-      ['Grafico', 'Tipo', 'Leyenda', 'Datos mostrados', 'Insight'],
-      chartRows(charts).map((row) => [row.chart, row.type, row.legend, row.data, row.insight]),
-      [33, 20, 42, 48, ctx.maxWidth - 143],
-    );
   }
 
   const tables = asArray(result.tables).map(asRecord);
@@ -1016,43 +1045,11 @@ function addDashboardResultPdf(input: PdfInput) {
     addSection(ctx, 'Hallazgos con evidencia');
     addTable(
       ctx,
-      ['Hallazgo', 'Descripcion', 'Evidencia', 'Confianza'],
-      findings.map((item) => [dashboardBusinessText(item.title), dashboardBusinessText(item.description), dashboardBusinessText(item.evidence), item.confidence]),
-      [42, 62, 48, ctx.maxWidth - 152],
+      ['Hallazgo', 'Descripcion'],
+      findings.map((item) => [dashboardBusinessText(item.title), dashboardBusinessText(item.description)]),
+      [54, ctx.maxWidth - 54],
     );
   }
-  addAdditionalResultSections(ctx, result, [
-    'dashboard_title',
-    'metadata',
-    'executiveSummary',
-    'audience',
-    'period',
-    'data_type',
-    'confidence_level',
-    'confidence_reason',
-    'executive_summary',
-    'kpis',
-    'charts',
-    'tables',
-    'insights',
-    'observations',
-    'recommendations',
-    'findings',
-    'missing_information',
-    'missingData',
-    'data_profile',
-    'dataProfile',
-    'dashboardPlan',
-    'data_understanding',
-    'extracted_data_quality',
-    'qualityWarnings',
-    'visualConfig',
-    'layout_suggestion',
-    'suggested_filters',
-    'document_summaries',
-    'source_files',
-    'disclaimer',
-  ]);
 
   addSection(ctx, 'Disclaimer');
   addText(ctx, DASHBOARD_CREATOR_DISCLAIMER, {
@@ -1628,7 +1625,6 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
     { Campo: 'Analisis construido', Valor: dashboardBusinessText(executiveSummary.analysis_built, 'Reporte ejecutivo generado a partir de los archivos cargados.') },
     { Campo: 'Audiencia', Valor: asText(result.audience) },
     { Campo: 'Periodo', Valor: asText(result.period) },
-    { Campo: 'Confianza', Valor: asText(result.confidence_level) },
     { Campo: 'Disclaimer', Valor: DASHBOARD_CREATOR_DISCLAIMER },
   ]);
 
@@ -1637,9 +1633,7 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
     KPI: kpi.title,
     Valor: kpi.value,
     Unidad: kpi.unit,
-    Estado: kpi.status,
     Descripcion: kpi.description,
-    Confianza: kpi.confidence,
   })));
 
   appendJsonSheet(XLSX, workbook, used, 'Graficos data', asArray(result.charts).map(asRecord).flatMap(dashboardChartDataRows));
@@ -1661,15 +1655,11 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
       Tipo: 'Hallazgo',
       Titulo: item.title,
       Descripcion: item.description,
-      Evidencia: dashboardBusinessText(item.evidence),
-      Confianza: item.confidence,
     })),
     ...asArray(result.recommendations).map((item) => ({
       Tipo: 'Recomendacion',
       Titulo: '',
       Descripcion: asText(item),
-      Evidencia: '',
-      Confianza: '',
     })),
   ]);
   appendJsonSheet(XLSX, workbook, used, 'Recomendaciones', dashboardListRows(asArray(result.recommendations), 'Recomendacion'));
@@ -2031,10 +2021,9 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     ];
 
     const kpiTable = docxTableFromRows(docx, dashboardBusinessKpis(result).map((kpi) => ({
-      KPI: kpi.title,
+      Indicador: kpi.title,
       Valor: kpi.value,
-      Descripcion: dashboardBusinessText(kpi.description),
-      Confianza: kpi.confidence,
+      Interpretacion: dashboardBusinessText(kpi.description),
     })));
     if (kpiTable) children.push(kpiTable);
 
@@ -2059,8 +2048,6 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     const findingsTable = docxTableFromRows(docx, asArray(result.findings).map(asRecord).map((item) => ({
       Hallazgo: dashboardBusinessText(item.title),
       Descripcion: dashboardBusinessText(item.description),
-      Evidencia: dashboardBusinessText(item.evidence),
-      Confianza: item.confidence,
     })));
     if (findingsTable) children.push(findingsTable);
 
@@ -2344,17 +2331,16 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
     slide = pptx.addSlide();
     addPptTitle(slide, 'KPIs principales');
     addPptRows(slide, kpis.map((kpi) => ({
-      KPI: kpi.title,
+      Indicador: kpi.title,
       Valor: kpi.value,
-      Descripcion: dashboardBusinessText(kpi.description),
-      Confianza: kpi.confidence,
+      Interpretacion: dashboardBusinessText(kpi.description),
     })), { maxRows: kpis.length });
     addPptFooter(slide, input);
   }
 
   asArray(result.charts).map(asRecord).forEach((chart) => {
     slide = pptx.addSlide();
-    addPptTitle(slide, asText(chart.title, 'Grafico'), `${asText(chart.type)} | ${asText(chart.confidence)} | ${asText(chart.description)}`);
+    addPptTitle(slide, asText(chart.title, 'Grafico'), asText(chart.description, ''));
     addPptRows(slide, dashboardChartDataRows(chart), { x: 0.6, y: 1.35, w: 6.2, h: 4.7, maxRows: 9 });
     slide.addText(asText(chart.insight), { x: 7.05, y: 1.45, w: 5.55, h: 1.4, fontSize: 13, color: '334155', fit: 'shrink' });
     addPptFooter(slide, input);
@@ -2381,8 +2367,7 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
     addPptTitle(slide, 'Hallazgos con evidencia');
     addPptRows(slide, findings.map((item) => ({
       Hallazgo: dashboardBusinessText(item.title),
-      Evidencia: dashboardBusinessText(item.evidence),
-      Confianza: item.confidence,
+      Descripcion: dashboardBusinessText(item.description),
     })), { maxRows: 8 });
     addPptFooter(slide, input);
   }

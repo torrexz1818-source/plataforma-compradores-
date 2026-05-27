@@ -19,7 +19,6 @@ export function DashboardFindings({ result }: { result: DashboardResult }) {
               {item.inferred ? <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700">inferencia</Badge> : null}
             </div>
             <p className="mt-2 text-sm leading-6 text-slate-600">{businessText(item.description)}</p>
-            {businessText(item.evidence) ? <p className="mt-2 text-xs font-medium text-slate-500">Evidencia: {businessText(item.evidence)}</p> : null}
           </article>
         ))}
       </div>

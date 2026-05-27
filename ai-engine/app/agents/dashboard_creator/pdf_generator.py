@@ -9,6 +9,9 @@ TECHNICAL_KEYS = {
     "dashboardPlan",
     "data_profile",
     "metadata",
+    "confidence_level",
+    "confidence_reason",
+    "analysis_type",
     "data_understanding",
     "visualConfig",
     "layout_suggestion",
@@ -42,17 +45,42 @@ def _executive_result(result: dict[str, Any]) -> dict[str, Any]:
         summary["analysis_built"] = "Reporte ejecutivo generado a partir de los archivos cargados, con indicadores calculados segun la informacion disponible."
         cleaned["executiveSummary"] = summary
     cleaned["kpis"] = [
-        {key: value for key, value in item.items() if key not in {"source", "calculation_logic"}}
+        {key: value for key, value in item.items() if key not in {"source", "calculation_logic", "confidence", "status"}}
         for item in result.get("kpis", [])
         if isinstance(item, dict) and item.get("title") not in {"Registros analizados", "Columnas detectadas"}
     ]
+    cleaned["charts"] = [
+        {
+            "chart_id": item.get("chart_id"),
+            "title": item.get("title"),
+            "type": item.get("type"),
+            "description": item.get("description"),
+            "x_axis": item.get("x_axis"),
+            "y_axis": item.get("y_axis"),
+            "data": item.get("data"),
+            "colors": item.get("colors"),
+            "legend": item.get("legend"),
+            "insight": item.get("insight"),
+        }
+        for item in result.get("charts", [])
+        if isinstance(item, dict) and item.get("data")
+    ][:8]
     cleaned["tables"] = [
-        item for item in result.get("tables", [])
+        {
+            "title": item.get("title"),
+            "description": item.get("description"),
+            "columns": item.get("columns"),
+            "rows": item.get("rows"),
+        }
+        for item in result.get("tables", [])
         if isinstance(item, dict)
         and not any(token in str(item.get("title", "")).lower() for token in ("documentos procesados", "archivos procesados", "calidad", "data profile", "datos faltantes"))
     ][:4]
-    cleaned["charts"] = [item for item in result.get("charts", []) if isinstance(item, dict) and item.get("data")][:8]
-    cleaned["findings"] = [item for item in result.get("findings", []) if isinstance(item, dict) and item.get("title") and item.get("description")][:8]
+    cleaned["findings"] = [
+        {"title": item.get("title"), "description": item.get("description")}
+        for item in result.get("findings", [])
+        if isinstance(item, dict) and item.get("title") and item.get("description")
+    ][:8]
     cleaned["recommendations"] = [item for item in result.get("recommendations", []) if item][:8]
     cleaned["disclaimer"] = DASHBOARD_CREATOR_DISCLAIMER
     return cleaned
