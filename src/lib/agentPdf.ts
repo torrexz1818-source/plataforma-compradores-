@@ -338,6 +338,62 @@ function addCard(ctx: PdfContext, title: string, body: string | string[], tone: 
   ctx.y += 5;
 }
 
+function addDashboardKpiCards(ctx: PdfContext, kpis: Record<string, unknown>[]) {
+  if (!kpis.length) return;
+  addSection(ctx, 'KPIs principales');
+  const gap = 4;
+  const cardWidth = (ctx.maxWidth - gap) / 2;
+  kpis.slice(0, 8).forEach((kpi, index) => {
+    if (index % 2 === 0) ensurePage(ctx, 34);
+    const x = ctx.marginX + (index % 2) * (cardWidth + gap);
+    const y = ctx.y;
+    const status = asText(kpi.status, 'neutral');
+    const accent = status === 'positive' ? '#B2EB4A' : status === 'critical' ? '#F3313F' : status === 'warning' ? '#F59E0B' : ctx.primaryColor;
+    ctx.doc.setFillColor('#FFFFFF');
+    ctx.doc.setDrawColor('#E2E8F0');
+    ctx.doc.roundedRect(x, y, cardWidth, 28, 2, 2, 'FD');
+    ctx.doc.setFillColor(accent);
+    ctx.doc.rect(x, y, 2.2, 28, 'F');
+    ctx.doc.setFont('helvetica', 'bold');
+    ctx.doc.setFontSize(7.5);
+    ctx.doc.setTextColor('#64748B');
+    ctx.doc.text(ctx.doc.splitTextToSize(asText(kpi.title), cardWidth - 10), x + 5, y + 6);
+    ctx.doc.setFontSize(15);
+    ctx.doc.setTextColor('#0F172A');
+    ctx.doc.text(ctx.doc.splitTextToSize(asText(kpi.value), cardWidth - 10), x + 5, y + 15);
+    ctx.doc.setFont('helvetica', 'normal');
+    ctx.doc.setFontSize(7);
+    ctx.doc.setTextColor('#64748B');
+    ctx.doc.text(ctx.doc.splitTextToSize(asText(kpi.description), cardWidth - 10), x + 5, y + 22);
+    if (index % 2 === 1 || index === Math.min(kpis.length, 8) - 1) ctx.y += 32;
+  });
+}
+
+function addDashboardChartVisual(ctx: PdfContext, chart: Record<string, unknown>) {
+  const points = asArray(chart.data).map(asRecord).filter((point) => point.label && Number.isFinite(Number(point.value))).slice(0, 8);
+  if (!points.length) return;
+  addText(ctx, asText(chart.title, 'Grafico'), { size: 9.5, bold: true, color: '#0f172a' });
+  const maxValue = Math.max(...points.map((point) => Number(point.value) || 0), 1);
+  points.forEach((point, index) => {
+    ensurePage(ctx, 9);
+    const value = Number(point.value) || 0;
+    const barWidth = Math.max(4, (value / maxValue) * (ctx.maxWidth - 58));
+    const y = ctx.y;
+    ctx.doc.setFont('helvetica', 'normal');
+    ctx.doc.setFontSize(7);
+    ctx.doc.setTextColor('#475569');
+    ctx.doc.text(ctx.doc.splitTextToSize(asText(point.label), 38), ctx.marginX, y + 4);
+    ctx.doc.setFillColor('#EEF2FF');
+    ctx.doc.roundedRect(ctx.marginX + 42, y, ctx.maxWidth - 58, 5, 1, 1, 'F');
+    ctx.doc.setFillColor(index % 4 === 0 ? '#0E109E' : index % 4 === 1 ? '#5A31D5' : index % 4 === 2 ? '#F3313F' : '#B2EB4A');
+    ctx.doc.roundedRect(ctx.marginX + 42, y, barWidth, 5, 1, 1, 'F');
+    ctx.doc.setTextColor('#0F172A');
+    ctx.doc.text(asText(value.toLocaleString('es-PE')), ctx.pageWidth - ctx.marginX, y + 4, { align: 'right' });
+    ctx.y += 8;
+  });
+  if (chart.insight) addText(ctx, asText(chart.insight), { size: 8, color: '#64748b', gap: 1 });
+}
+
 function addBulletList(ctx: PdfContext, title: string, items: unknown[], limit = 5) {
   const values = items.map((item) => asText(item, '')).filter(Boolean).slice(0, limit);
   if (!values.length) return;
@@ -731,29 +787,35 @@ function addProposalComparisonPdf(input: PdfInput) {
 function addDashboardResultPdf(input: PdfInput) {
   const result = asRecord(input.result);
   const ctx = createContext(input);
+  ctx.primaryColor = '#0E109E';
   const subtitle = `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Confianza: ${asText(result.confidence_level)}`;
+  const metadata = asRecord(result.metadata);
+  const executiveSummary = asRecord(result.executiveSummary);
 
   addHeader(ctx, input, subtitle);
   addCard(ctx, 'Resumen ejecutivo', [
-    asText(result.executive_summary),
+    asText(executiveSummary.information_found, asText(result.executive_summary)),
+    asText(executiveSummary.analysis_built, 'Dashboard construido desde el mismo DashboardResult mostrado en plataforma.'),
     `Tipo de datos: ${asText(result.data_type)}`,
     `Confianza: ${asText(result.confidence_level)} - ${asText(result.confidence_reason)}`,
+    `Reporte: ${asText(metadata.report_name, asText(result.dashboard_title))}`,
   ]);
 
   const kpis = asArray(result.kpis).map(asRecord);
   if (kpis.length) {
-    addSection(ctx, 'KPIs principales');
+    addDashboardKpiCards(ctx, kpis);
     addTable(
       ctx,
-      ['KPI', 'Valor', 'Descripcion', 'Fuente', 'Confianza'],
-      kpis.map((kpi) => [kpi.title, kpi.value, kpi.description, kpi.source, kpi.confidence]),
-      [36, 27, 58, 32, ctx.maxWidth - 153],
+      ['KPI', 'Valor', 'Unidad', 'Fuente', 'Estado'],
+      kpis.map((kpi) => [kpi.title, kpi.value, kpi.unit, kpi.source, kpi.status ?? kpi.confidence]),
+      [40, 30, 24, 32, ctx.maxWidth - 126],
     );
   }
 
   const charts = asArray(result.charts).map(asRecord);
   if (charts.length) {
-    addSection(ctx, 'Graficos y datos base');
+    addSection(ctx, 'Graficos principales');
+    charts.slice(0, 4).forEach((chart) => addDashboardChartVisual(ctx, chart));
     addTable(
       ctx,
       ['Grafico', 'Tipo', 'Leyenda', 'Datos mostrados', 'Insight'],
@@ -809,10 +871,31 @@ function addDashboardResultPdf(input: PdfInput) {
 
   addSection(ctx, 'Recomendaciones');
   addBulletList(ctx, 'Acciones sugeridas', asArray(result.recommendations), 8);
-  addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 8);
+  const findings = asArray(result.findings).map(asRecord);
+  if (findings.length) {
+    addSection(ctx, 'Hallazgos con evidencia');
+    addTable(
+      ctx,
+      ['Hallazgo', 'Descripcion', 'Evidencia', 'Confianza'],
+      findings.map((item) => [item.title, item.description, item.evidence ?? item.source_component, item.confidence]),
+      [42, 62, 48, ctx.maxWidth - 152],
+    );
+  }
+  const missingData = asArray(result.missingData).map(asRecord);
+  if (missingData.length) {
+    addSection(ctx, 'Datos faltantes');
+    addTable(
+      ctx,
+      ['Indicador', 'Motivo', 'Campos necesarios'],
+      missingData.map((item) => [item.indicator, item.reason, asArray(item.required_fields).join(', ')]),
+      [42, 74, ctx.maxWidth - 116],
+    );
+  } else {
+    addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 8);
+  }
 
   const dataProfile = asRecord(result.data_profile);
-  const qualityWarnings = asArray(dataProfile.data_quality_warnings);
+  const qualityWarnings = [...asArray(dataProfile.data_quality_warnings), ...asArray(result.qualityWarnings)];
   if (qualityWarnings.length || result.data_understanding || result.extracted_data_quality) {
     addSection(ctx, 'Calidad de datos');
     if (result.data_understanding) addText(ctx, asText(result.data_understanding), { size: 8.7, color: '#334155' });
@@ -1398,10 +1481,23 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
   const workbook = XLSX.utils.book_new();
   addMetadataSheet(XLSX, workbook, input, result);
   const used = new Set<string>(['Resumen']);
+  const executiveSummary = asRecord(result.executiveSummary);
+
+  appendJsonSheet(XLSX, workbook, used, 'Resumen Ejecutivo', [
+    { Campo: 'Titulo', Valor: asText(result.dashboard_title, input.title) },
+    { Campo: 'Reporte', Valor: asText(asRecord(result.metadata).report_name, asText(result.dashboard_title)) },
+    { Campo: 'Resumen', Valor: asText(executiveSummary.information_found, asText(result.executive_summary)) },
+    { Campo: 'Analisis construido', Valor: asText(executiveSummary.analysis_built) },
+    { Campo: 'Audiencia', Valor: asText(result.audience) },
+    { Campo: 'Periodo', Valor: asText(result.period) },
+    { Campo: 'Confianza', Valor: asText(result.confidence_level) },
+  ]);
 
   appendJsonSheet(XLSX, workbook, used, 'KPIs', asArray(result.kpis).map(asRecord).map((kpi) => ({
     KPI: kpi.title,
     Valor: kpi.value,
+    Unidad: kpi.unit,
+    Estado: kpi.status,
     Descripcion: kpi.description,
     Logica: kpi.calculation_logic,
     Fuente: kpi.source,
@@ -1409,6 +1505,8 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
   })));
 
   appendJsonSheet(XLSX, workbook, used, 'Graficos data', asArray(result.charts).map(asRecord).flatMap(dashboardChartDataRows));
+  appendJsonSheet(XLSX, workbook, used, 'Indicadores Calculados', asArray(result.kpis).map(asRecord));
+  appendJsonSheet(XLSX, workbook, used, 'Datos Procesados', asArray(result.charts).map(asRecord).flatMap(dashboardChartDataRows));
 
   asArray(result.tables).map(asRecord).forEach((table) => {
     appendJsonSheet(XLSX, workbook, used, asText(table.title, 'Tabla'), dashboardTableRows(table));
@@ -1425,9 +1523,32 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
     Tipo: item.type,
     Descripcion: item.description,
   })));
+  appendJsonSheet(XLSX, workbook, used, 'Hallazgos y Recomendaciones', [
+    ...asArray(result.findings).map(asRecord).map((item) => ({
+      Tipo: 'Hallazgo',
+      Titulo: item.title,
+      Descripcion: item.description,
+      Evidencia: item.evidence ?? item.source_component,
+      Confianza: item.confidence,
+    })),
+    ...asArray(result.recommendations).map((item) => ({
+      Tipo: 'Recomendacion',
+      Titulo: '',
+      Descripcion: asText(item),
+      Evidencia: '',
+      Confianza: '',
+    })),
+  ]);
   appendJsonSheet(XLSX, workbook, used, 'Recomendaciones', dashboardListRows(asArray(result.recommendations), 'Recomendacion'));
   appendJsonSheet(XLSX, workbook, used, 'Info faltante', dashboardListRows(asArray(result.missing_information), 'Informacion faltante'));
-  appendJsonSheet(XLSX, workbook, used, 'Calidad datos', dashboardListRows(asArray(asRecord(result.data_profile).data_quality_warnings), 'Advertencia'));
+  appendJsonSheet(XLSX, workbook, used, 'Missing data', asArray(result.missingData).map(asRecord));
+  appendJsonSheet(XLSX, workbook, used, 'Calidad datos', dashboardListRows([
+    ...asArray(asRecord(result.data_profile).data_quality_warnings),
+    ...asArray(result.qualityWarnings),
+  ], 'Advertencia'));
+  appendJsonSheet(XLSX, workbook, used, 'DataProfile columnas', asArray(asRecord(result.dataProfile || result.data_profile).columns).map(asRecord));
+  appendJsonSheet(XLSX, workbook, used, 'Analisis posibles', asArray(asRecord(result.dataProfile || result.data_profile).possibleAnalyses).map(asRecord));
+  appendJsonSheet(XLSX, workbook, used, 'Analisis no posibles', asArray(asRecord(result.dataProfile || result.data_profile).notPossibleAnalyses).map(asRecord));
   appendJsonSheet(XLSX, workbook, used, 'Archivos', asArray(result.source_files).map(asRecord));
 
   XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
@@ -1732,13 +1853,15 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     return;
   }
   if (isDashboardResult(result)) {
+    const executiveSummary = asRecord(result.executiveSummary);
     const children: DocxChild[] = [
       docxParagraph(docx, asText(result.dashboard_title, input.title), { heading: true }),
       docxParagraph(docx, `Fecha de generacion: ${formatDate()}`),
       docxParagraph(docx, `Agente usado: ${input.agentName || input.title}`),
       docxParagraph(docx, `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Tipo de datos: ${asText(result.data_type)}`),
       docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
-      docxParagraph(docx, asText(result.executive_summary)),
+      docxParagraph(docx, asText(executiveSummary.information_found, asText(result.executive_summary))),
+      executiveSummary.analysis_built ? docxParagraph(docx, asText(executiveSummary.analysis_built)) : docxParagraph(docx, ''),
       docxParagraph(docx, 'Nivel de confianza', { heading: true }),
       docxParagraph(docx, `${asText(result.confidence_level).toUpperCase()}: ${asText(result.confidence_reason)}`),
       docxParagraph(docx, 'KPIs principales', { heading: true }),
@@ -1777,8 +1900,25 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     });
     asArray(result.recommendations).forEach((item) => children.push(docxParagraph(docx, `- ${asText(item)}`)));
 
+    children.push(docxParagraph(docx, 'Hallazgos con evidencia', { heading: true }));
+    const findingsTable = docxTableFromRows(docx, asArray(result.findings).map(asRecord).map((item) => ({
+      Hallazgo: item.title,
+      Descripcion: item.description,
+      Evidencia: item.evidence ?? item.source_component,
+      Confianza: item.confidence,
+    })));
+    if (findingsTable) children.push(findingsTable);
+
     children.push(docxParagraph(docx, 'Informacion faltante y calidad de datos', { heading: true }));
-    [...asArray(result.missing_information), ...asArray(asRecord(result.data_profile).data_quality_warnings)]
+    [
+      ...asArray(result.missing_information),
+      ...asArray(result.missingData).map((item) => {
+        const record = asRecord(item);
+        return `${asText(record.indicator)}: ${asText(record.reason)} ${asArray(record.required_fields).join(', ')}`;
+      }),
+      ...asArray(asRecord(result.data_profile).data_quality_warnings),
+      ...asArray(result.qualityWarnings),
+    ]
       .forEach((item) => children.push(docxParagraph(docx, `- ${asText(item)}`)));
 
     if (result.disclaimer) {
@@ -2095,9 +2235,29 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
   slide.addText([...insightLines, '', ...recommendationLines].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.25, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
   addPptFooter(slide, input);
 
+  const findings = asArray(result.findings).map(asRecord);
+  if (findings.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Hallazgos con evidencia');
+    addPptRows(slide, findings.map((item) => ({
+      Hallazgo: item.title,
+      Evidencia: item.evidence ?? item.source_component,
+      Confianza: item.confidence,
+    })), { maxRows: 8 });
+    addPptFooter(slide, input);
+  }
+
   slide = pptx.addSlide();
   addPptTitle(slide, 'Informacion faltante y calidad de datos');
-  slide.addText([...asArray(result.missing_information), ...asArray(asRecord(result.data_profile).data_quality_warnings)].map((item) => `- ${asText(item)}`).join('\n') || 'Sin advertencias registradas.', {
+  slide.addText([
+    ...asArray(result.missing_information),
+    ...asArray(result.missingData).map((item) => {
+      const record = asRecord(item);
+      return `${asText(record.indicator)}: ${asText(record.reason)} ${asArray(record.required_fields).join(', ')}`;
+    }),
+    ...asArray(asRecord(result.data_profile).data_quality_warnings),
+    ...asArray(result.qualityWarnings),
+  ].map((item) => `- ${asText(item)}`).join('\n') || 'Sin advertencias registradas.', {
     x: 0.65,
     y: 1.35,
     w: 11.8,

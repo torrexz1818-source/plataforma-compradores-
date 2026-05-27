@@ -25,22 +25,6 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip as RechartsTooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-import {
   getAgentDetail,
   getAgents,
   getMyAgentExecutions,
@@ -73,7 +57,7 @@ import {
   type TermsFormField,
 } from '@/features/terms-of-reference/termsOfReferenceApi';
 import { useDashboardCreator } from '@/features/dashboard-creator/useDashboardCreator';
-import type { DashboardChart } from '@/features/dashboard-creator/dashboardCreatorApi';
+import { DashboardReportView } from '@/features/dashboard-creator/components/DashboardReportView';
 import { useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
 import { downloadAgentResult, type AgentExportFormat } from '@/lib/agentPdf';
 import MonetizationPanel from '@/components/MonetizationPanel';
@@ -115,7 +99,6 @@ const dashboardLoadingSteps = [
   'Preparando dashboard',
   'Finalizando',
 ];
-const dashboardChartColors = ['#09008B', '#2563EB', '#16A34A', '#F59E0B', '#DC2626', '#7C3AED', '#0F766E', '#DB2777'];
 const termsGenerationSteps = [
   'Leyendo informacion',
   'Analizando requerimiento',
@@ -921,11 +904,6 @@ const NexuIA = () => {
       Valor: textValue(value),
     }));
 
-  const dashboardTableRowsForExport = (table: { columns?: string[]; rows?: Array<Record<string, unknown>> }) => {
-    const columns = table.columns ?? [];
-    return (table.rows ?? []).map((row) => Object.fromEntries(columns.map((column) => [column, row[column] ?? ''])));
-  };
-
   const buildTermsVisibleExport = (result: NonNullable<typeof termsGenerateMutation.data>) => ({
     'Resumen ejecutivo': result.executive_summary,
     'Datos principales': [
@@ -994,44 +972,6 @@ const NexuIA = () => {
       'Emitir orden de compra o contrato según corresponda.',
     ], 'Paso'),
     'Documentos de apoyo leidos': result.supporting_documents_summary ?? [],
-    'Disclaimer': result.disclaimer,
-  });
-
-  const buildDashboardVisibleExport = (result: NonNullable<typeof dashboardCreatorMutation.data>) => ({
-    'Resumen ejecutivo': result.executive_summary,
-    'Información general': [
-      { Campo: 'Análisis', Valor: result.data_understanding.detected_analysis_type },
-      { Campo: 'Modo', Valor: result.analysis_mode },
-      { Campo: 'Confianza', Valor: result.confidence_level },
-      { Campo: 'Estructura', Valor: result.data_understanding.structure_level },
-      ...(result.confidence_reason ? [{ Campo: 'Motivo de confianza', Valor: result.confidence_reason }] : []),
-    ],
-    'KPIs principales': result.kpis,
-    'Notas sobre datos': listRows(result.data_understanding.notes),
-    'Archivos y documentos procesados': (result.document_summaries?.length ? result.document_summaries : result.source_files ?? []).map((file) => ({
-      Archivo: file.file_name,
-      Tipo: file.detected_type,
-      'Datos detectados': 'relevant_findings' in file ? file.relevant_findings.join(', ') : '',
-      Limitaciones: 'limitations' in file ? file.limitations.slice(0, 2).join('; ') : '',
-    })),
-    'Gráficos': result.charts.map((chart) => ({
-      Titulo: chart.title,
-      Descripcion: chart.description,
-      Tipo: chart.type,
-      Insight: chart.insight,
-      Datos: chart.data.slice(0, 12).map((point) => `${point.label}: ${point.value}`).join('; '),
-    })),
-    ...Object.fromEntries(result.tables.map((table) => [`Tabla - ${table.title}`, dashboardTableRowsForExport(table)])),
-    'Observaciones': result.observations,
-    'Insights': result.insights,
-    'Recomendaciones': listRows(result.recommendations),
-    'Perfil de datos': [
-      { Campo: 'Filas', Valor: result.data_profile.rows_detected },
-      { Campo: 'Columnas', Valor: result.data_profile.columns_detected },
-      { Campo: 'Archivos', Valor: result.data_profile.files_processed },
-    ],
-    'Advertencias de calidad': listRows(result.data_profile.data_quality_warnings),
-    'Filtros sugeridos e información faltante': listRows([...result.suggested_filters, ...result.missing_information]),
     'Disclaimer': result.disclaimer,
   });
 
@@ -1214,7 +1154,7 @@ const NexuIA = () => {
     if (!dashboardCreatorMutation.data) return;
     await handleExportResult({
       title: dashboardCreatorMutation.data.dashboard_title || 'Dashboard generado',
-      result: buildDashboardVisibleExport(dashboardCreatorMutation.data) as unknown as Record<string, unknown>,
+      result: dashboardCreatorMutation.data as unknown as Record<string, unknown>,
       fileName: 'dashboard-nodus-ia',
       operationName: 'Descarga dashboard',
       captureElementId: 'dashboard-creator-export-view',
@@ -1748,173 +1688,6 @@ const NexuIA = () => {
       ))}
     </div>
   );
-
-  const renderSimpleChart = (chart: DashboardChart) => {
-    const chartData = chart.data
-      .slice(0, 12)
-      .map((item, index) => ({
-        name: item.label,
-        value: Number(item.value) || 0,
-        group: item.group,
-        color: chart.legend?.find((legend) => legend.label === item.label)?.color || dashboardChartColors[index % dashboardChartColors.length],
-      }))
-      .filter((item) => item.name && Number.isFinite(item.value));
-    const maxValue = Math.max(...chartData.map((item) => item.value), 1);
-    const totalValue = chartData.reduce((sum, item) => sum + item.value, 0);
-    const isCircular = chart.type === 'pie' || chart.type === 'donut';
-    const isLine = chart.type === 'line';
-    const isArea = chart.type === 'area';
-    const isBar = ['bar', 'horizontal_bar', 'stacked_bar'].includes(chart.type);
-    const renderChartBody = () => {
-      if (!chartData.length || chart.type === 'table' || chart.type === 'matrix' || chart.type === 'alert') {
-        return (
-          <div className="rounded-xl border border-dashed border-primary/20 bg-primary/5 p-4 text-sm text-muted-foreground">
-            No hay puntos numericos suficientes para graficar con precision. Revisa la tabla o el insight asociado.
-          </div>
-        );
-      }
-
-      if (isCircular) {
-        return (
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={chart.type === 'donut' ? 58 : 0}
-                  outerRadius={96}
-                  paddingAngle={chart.type === 'donut' ? 2 : 0}
-                >
-                  {chartData.map((entry, index) => (
-                    <Cell key={`${entry.name}-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip formatter={(value) => Number(value).toLocaleString('es-PE')} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        );
-      }
-
-      if (isLine || isArea) {
-        const Chart = isArea ? AreaChart : LineChart;
-        return (
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <Chart data={chartData} margin={{ top: 8, right: 16, bottom: 16, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-18} textAnchor="end" height={52} />
-                <YAxis tick={{ fontSize: 11 }} width={56} />
-                <RechartsTooltip formatter={(value) => Number(value).toLocaleString('es-PE')} />
-                {isArea ? (
-                  <Area type="monotone" dataKey="value" stroke="#09008B" fill="#09008B" fillOpacity={0.18} strokeWidth={2.5} />
-                ) : (
-                  <Line type="monotone" dataKey="value" stroke="#09008B" strokeWidth={2.5} dot={{ r: 3 }} />
-                )}
-              </Chart>
-            </ResponsiveContainer>
-          </div>
-        );
-      }
-
-      if (isBar) {
-        return (
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                layout={chart.type === 'horizontal_bar' ? 'vertical' : 'horizontal'}
-                margin={{ top: 8, right: 16, bottom: chart.type === 'horizontal_bar' ? 8 : 34, left: chart.type === 'horizontal_bar' ? 60 : 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                {chart.type === 'horizontal_bar' ? (
-                  <>
-                    <XAxis type="number" tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                  </>
-                ) : (
-                  <>
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-18} textAnchor="end" height={52} />
-                    <YAxis tick={{ fontSize: 11 }} width={56} />
-                  </>
-                )}
-                <RechartsTooltip formatter={(value) => Number(value).toLocaleString('es-PE')} />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`${entry.name}-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        );
-      }
-
-      return (
-        <div className="space-y-3">
-          {chartData.slice(0, 10).map((item) => {
-            const width = `${Math.max(5, (item.value / maxValue) * 100)}%`;
-            return (
-              <div key={`${chart.chart_id}-${item.name}`} className="space-y-1">
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="truncate text-foreground/80">{item.name}</span>
-                  <span className="shrink-0 text-muted-foreground">{item.value.toLocaleString('es-PE')}</span>
-                </div>
-                <div className="h-2.5 rounded-full bg-primary/10">
-                  <div className="h-2.5 rounded-full bg-primary" style={{ width }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      );
-    };
-    const renderChartLegend = () => {
-      if (!chartData.length) return null;
-      return (
-        <div className="mt-4 rounded-xl border border-primary/10 bg-primary/5 p-3">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">Leyenda</p>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {chartData.map((item) => {
-              const percentage = totalValue ? ` · ${((item.value / totalValue) * 100).toFixed(1)}%` : '';
-              return (
-                <div key={`${chart.chart_id}-legend-${item.name}`} className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: item.color }} />
-                  <span className="truncate text-foreground/80">{item.name}</span>
-                  <span className="shrink-0">{item.value.toLocaleString('es-PE')}{percentage}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    };
-
-    return (
-      <div className="rounded-2xl border border-primary/15 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">{chart.title}</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground/70">{chart.description}</p>
-          </div>
-          <div className="flex flex-wrap justify-end gap-2">
-            <Badge variant="outline" className="border-primary/15 text-muted-foreground">{chart.type}</Badge>
-            {chart.data_source === 'suggested' ? (
-              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-700">Gráfico sugerido con información parcial</Badge>
-            ) : null}
-            {chart.confidence === 'low' ? (
-              <Badge variant="outline" className="border-destructive/30 bg-destructive/5 text-destructive">Confianza baja</Badge>
-            ) : null}
-          </div>
-        </div>
-        <div className="mt-4">{renderChartBody()}</div>
-        {renderChartLegend()}
-        <p className="mt-3 text-xs leading-5 text-muted-foreground/70">{chart.insight}</p>
-      </div>
-    );
-  };
 
   return (
     <div className="responsive-agent-page min-w-0 space-y-6 pb-8">
@@ -2854,170 +2627,7 @@ const NexuIA = () => {
                   {isTermsReference && termsResult ? renderAgentFeedbackPanel() : null}
 
                   {isDashboardCreator && dashboardResult ? (
-                    <div id="dashboard-creator-export-view" className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{dashboardResult.dashboard_title}</p>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">{dashboardResult.executive_summary}</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <Badge variant="outline" className="border-primary/15 bg-white text-primary">
-                              Análisis: {dashboardResult.data_understanding.detected_analysis_type}
-                            </Badge>
-                            <Badge variant="outline" className="border-primary/15 bg-white text-primary">
-                              Modo: {dashboardResult.analysis_mode}
-                            </Badge>
-                            <Badge
-                              variant="outline"
-                              className={
-                                dashboardResult.confidence_level === 'low'
-                                  ? 'border-destructive/30 bg-destructive/5 text-destructive'
-                                  : 'border-primary/15 bg-white text-primary'
-                              }
-                            >
-                              Confianza: {dashboardResult.confidence_level}
-                            </Badge>
-                            <Badge variant="outline" className="border-primary/15 bg-white text-primary">
-                              Estructura: {dashboardResult.data_understanding.structure_level}
-                            </Badge>
-                          </div>
-                          {dashboardResult.confidence_reason ? (
-                            <p className="mt-3 max-w-3xl text-xs leading-5 text-muted-foreground">
-                              {dashboardResult.confidence_reason}
-                            </p>
-                          ) : null}
-                        </div>
-                        <div data-export-hidden="true">{renderExportControls(handleDownloadDashboardPdf)}</div>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        {dashboardResult.kpis.map((kpi) => (
-                          <div key={kpi.title} className="rounded-2xl border border-primary/15 bg-white p-4">
-                            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">{kpi.title}</p>
-                            <p className="mt-2 text-2xl font-semibold text-foreground">{kpi.value}</p>
-                            <p className="mt-2 text-xs leading-5 text-muted-foreground/70">{kpi.description}</p>
-                            <div className="mt-3 flex flex-wrap gap-2">
-                              <Badge variant="outline" className="border-primary/10 text-[10px] text-muted-foreground">{kpi.source}</Badge>
-                              {kpi.confidence === 'low' ? (
-                                <Badge variant="outline" className="border-destructive/30 bg-destructive/5 text-[10px] text-destructive">Confianza baja</Badge>
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {dashboardResult.data_understanding.notes.length ? (
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Entendimiento de datos</p>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            Fuentes: {dashboardResult.data_understanding.source_types.join(', ') || 'No especificado'}.
-                          </p>
-                          <div className="mt-2">{renderValueList(dashboardResult.data_understanding.notes)}</div>
-                        </div>
-                      ) : null}
-
-                      {(dashboardResult.source_files?.length || dashboardResult.document_summaries?.length) ? (
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Archivos analizados</p>
-                          <div className="mt-3 grid gap-2 lg:grid-cols-2">
-                            {(dashboardResult.document_summaries?.length ? dashboardResult.document_summaries : dashboardResult.source_files).map((file) => (
-                              <div key={`${file.file_name}-${file.detected_type}`} className="rounded-xl bg-primary/5 p-3">
-                                <p className="text-sm font-medium text-foreground">{file.file_name}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">Tipo detectado: {file.detected_type}</p>
-                                {'relevant_findings' in file && file.relevant_findings.length ? (
-                                  <p className="mt-1 text-xs text-muted-foreground/80">Datos detectados: {file.relevant_findings.join(', ')}</p>
-                                ) : null}
-                                {'limitations' in file && file.limitations.length ? (
-                                  <p className="mt-1 text-xs text-muted-foreground/70">Limitaciones: {file.limitations.slice(0, 2).join('; ')}</p>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      {dashboardResult.charts.length ? (
-                        <div className="grid gap-4 lg:grid-cols-2">
-                          {dashboardResult.charts.map((chart) => renderSimpleChart(chart))}
-                        </div>
-                      ) : null}
-
-                      {dashboardResult.tables.length ? (
-                        <div className="space-y-4">
-                          {dashboardResult.tables.map((table) => (
-                            <div key={table.title} className="rounded-2xl border border-primary/15 bg-white p-4">
-                              <p className="text-sm font-medium text-foreground">{table.title}</p>
-                              <p className="mt-1 text-xs leading-5 text-muted-foreground/70">{table.description}</p>
-                              <div className="mt-3 overflow-x-auto">
-                                <table className="w-full min-w-[520px] text-left text-sm">
-                                  <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
-                                    <tr>{table.columns.map((column) => <th key={column} className="px-3 py-2 font-medium">{column}</th>)}</tr>
-                                  </thead>
-                                  <tbody>
-                                    {table.rows.slice(0, 10).map((row, index) => (
-                                      <tr key={index} className="border-t border-primary/10">
-                                        {table.columns.map((column) => <td key={column} className="px-3 py-2 text-muted-foreground">{String(row[column] ?? '')}</td>)}
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-
-                      {dashboardResult.observations.length ? (
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Observaciones</p>
-                          <div className="mt-3 grid gap-2 lg:grid-cols-2">
-                            {dashboardResult.observations.map((observation) => (
-                              <div key={`${observation.type}-${observation.title}`} className="rounded-xl bg-primary/5 p-3">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="text-sm font-medium text-foreground">{observation.title}</p>
-                                  <Badge variant="outline" className="border-primary/15 text-[10px] text-muted-foreground">{observation.type}</Badge>
-                                </div>
-                                <p className="mt-1 text-sm text-muted-foreground">{observation.description}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : null}
-
-                      <div className="grid gap-4 lg:grid-cols-2">
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Insights detectados</p>
-                          <div className="mt-3 space-y-2">
-                            {dashboardResult.insights.map((insight) => (
-                              <div key={insight.title} className="rounded-xl bg-primary/5 p-3">
-                                <p className="text-sm font-medium text-foreground">{insight.title}</p>
-                                <p className="mt-1 text-sm text-muted-foreground">{insight.description}</p>
-                                <p className="mt-1 text-xs text-muted-foreground/70">Acción: {insight.recommended_action}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Recomendaciones</p>
-                          <div className="mt-2">{renderValueList(dashboardResult.recommendations)}</div>
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4 lg:grid-cols-2">
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Calidad de datos</p>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            {dashboardResult.data_profile.rows_detected} filas, {dashboardResult.data_profile.columns_detected} columnas, {dashboardResult.data_profile.files_processed} archivo(s).
-                          </p>
-                          <div className="mt-2">{renderValueList(dashboardResult.data_profile.data_quality_warnings)}</div>
-                        </div>
-                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
-                          <p className="text-sm font-medium text-foreground">Filtros sugeridos e información faltante</p>
-                          <div className="mt-2">{renderValueList([...dashboardResult.suggested_filters, ...dashboardResult.missing_information])}</div>
-                        </div>
-                      </div>
-
-                      <p className="text-xs leading-5 text-muted-foreground/70">{dashboardResult.disclaimer}</p>
-                    </div>
+                    <DashboardReportView result={dashboardResult} actions={renderExportControls(handleDownloadDashboardPdf)} />
                   ) : null}
 
                   {isDashboardCreator && dashboardResult ? renderAgentFeedbackPanel() : null}

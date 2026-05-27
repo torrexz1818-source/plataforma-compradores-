@@ -9,8 +9,8 @@ from fastapi import HTTPException, UploadFile
 from app.agents.dashboard_creator.dashboard_builder import build_dashboard_result
 from app.agents.dashboard_creator.data_profiler import profile_files
 from app.agents.dashboard_creator.insight_generator import build_basic_insights
-from app.agents.dashboard_creator.prompts import SYSTEM_PROMPT, build_insight_prompt
-from app.agents.dashboard_creator.quality_validator import validate_dashboard_request
+from app.agents.dashboard_creator.prompts import SYSTEM_PROMPT, build_insight_prompt, build_planner_prompt
+from app.agents.dashboard_creator.quality_validator import validate_dashboard_request, validate_dashboard_result_payload
 from app.agents.dashboard_creator.schemas import DashboardResult
 from app.ai.llm_client import analyze_with_openai
 from app.config import get_settings
@@ -189,6 +189,173 @@ def _normalize_insights(items: list[Any]) -> list[dict[str, Any]]:
     return normalized
 
 
+def _normalize_dashboard_plan(item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    allowed_confidence = {"low", "medium", "high"}
+    report_info = item.get("reportInfo") if isinstance(item.get("reportInfo"), dict) else {}
+    narrative_plan = item.get("narrativePlan") if isinstance(item.get("narrativePlan"), dict) else {}
+    selected = _as_list(item.get("selectedIndicators") or item.get("applicable_indicators"))
+    skipped = _as_list(item.get("skippedIndicators") or item.get("not_applicable_indicators"))
+    chart_plan = _as_list(item.get("chartPlan") or item.get("suggested_charts"))
+    table_plan = _as_list(item.get("tablePlan") or item.get("suggested_tables"))
+    return {
+        "title": item.get("title") or report_info.get("dashboardTitle"),
+        "report_name": item.get("report_name") or report_info.get("reportName"),
+        "objective": item.get("objective") or report_info.get("objective"),
+        "reportInfo": report_info,
+        "selectedIndicators": selected[:16],
+        "skippedIndicators": skipped[:16],
+        "chartPlan": chart_plan[:10],
+        "tablePlan": table_plan[:10],
+        "narrativePlan": narrative_plan,
+        "applicable_indicators": selected[:16],
+        "not_applicable_indicators": skipped[:16],
+        "suggested_charts": chart_plan[:10],
+        "suggested_tables": table_plan[:10],
+        "preliminary_summary": item.get("preliminary_summary") or narrative_plan.get("preliminarySummary"),
+        "allowed_findings": _as_list(item.get("allowed_findings") or narrative_plan.get("allowedFindings"))[:12],
+        "allowed_recommendations": [str(value) for value in _as_list(item.get("allowed_recommendations") or narrative_plan.get("allowedRecommendations"))[:12]],
+        "limitations": [str(value) for value in _as_list(item.get("limitations") or narrative_plan.get("limitations") or narrative_plan.get("missingData"))[:12]],
+        "confidence_level": item.get("confidence_level") if item.get("confidence_level") in allowed_confidence else "medium",
+    }
+
+
+def _plan_supported_by_profile(plan_item: dict[str, Any], possible_codes: set[str], candidates: dict[str, Any]) -> tuple[bool, list[str]]:
+    fields = _as_list(plan_item.get("fieldsUsed") or plan_item.get("requiredFields") or plan_item.get("required_fields") or plan_item.get("missingFields"))
+    normalized_fields = [str(field) for field in fields]
+    missing = [field for field in normalized_fields if field not in candidates and field.replace(" ", "_") not in candidates]
+    name = str(plan_item.get("name") or plan_item.get("metric") or plan_item.get("title") or "").lower()
+    protected = {
+        "kraljic": "kraljic",
+        "otif": "otif",
+        "nps": "nps",
+        "ahorro": "ahorro",
+        "ciclo": "ciclo_compra",
+        "pago": "condiciones_pago",
+    }
+    for keyword, code in protected.items():
+        if keyword in name and code not in possible_codes:
+            return False, missing or [code]
+    return not missing, missing
+
+
+def _validate_dashboard_plan(profiled: dict[str, Any], dashboard_plan: dict[str, Any] | None) -> tuple[dict[str, Any] | None, list[str]]:
+    if not dashboard_plan:
+        return None, []
+    profile = profiled.get("profile", {})
+    candidates = profile.get("candidateFields", {})
+    possible_codes = {str(item.get("analysis")) for item in profile.get("possibleAnalyses", []) if isinstance(item, dict)}
+    warnings: list[str] = []
+    selected = []
+    skipped = list(_as_list(dashboard_plan.get("skippedIndicators")))
+    for item in _as_list(dashboard_plan.get("selectedIndicators")):
+        if not isinstance(item, dict):
+            continue
+        supported, missing = _plan_supported_by_profile(item, possible_codes, candidates)
+        if supported:
+            selected.append(item)
+        else:
+            skipped.append({"name": item.get("name") or item.get("metric") or "Indicador sugerido por LLM", "reason": "El dataProfile no respalda este indicador.", "missingFields": missing})
+            warnings.append(f"Se descarto indicador sugerido por LLM sin respaldo suficiente: {item.get('name') or item.get('metric')}.")
+    dashboard_plan["selectedIndicators"] = selected
+    dashboard_plan["skippedIndicators"] = skipped[:24]
+    dashboard_plan["applicable_indicators"] = selected
+    dashboard_plan["not_applicable_indicators"] = dashboard_plan["skippedIndicators"]
+    return dashboard_plan, warnings
+
+
+def _normalize_findings(items: list[Any]) -> list[dict[str, Any]]:
+    normalized = []
+    for index, item in enumerate(items[:10], start=1):
+        if not isinstance(item, dict):
+            continue
+        basis = str(item.get("basis") or item.get("source_component") or "")
+        inferred = basis == "inference" or bool(item.get("inferred"))
+        normalized.append(
+            {
+                "title": str(item.get("title") or f"Hallazgo {index}")[:90],
+                "description": str(item.get("description") or item.get("basis") or "Hallazgo basado en el resultado disponible.")[:360],
+                "evidence": str(item.get("evidence") or item.get("basis") or "")[:220] or None,
+                "source_component": basis[:80] or None,
+                "confidence": item.get("confidence") if item.get("confidence") in {"low", "medium", "high"} else ("low" if inferred else "medium"),
+                "inferred": inferred,
+            }
+        )
+    return normalized
+
+
+def _missing_data_items(profiled: dict[str, Any], missing_information: list[str], dashboard_plan: dict[str, Any] | None) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for analysis in profiled.get("profile", {}).get("notPossibleAnalyses", [])[:12]:
+        if not isinstance(analysis, dict):
+            continue
+        items.append(
+            {
+                "indicator": str(analysis.get("label") or analysis.get("analysis") or "Indicador no calculable"),
+                "reason": str(analysis.get("reason") or "Faltan campos requeridos."),
+                "required_fields": [str(field) for field in _as_list(analysis.get("missing_fields"))],
+            }
+        )
+    if dashboard_plan:
+        for indicator in _as_list(dashboard_plan.get("not_applicable_indicators") or dashboard_plan.get("skippedIndicators"))[:12]:
+            if not isinstance(indicator, dict):
+                continue
+            items.append(
+                {
+                    "indicator": str(indicator.get("name") or indicator.get("metric") or "Indicador no aplicable"),
+                    "reason": str(indicator.get("reason") or "No hay datos suficientes."),
+                    "required_fields": [str(field) for field in _as_list(indicator.get("missing_fields") or indicator.get("missingFields"))],
+                }
+            )
+    for text in missing_information[:12]:
+        items.append({"indicator": "Informacion faltante", "reason": str(text), "required_fields": []})
+    return _merge_dashboard_items(items, [], key="indicator", limit=24)
+
+
+def _validate_dashboard_outputs(profiled: dict[str, Any], missing_information: list[str]) -> list[str]:
+    warnings: list[str] = []
+    valid_kpis = []
+    for kpi in profiled.get("kpis", []):
+        if not isinstance(kpi, dict):
+            continue
+        source = kpi.get("source")
+        if source not in {"python", "backend", "calculated", "llm_structured_from_documents"}:
+            kpi["source"] = "python"
+        if source == "llm_structured_from_documents":
+            kpi["confidence"] = kpi.get("confidence") if kpi.get("confidence") in {"low", "medium", "high"} else "low"
+        valid_kpis.append(kpi)
+    profiled["kpis"] = valid_kpis
+
+    valid_charts = []
+    for chart in profiled.get("charts", []):
+        if not isinstance(chart, dict):
+            continue
+        data = [point for point in _as_list(chart.get("data")) if isinstance(point, dict)]
+        if not data:
+            warnings.append(f"No se incluyo el grafico {chart.get('title') or chart.get('chart_id')} porque no tiene datos reales.")
+            missing_information.append(f"Faltan datos numericos para graficar {chart.get('title') or 'un grafico sugerido'}.")
+            continue
+        if not _as_list(chart.get("legend")):
+            chart["legend"] = [
+                {"label": str(point.get("label") or "Sin etiqueta"), "value": str(point.get("value") or 0), "color": None}
+                for point in data[:12]
+            ]
+        valid_charts.append(chart)
+    profiled["charts"] = valid_charts
+
+    valid_tables = []
+    for table in profiled.get("tables", []):
+        if not isinstance(table, dict):
+            continue
+        if not _as_list(table.get("rows")):
+            warnings.append(f"No se incluyo la tabla {table.get('title')} porque no tiene filas reales.")
+            continue
+        valid_tables.append(table)
+    profiled["tables"] = valid_tables
+    return warnings
+
+
 async def generate_dashboard(
     *,
     title: str,
@@ -226,6 +393,8 @@ async def generate_dashboard(
         ]
         observations = _merge_unique(observations, _build_quality_observations(profiled))
         missing_information = []
+        dashboard_plan: dict[str, Any] | None = None
+        findings: list[dict[str, Any]] = []
         llm_used = False
 
         if not profiled["profile"]["numeric_columns"]:
@@ -239,6 +408,27 @@ async def generate_dashboard(
 
         if should_use_llm:
             try:
+                planner_result = await analyze_with_openai(
+                    build_planner_prompt(
+                        title=title,
+                        objective=objective,
+                        audience=audience,
+                        period=period,
+                        data_type=data_type,
+                        additional_context=additional_context,
+                        profiled=profiled,
+                    ),
+                    SYSTEM_PROMPT,
+                )
+                dashboard_plan = _normalize_dashboard_plan(planner_result.get("dashboard_plan"))
+                dashboard_plan, plan_warnings = _validate_dashboard_plan(profiled, dashboard_plan)
+                if plan_warnings:
+                    profiled["profile"]["data_quality_warnings"] = _merge_unique(profiled["profile"].get("data_quality_warnings", []), plan_warnings)
+                    observations = _merge_unique(
+                        observations,
+                        [{"title": "Validacion de dashboardPlan", "description": warning, "type": "data_quality"} for warning in plan_warnings],
+                    )
+
                 llm_result = await analyze_with_openai(
                     build_insight_prompt(
                         title=title,
@@ -253,6 +443,11 @@ async def generate_dashboard(
                     SYSTEM_PROMPT,
                 )
                 executive_summary = str(llm_result.get("executive_summary") or executive_summary)
+                if not dashboard_plan:
+                    dashboard_plan = _normalize_dashboard_plan(llm_result.get("dashboard_plan"))
+                    dashboard_plan, plan_warnings = _validate_dashboard_plan(profiled, dashboard_plan)
+                    if plan_warnings:
+                        profiled["profile"]["data_quality_warnings"] = _merge_unique(profiled["profile"].get("data_quality_warnings", []), plan_warnings)
                 if llm_result.get("confidence_level") in {"low", "medium", "high"}:
                     profiled["confidence_level"] = llm_result["confidence_level"]
 
@@ -269,9 +464,11 @@ async def generate_dashboard(
                 llm_kpis = _normalize_llm_kpis(_as_list(llm_result.get("kpis")))
                 llm_charts = _normalize_llm_charts(_as_list(llm_result.get("charts")))
                 llm_tables = _normalize_llm_tables(_as_list(llm_result.get("tables")))
-                profiled["kpis"] = _merge_dashboard_items(profiled.get("kpis", []), llm_kpis, "title", 12)
-                profiled["charts"] = _merge_dashboard_items(profiled.get("charts", []), llm_charts, "chart_id", 8)
-                profiled["tables"] = _merge_dashboard_items(profiled.get("tables", []), llm_tables, "title", 6)
+                allow_document_structuring = has_document_sources or profiled.get("data_understanding", {}).get("structure_level") == "low"
+                if allow_document_structuring:
+                    profiled["kpis"] = _merge_dashboard_items(profiled.get("kpis", []), llm_kpis, "title", 24)
+                    profiled["charts"] = _merge_dashboard_items(profiled.get("charts", []), llm_charts, "chart_id", 16)
+                    profiled["tables"] = _merge_dashboard_items(profiled.get("tables", []), llm_tables, "title", 12)
 
                 if isinstance(llm_result.get("insights"), list):
                     insights = _merge_unique(insights, _normalize_insights(llm_result["insights"]))
@@ -280,6 +477,12 @@ async def generate_dashboard(
                     recommendations = _merge_unique(recommendations, [str(item) for item in llm_result["recommendations"]])
                 if isinstance(llm_result.get("missing_information"), list):
                     missing_information = _merge_unique(missing_information, [str(item) for item in llm_result["missing_information"]])
+                if isinstance(llm_result.get("findings"), list):
+                    findings = _merge_unique(findings, _normalize_findings(llm_result["findings"]))
+                if dashboard_plan:
+                    recommendations = _merge_unique(recommendations, [str(item) for item in dashboard_plan.get("allowed_recommendations", [])])
+                    missing_information = _merge_unique(missing_information, [str(item) for item in dashboard_plan.get("limitations", [])])
+                    findings = _merge_unique(findings, _normalize_findings(_as_list(dashboard_plan.get("allowed_findings"))))
 
                 chart_explanations = llm_result.get("chart_explanations")
                 if isinstance(chart_explanations, dict):
@@ -290,6 +493,17 @@ async def generate_dashboard(
                 llm_used = True
             except HTTPException:
                 recommendations.append("El LLM no estuvo disponible; se genero el dashboard con calculos y sintesis basica de Python.")
+
+        anti_invention_warnings = _validate_dashboard_outputs(profiled, missing_information)
+        if anti_invention_warnings:
+            profiled["profile"]["data_quality_warnings"] = _merge_unique(
+                profiled["profile"].get("data_quality_warnings", []),
+                anti_invention_warnings,
+            )
+            observations = _merge_unique(
+                observations,
+                [{"title": "Validacion anti-invencion", "description": warning, "type": "data_quality"} for warning in anti_invention_warnings],
+            )
 
         result = build_dashboard_result(
             title=title,
@@ -303,11 +517,15 @@ async def generate_dashboard(
             observations=observations,
             recommendations=recommendations,
             missing_information=missing_information,
+            dashboard_plan=dashboard_plan,
+            findings=findings,
+            missing_data_items=_missing_data_items(profiled, missing_information, dashboard_plan),
             llm_used=llm_used,
             model_provider="OpenAI" if llm_used else None,
             model_name=settings.openai_model if llm_used else None,
             latency_ms=int((time.perf_counter() - started_at) * 1000),
         )
+        result = validate_dashboard_result_payload(result)
         return DashboardResult.model_validate(result)
     except HTTPException:
         raise

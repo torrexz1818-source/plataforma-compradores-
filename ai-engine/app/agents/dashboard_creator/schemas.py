@@ -9,9 +9,10 @@ Confidence = Literal["low", "medium", "high"]
 AnalysisMode = Literal["structured_data", "document_based", "mixed"]
 AnalysisType = Literal["gastos", "proveedores", "compras", "contratos", "inventario", "cotizaciones", "cumplimiento", "financiero", "mixto"]
 StructureLevel = Literal["high", "medium", "low"]
-KpiSource = Literal["python", "llm_structured_from_documents"]
+KpiSource = Literal["python", "backend", "calculated", "llm_structured_from_documents"]
 ChartSource = Literal["python_calculated", "llm_structured", "suggested"]
 ObservationType = Literal["opportunity", "risk", "warning", "trend", "data_quality"]
+KpiStatus = Literal["positive", "warning", "critical", "neutral"]
 ChartType = Literal[
     "bar",
     "horizontal_bar",
@@ -36,6 +37,14 @@ class DataProfile(BaseModel):
     numeric_columns: list[str] = Field(default_factory=list)
     category_columns: list[str] = Field(default_factory=list)
     data_quality_warnings: list[str] = Field(default_factory=list)
+    files: list[dict[str, Any]] = Field(default_factory=list)
+    columns: list[dict[str, Any]] = Field(default_factory=list)
+    candidateFields: dict[str, list[str]] = Field(default_factory=dict)
+    rowSamples: list[dict[str, Any]] = Field(default_factory=list)
+    basicStats: dict[str, Any] = Field(default_factory=dict)
+    possibleAnalyses: list[dict[str, Any]] = Field(default_factory=list)
+    notPossibleAnalyses: list[dict[str, Any]] = Field(default_factory=list)
+    confidence: Confidence = "medium"
 
 
 class DataUnderstanding(BaseModel):
@@ -53,6 +62,9 @@ class DashboardKpi(BaseModel):
     calculation_logic: str
     source: KpiSource = "python"
     confidence: Confidence = "medium"
+    unit: str | None = None
+    status: KpiStatus = "neutral"
+    evidence_refs: list[str] = Field(default_factory=list)
 
 
 class ChartDataPoint(BaseModel):
@@ -79,6 +91,7 @@ class DashboardChart(BaseModel):
     data_source: ChartSource = "python_calculated"
     confidence: Confidence = "medium"
     insight: str
+    colors: list[str] = Field(default_factory=list)
 
 
 class DashboardTable(BaseModel):
@@ -87,6 +100,7 @@ class DashboardTable(BaseModel):
     source: KpiSource = "python"
     columns: list[str] = Field(default_factory=list)
     rows: list[dict[str, Any]] = Field(default_factory=list)
+    observations: list[str] = Field(default_factory=list)
 
 
 class DashboardInsight(BaseModel):
@@ -117,6 +131,68 @@ class LayoutSuggestion(BaseModel):
     priority: int
 
 
+class DashboardMetadata(BaseModel):
+    title: str | None = None
+    report_name: str | None = None
+    created_from: str = "Buyer Nodus"
+    agent_name: str = "Creador de Dashboard"
+    agent_key: str = "dashboard_creator"
+    user: str | None = None
+    generated_at: str | None = None
+    analyzed_files: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ExecutiveSummaryBlock(BaseModel):
+    information_found: str | None = None
+    analysis_built: str | None = None
+    main_indicators: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+
+class DashboardFinding(BaseModel):
+    title: str
+    description: str
+    evidence: str | None = None
+    source_component: str | None = None
+    confidence: Confidence = "medium"
+    inferred: bool = False
+
+
+class MissingDataItem(BaseModel):
+    indicator: str
+    reason: str
+    required_fields: list[str] = Field(default_factory=list)
+
+
+class VisualConfig(BaseModel):
+    background: str = "white"
+    primary: str = "#0E109E"
+    secondary: str = "#5A31D5"
+    danger: str = "#F3313F"
+    success: str = "#B2EB4A"
+
+
+class DashboardPlan(BaseModel):
+    title: str | None = None
+    report_name: str | None = None
+    objective: str | None = None
+    reportInfo: dict[str, Any] = Field(default_factory=dict)
+    selectedIndicators: list[dict[str, Any]] = Field(default_factory=list)
+    skippedIndicators: list[dict[str, Any]] = Field(default_factory=list)
+    chartPlan: list[dict[str, Any]] = Field(default_factory=list)
+    tablePlan: list[dict[str, Any]] = Field(default_factory=list)
+    narrativePlan: dict[str, Any] = Field(default_factory=dict)
+    applicable_indicators: list[dict[str, Any]] = Field(default_factory=list)
+    not_applicable_indicators: list[dict[str, Any]] = Field(default_factory=list)
+    suggested_charts: list[dict[str, Any]] = Field(default_factory=list)
+    suggested_tables: list[dict[str, Any]] = Field(default_factory=list)
+    preliminary_summary: str | None = None
+    allowed_findings: list[dict[str, Any]] = Field(default_factory=list)
+    allowed_recommendations: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    confidence_level: Confidence = "medium"
+
+
 class DashboardResult(BaseModel):
     dashboard_title: str
     objective: str
@@ -141,6 +217,14 @@ class DashboardResult(BaseModel):
     source_files: list[dict[str, Any]] = Field(default_factory=list)
     suggested_filters: list[str] = Field(default_factory=list)
     layout_suggestion: list[LayoutSuggestion] = Field(default_factory=list)
+    metadata: DashboardMetadata | None = None
+    executiveSummary: ExecutiveSummaryBlock | None = None
+    dataProfile: DataProfile | None = None
+    dashboardPlan: DashboardPlan | None = None
+    findings: list[DashboardFinding] = Field(default_factory=list)
+    missingData: list[MissingDataItem] = Field(default_factory=list)
+    qualityWarnings: list[str] = Field(default_factory=list)
+    visualConfig: VisualConfig = Field(default_factory=VisualConfig)
     pdf_available: bool = True
     model_provider: str | None = None
     model_name: str | None = None

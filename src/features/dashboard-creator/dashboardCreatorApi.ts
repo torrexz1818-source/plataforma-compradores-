@@ -3,8 +3,11 @@ export type DashboardKpi = {
   value: string;
   description: string;
   calculation_logic: string;
-  source: 'python' | 'llm_structured_from_documents';
+  source: 'python' | 'backend' | 'calculated' | 'llm_structured_from_documents';
   confidence: 'low' | 'medium' | 'high';
+  unit?: string | null;
+  status?: 'positive' | 'warning' | 'critical' | 'neutral';
+  evidence_refs?: string[];
 };
 
 export type DashboardChart = {
@@ -16,6 +19,7 @@ export type DashboardChart = {
   y_axis: string | null;
   data: Array<{ label: string; value: number; group?: string | null }>;
   legend?: Array<{ label: string; value?: string | null; color?: string | null }>;
+  colors?: string[];
   data_source: 'python_calculated' | 'llm_structured' | 'suggested';
   confidence: 'low' | 'medium' | 'high';
   insight: string;
@@ -28,6 +32,16 @@ export type DashboardObservation = {
 };
 
 export type DashboardResult = {
+  metadata?: {
+    title?: string | null;
+    report_name?: string | null;
+    created_from?: string;
+    agent_name?: string;
+    agent_key?: string;
+    user?: string | null;
+    generated_at?: string | null;
+    analyzed_files?: Array<Record<string, unknown>>;
+  } | null;
   dashboard_title: string;
   objective: string;
   audience: string | null;
@@ -37,6 +51,12 @@ export type DashboardResult = {
   confidence_level: 'low' | 'medium' | 'high';
   confidence_reason?: string | null;
   executive_summary: string;
+  executiveSummary?: {
+    information_found?: string | null;
+    analysis_built?: string | null;
+    main_indicators?: string[];
+    limitations?: string[];
+  } | null;
   llm_used: boolean;
   data_understanding: {
     files_processed: number;
@@ -54,14 +74,34 @@ export type DashboardResult = {
     numeric_columns: string[];
     category_columns: string[];
     data_quality_warnings: string[];
+    files?: Array<Record<string, unknown>>;
+    columns?: Array<Record<string, unknown>>;
+    candidateFields?: Record<string, string[]>;
+    rowSamples?: Array<Record<string, unknown>>;
+    basicStats?: Record<string, unknown>;
+    possibleAnalyses?: Array<Record<string, unknown>>;
+    notPossibleAnalyses?: Array<Record<string, unknown>>;
+    confidence?: 'low' | 'medium' | 'high';
   };
+  dataProfile?: DashboardResult['data_profile'];
+  dashboardPlan?: Record<string, unknown> | null;
   kpis: DashboardKpi[];
   charts: DashboardChart[];
-  tables: Array<{ title: string; description: string; source: 'python' | 'llm_structured_from_documents'; columns: string[]; rows: Array<Record<string, unknown>> }>;
+  tables: Array<{ title: string; description: string; source: 'python' | 'backend' | 'calculated' | 'llm_structured_from_documents'; columns: string[]; rows: Array<Record<string, unknown>>; observations?: string[] }>;
+  findings?: Array<{ title: string; description: string; evidence?: string | null; source_component?: string | null; confidence?: 'low' | 'medium' | 'high'; inferred?: boolean }>;
   insights: Array<{ title: string; description: string; impact: 'low' | 'medium' | 'high'; recommended_action: string }>;
   observations: DashboardObservation[];
   recommendations: string[];
   missing_information: string[];
+  missingData?: Array<{ indicator: string; reason: string; required_fields?: string[] }>;
+  qualityWarnings?: string[];
+  visualConfig?: {
+    background?: string;
+    primary?: string;
+    secondary?: string;
+    danger?: string;
+    success?: string;
+  };
   document_summaries: Array<{
     file_name: string;
     detected_type: string;

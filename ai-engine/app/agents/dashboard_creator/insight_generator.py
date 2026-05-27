@@ -31,6 +31,8 @@ def build_basic_insights(profiled: dict[str, Any]) -> tuple[str, list[dict[str, 
                     "description": "Se calcularon KPIs, rankings, tablas y graficos con Python a partir de las columnas detectadas.",
                     "impact": "medium",
                     "recommended_action": "Revisar los campos detectados y ajustar nombres de columnas si algun KPI no representa el negocio.",
+                    "basis": "data_profile",
+                    "inferred": False,
                 }
             )
         else:
@@ -40,6 +42,8 @@ def build_basic_insights(profiled: dict[str, Any]) -> tuple[str, list[dict[str, 
                     "description": "No se encontro una tabla estructurada suficiente; el resultado se apoya en texto/documentos extraidos.",
                     "impact": "medium",
                     "recommended_action": "Subir Excel o CSV con columnas de fecha, proveedor/categoria y monto.",
+                    "basis": "missing_data",
+                    "inferred": False,
                 }
             )
 

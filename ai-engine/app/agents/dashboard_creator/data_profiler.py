@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,30 @@ CATEGORY_HINTS = ("categoria", "category", "rubro", "familia", "tipo", "linea", 
 DATE_HINTS = ("fecha", "date", "periodo", "mes", "month", "year", "ano")
 QUANTITY_HINTS = ("cantidad", "qty", "quantity", "unidades", "items")
 STATUS_HINTS = ("estado", "status", "situacion")
+PRODUCT_HINTS = ("producto", "item", "sku", "material", "articulo")
+SERVICE_HINTS = ("servicio", "service", "prestacion")
+CURRENCY_HINTS = ("moneda", "currency", "divisa")
+PO_HINTS = ("orden", "oc", "purchase order", "po", "pedido")
+REQUEST_HINTS = ("solicitud", "requisicion", "requerimiento", "rq")
+BASE_PRICE_HINTS = ("precio base", "precio inicial", "precio lista", "base price")
+PREVIOUS_PRICE_HINTS = ("precio anterior", "precio previo", "last price")
+NEGOTIATED_PRICE_HINTS = ("precio negociado", "precio final", "negociado")
+BUDGET_HINTS = ("presupuesto", "budget")
+QUOTE_HINTS = ("cotizacion", "quote", "propuesta")
+SAVINGS_HINTS = ("ahorro", "saving", "savings")
+PROMISED_DATE_HINTS = ("fecha prometida", "fecha compromiso", "prometida", "promised")
+ACTUAL_DATE_HINTS = ("fecha real", "fecha entrega", "entregado", "actual")
+REQUESTED_QTY_HINTS = ("cantidad solicitada", "qty solicitada", "solicitado")
+DELIVERED_QTY_HINTS = ("cantidad entregada", "qty entregada", "entregado")
+PAYMENT_TERMS_HINTS = ("condicion de pago", "pago", "credito", "contado", "plazo")
+RATING_HINTS = ("calificacion", "rating", "score", "evaluacion")
+SURVEY_HINTS = ("encuesta", "satisfaccion", "survey")
+NPS_HINTS = ("nps",)
+FINANCIAL_IMPACT_HINTS = ("impacto financiero", "impacto", "financial impact")
+SUPPLY_RISK_HINTS = ("riesgo suministro", "riesgo de suministro", "riesgo", "risk")
+STOCK_HINTS = ("stock", "existencia", "existencias")
+INVENTORY_HINTS = ("inventario", "almacen", "inventory")
+LIQUIDATION_HINTS = ("liquidacion", "liquidation")
 NUMERIC_EXCLUDE_HINTS = ("telefono", "teléfono", "celular", "dni", "ruc", "documento", "edad")
 TEXT_KEYWORDS = (
     "proveedor",
@@ -39,14 +64,52 @@ ANALYSIS_KEYWORDS = {
     "cumplimiento": ("cumplimiento", "certificado", "homologacion", "auditoria"),
     "financiero": ("financiero", "presupuesto", "costo", "margen", "factura"),
 }
+BUYER_NODUS_COLORS = ["#0E109E", "#5A31D5", "#F3313F", "#B2EB4A", "#2F80ED", "#22A06B", "#F59E0B", "#64748B"]
+FIELD_HINTS = {
+    "proveedor": SUPPLIER_HINTS,
+    "categoria": CATEGORY_HINTS,
+    "producto": PRODUCT_HINTS,
+    "servicio": SERVICE_HINTS,
+    "monto": AMOUNT_HINTS,
+    "moneda": CURRENCY_HINTS,
+    "fecha": DATE_HINTS,
+    "orden_compra": PO_HINTS,
+    "solicitud": REQUEST_HINTS,
+    "requerimiento": REQUEST_HINTS,
+    "precio_base": BASE_PRICE_HINTS,
+    "precio_anterior": PREVIOUS_PRICE_HINTS,
+    "precio_negociado": NEGOTIATED_PRICE_HINTS,
+    "presupuesto": BUDGET_HINTS,
+    "cotizacion": QUOTE_HINTS,
+    "ahorro": SAVINGS_HINTS,
+    "fecha_prometida": PROMISED_DATE_HINTS,
+    "fecha_real": ACTUAL_DATE_HINTS,
+    "cantidad_solicitada": REQUESTED_QTY_HINTS,
+    "cantidad_entregada": DELIVERED_QTY_HINTS,
+    "estado_cumplimiento": STATUS_HINTS,
+    "condicion_pago": PAYMENT_TERMS_HINTS,
+    "credito": ("credito",),
+    "contado": ("contado",),
+    "plazo": ("plazo",),
+    "calificacion": RATING_HINTS,
+    "encuesta": SURVEY_HINTS,
+    "nps": NPS_HINTS,
+    "impacto_financiero": FINANCIAL_IMPACT_HINTS,
+    "riesgo_suministro": SUPPLY_RISK_HINTS,
+    "stock": STOCK_HINTS,
+    "inventario": INVENTORY_HINTS,
+    "liquidacion": LIQUIDATION_HINTS,
+}
 
 
 def _read_table(path: Path, file_type: str) -> pd.DataFrame | None:
     if file_type == "csv":
         try:
-            return pd.read_csv(path, sep=None, engine="python")
+            return pd.read_csv(path)
         except UnicodeDecodeError:
-            return pd.read_csv(path, sep=None, engine="python", encoding="latin-1")
+            return pd.read_csv(path, encoding="latin-1")
+        except pd.errors.ParserError:
+            return pd.read_csv(path, sep=None, engine="python")
     if file_type == "xlsx":
         workbook = pd.read_excel(path, sheet_name=None)
         frames = []
@@ -58,6 +121,15 @@ def _read_table(path: Path, file_type: str) -> pd.DataFrame | None:
             frames.append(frame)
         return pd.concat(frames, ignore_index=True) if frames else None
     return None
+
+
+def _excel_sheet_names(path: Path, file_type: str) -> list[str]:
+    if file_type != "xlsx":
+        return []
+    try:
+        return [str(sheet) for sheet in pd.ExcelFile(path).sheet_names]
+    except Exception:
+        return []
 
 
 def _header_score(row: pd.Series) -> int:
@@ -153,6 +225,12 @@ def _numeric_likeness(series: pd.Series) -> float:
     return float(values.str.match(pattern, case=False).mean())
 
 
+def _parse_dates_quiet(values: pd.Series) -> pd.Series:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        return pd.to_datetime(values, errors="coerce", dayfirst=True)
+
+
 def _detect_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
     numeric_columns: list[str] = []
     date_columns: list[str] = []
@@ -168,7 +246,7 @@ def _detect_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str
         numeric = _to_numeric(values)
         numeric_ratio = numeric.notna().mean()
         numeric_likeness = _numeric_likeness(values)
-        parsed_dates = pd.to_datetime(values, errors="coerce", dayfirst=True)
+        parsed_dates = _parse_dates_quiet(values)
         date_ratio = parsed_dates.notna().mean()
 
         has_numeric_hint = any(hint in lower for hint in AMOUNT_HINTS + QUANTITY_HINTS)
@@ -228,6 +306,392 @@ def _format_number(value: float | int | None) -> str:
     return f"{float(value):,.2f}"
 
 
+def _normalize_column_name(column: str) -> str:
+    normalized = str(column).strip().lower()
+    replacements = {
+        "á": "a",
+        "é": "e",
+        "í": "i",
+        "ó": "o",
+        "ú": "u",
+        "ñ": "n",
+    }
+    for source, target in replacements.items():
+        normalized = normalized.replace(source, target)
+    return "_".join(part for part in normalized.replace("/", " ").replace("-", " ").split() if part)
+
+
+def _column_type(series: pd.Series) -> str:
+    values = series.dropna()
+    if values.empty:
+        return "empty"
+    if _numeric_likeness(values) >= 0.65:
+        return "number"
+    if _parse_dates_quiet(values).notna().mean() >= 0.55:
+        return "date"
+    return "category" if values.nunique(dropna=True) <= max(35, len(values) * 0.72) else "text"
+
+
+def _column_profiles(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    profiles: list[dict[str, Any]] = []
+    if frame.empty:
+        return profiles
+    visible_columns = [column for column in frame.columns if not str(column).startswith("__")]
+    for column in visible_columns[:80]:
+        values = frame[column]
+        examples = [str(value)[:80] for value in values.dropna().head(4).tolist()]
+        profiles.append(
+            {
+                "original_name": str(column),
+                "normalized_name": _normalize_column_name(str(column)),
+                "detected_type": _column_type(values),
+                "null_percentage": round(float(values.isna().mean()), 4),
+                "examples": examples,
+            }
+        )
+    return profiles
+
+
+def _candidate_fields(columns: list[str]) -> dict[str, list[str]]:
+    candidates: dict[str, list[str]] = {}
+    for field, hints in FIELD_HINTS.items():
+        matches = [column for column in columns if any(hint in column.lower() for hint in hints)]
+        if matches:
+            candidates[field] = matches[:5]
+    return candidates
+
+
+def _candidate_col(candidates: dict[str, list[str]], *fields: str) -> str | None:
+    for field in fields:
+        values = candidates.get(field) or []
+        for column in values:
+            if column and not _is_generic_column(column):
+                return column
+    return None
+
+
+def _row_samples(frame: pd.DataFrame, max_rows: int = 5) -> list[dict[str, Any]]:
+    if frame.empty:
+        return []
+    visible_columns = [column for column in frame.columns if not str(column).startswith("__")][:12]
+    samples = frame[visible_columns].head(max_rows).where(pd.notna(frame[visible_columns].head(max_rows)), None)
+    return [{str(key): value for key, value in row.items()} for row in samples.to_dict(orient="records")]
+
+
+def _date_range(frame: pd.DataFrame, date_columns: list[str]) -> dict[str, str] | None:
+    for column in date_columns:
+        parsed = _parse_dates_quiet(frame[column]).dropna() if column in frame else pd.Series(dtype="datetime64[ns]")
+        if not parsed.empty:
+            return {"column": column, "min": str(parsed.min().date()), "max": str(parsed.max().date())}
+    return None
+
+
+def _basic_stats(frame: pd.DataFrame, numeric_columns: list[str], date_columns: list[str], category_columns: list[str]) -> dict[str, Any]:
+    stats: dict[str, Any] = {
+        "rows": int(len(frame)),
+        "columns": len([column for column in frame.columns if not str(column).startswith("__")]) if not frame.empty else 0,
+        "possible_totals": {},
+        "counts": {},
+        "date_range": _date_range(frame, date_columns) if not frame.empty else None,
+        "top_unique_values": {},
+        "relevant_nulls": {},
+    }
+    if frame.empty:
+        return stats
+    for column in numeric_columns[:8]:
+        if column in frame:
+            values = _to_numeric(frame[column]).dropna()
+            if not values.empty:
+                stats["possible_totals"][column] = round(float(values.sum()), 2)
+    for column in category_columns[:8]:
+        if column in frame:
+            values = frame[column].dropna().astype(str).str.strip()
+            stats["counts"][column] = int(values.nunique())
+            stats["top_unique_values"][column] = values.value_counts().head(5).to_dict()
+    nulls = frame.isna().sum().sort_values(ascending=False)
+    stats["relevant_nulls"] = {str(column): int(count) for column, count in nulls.head(10).items() if count > 0 and not str(column).startswith("__")}
+    return stats
+
+
+def _analysis_capabilities(candidates: dict[str, list[str]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    rules = [
+        ("compras_totales", ["monto"], "Compras totales"),
+        ("compras_por_categoria", ["monto", "categoria"], "Compras por categoria"),
+        ("compras_por_proveedor", ["monto", "proveedor"], "Compras por proveedor"),
+        ("productos_servicios", ["producto|servicio"], "Productos o servicios"),
+        ("ahorro", ["ahorro|precio_base", "precio_negociado|ahorro"], "Ahorro"),
+        ("cumplimiento_simple", ["estado_cumplimiento"], "Cumplimiento simple"),
+        ("otif", ["fecha_prometida", "fecha_real", "cantidad_solicitada", "cantidad_entregada"], "OTIF"),
+        ("nps", ["nps"], "NPS"),
+        ("satisfaccion", ["calificacion|encuesta"], "Satisfaccion"),
+        ("kraljic", ["impacto_financiero", "riesgo_suministro"], "Kraljic"),
+        ("ciclo_compra", ["fecha", "fecha_real"], "Ciclo de compra"),
+        ("condiciones_pago", ["condicion_pago"], "Condiciones de pago"),
+        ("riesgo_concentracion", ["monto", "proveedor"], "Riesgo/concentracion"),
+        ("stock_inventario_liquidaciones", ["stock|inventario|liquidacion"], "Stock/inventario/liquidaciones"),
+    ]
+    possible: list[dict[str, Any]] = []
+    not_possible: list[dict[str, Any]] = []
+    for code, required_fields, label in rules:
+        missing = []
+        for field in required_fields:
+            alternatives = field.split("|")
+            if not any(alternative in candidates for alternative in alternatives):
+                missing.append(" o ".join(alternatives))
+        if missing:
+            not_possible.append(
+                {
+                    "analysis": code,
+                    "label": label,
+                    "reason": "Faltan campos requeridos.",
+                    "missing_fields": missing,
+                    "recommendation": f"Agregar columna(s): {', '.join(missing)}.",
+                }
+            )
+        else:
+            possible.append({"analysis": code, "label": label, "required_fields": required_fields, "confidence": "high" if len(required_fields) <= 2 else "medium"})
+    return possible, not_possible
+
+
+def _with_chart_presentation(chart: dict[str, Any]) -> dict[str, Any]:
+    data = chart.get("data") if isinstance(chart.get("data"), list) else []
+    total = sum(float(point.get("value") or 0) for point in data if isinstance(point, dict))
+    legend = []
+    for index, point in enumerate(data[:12]):
+        if not isinstance(point, dict):
+            continue
+        value = float(point.get("value") or 0)
+        suffix = f" ({value / total:.1%})" if total else ""
+        legend.append({"label": str(point.get("label") or "Sin etiqueta"), "value": f"{_format_number(value)}{suffix}", "color": BUYER_NODUS_COLORS[index % len(BUYER_NODUS_COLORS)]})
+    chart["legend"] = chart.get("legend") or legend
+    chart["colors"] = chart.get("colors") or BUYER_NODUS_COLORS[: max(1, min(len(data), len(BUYER_NODUS_COLORS)))]
+    return chart
+
+
+def _append_kpi(kpis: list[dict[str, Any]], title: str, value: str, description: str, logic: str, *, confidence: str = "high", unit: str | None = None, status: str = "neutral") -> None:
+    kpis.append(
+        {
+            "title": title,
+            "value": value,
+            "description": description,
+            "calculation_logic": logic,
+            "source": "calculated",
+            "confidence": confidence,
+            "unit": unit,
+            "status": status,
+        }
+    )
+
+
+def _clean_text_series(series: pd.Series) -> pd.Series:
+    return series.dropna().astype(str).str.strip()
+
+
+def _truthy_status(series: pd.Series) -> pd.Series:
+    text = series.astype(str).str.lower()
+    return text.str.contains("cumpl|complet|entreg|aprob|ok|si|sí|yes|true", regex=True, na=False)
+
+
+def _is_nps_scale(values: pd.Series) -> bool:
+    numeric = _to_numeric(values).dropna()
+    if numeric.empty:
+        return False
+    return numeric.between(0, 10).all() and numeric.nunique() >= 3
+
+
+def _date_diff_days(start: pd.Series, end: pd.Series) -> pd.Series:
+    start_dates = _parse_dates_quiet(start)
+    end_dates = _parse_dates_quiet(end)
+    return (end_dates - start_dates).dt.days
+
+
+def _add_chart(charts: list[dict[str, Any]], chart_id: str, title: str, chart_type: str, description: str, data: list[dict[str, Any]], insight: str, *, x_axis: str | None = None, y_axis: str | None = None, confidence: str = "high") -> None:
+    if not data:
+        return
+    charts.append(
+        _with_chart_presentation(
+            {
+                "chart_id": chart_id,
+                "title": title,
+                "type": chart_type,
+                "description": description,
+                "x_axis": x_axis,
+                "y_axis": y_axis,
+                "data": data,
+                "data_source": "python_calculated",
+                "confidence": confidence,
+                "insight": insight,
+            }
+        )
+    )
+
+
+def _deterministic_procurement_outputs(
+    frame: pd.DataFrame,
+    candidates: dict[str, list[str]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    kpis: list[dict[str, Any]] = []
+    charts: list[dict[str, Any]] = []
+    tables: list[dict[str, Any]] = []
+    insights: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    if frame.empty:
+        return kpis, charts, tables, insights, warnings
+
+    amount_col = _candidate_col(candidates, "monto")
+    supplier_col = _candidate_col(candidates, "proveedor")
+    category_col = _candidate_col(candidates, "categoria")
+    product_col = _candidate_col(candidates, "producto", "servicio")
+    currency_col = _candidate_col(candidates, "moneda")
+    date_col = _candidate_col(candidates, "fecha")
+    base_price_col = _candidate_col(candidates, "precio_base", "precio_anterior", "presupuesto")
+    negotiated_price_col = _candidate_col(candidates, "precio_negociado")
+    savings_col = _candidate_col(candidates, "ahorro")
+    status_col = _candidate_col(candidates, "estado_cumplimiento")
+    promised_date_col = _candidate_col(candidates, "fecha_prometida")
+    actual_date_col = _candidate_col(candidates, "fecha_real")
+    requested_qty_col = _candidate_col(candidates, "cantidad_solicitada")
+    delivered_qty_col = _candidate_col(candidates, "cantidad_entregada")
+    nps_col = _candidate_col(candidates, "nps")
+    rating_col = _candidate_col(candidates, "calificacion", "encuesta")
+    payment_col = _candidate_col(candidates, "condicion_pago", "credito", "contado", "plazo")
+    stock_col = _candidate_col(candidates, "stock", "inventario", "liquidacion")
+    impact_col = _candidate_col(candidates, "impacto_financiero")
+    supply_risk_col = _candidate_col(candidates, "riesgo_suministro")
+    po_col = _candidate_col(candidates, "orden_compra")
+    request_col = _candidate_col(candidates, "solicitud", "requerimiento")
+
+    if currency_col and amount_col:
+        currency_rows = _top_group(frame, currency_col, amount_col, limit=8)
+        _add_chart(charts, "amount_by_currency", "Compras por moneda", "donut", "Monto total agrupado por moneda detectada.", currency_rows, "Permite separar exposicion por moneda.", x_axis=currency_col, y_axis=amount_col, confidence="medium")
+        tables.append({"title": "Compras por moneda", "description": "Montos agrupados por moneda.", "source": "python", "columns": ["Ranking", "Moneda", "Monto", "Participacion"], "rows": _summary_table(currency_rows, "Moneda", "Monto")})
+
+    if product_col:
+        if amount_col:
+            product_rows = _top_group(frame, product_col, amount_col, limit=10)
+            _add_chart(charts, "top_products_services", "Top productos/servicios por monto", "horizontal_bar", "Ranking de productos o servicios por monto.", product_rows, "Ayuda a detectar items de mayor impacto.", x_axis=product_col, y_axis=amount_col)
+            tables.append({"title": "Resumen por producto/servicio", "description": "Productos o servicios con mayor monto.", "source": "python", "columns": ["Ranking", "Producto/Servicio", "Monto", "Participacion"], "rows": _summary_table(product_rows, "Producto/Servicio", "Monto")})
+        else:
+            counts = _clean_text_series(frame[product_col]).value_counts().head(10)
+            product_rows = [{"label": str(label), "value": int(value)} for label, value in counts.items()]
+            _add_chart(charts, "top_products_services_count", "Top productos/servicios por registros", "bar", "Frecuencia de productos o servicios detectados.", product_rows, "Muestra recurrencia por item.", x_axis=product_col, y_axis="Registros", confidence="medium")
+
+    if base_price_col and negotiated_price_col:
+        base = _to_numeric(frame[base_price_col])
+        negotiated = _to_numeric(frame[negotiated_price_col])
+        savings = (base - negotiated).dropna()
+        valid = savings[base.notna() & negotiated.notna()]
+        if not valid.empty:
+            total_savings = float(valid.sum())
+            valid_base = base[base.notna() & negotiated.notna()]
+            savings_pct = total_savings / float(valid_base.sum()) if float(valid_base.sum()) else 0
+            _append_kpi(kpis, "Ahorro calculado", _format_number(total_savings), f"Diferencia entre {base_price_col} y {negotiated_price_col}.", f"SUM({base_price_col} - {negotiated_price_col})", unit="monto", status="positive" if total_savings > 0 else "neutral")
+            _append_kpi(kpis, "Porcentaje de ahorro", f"{savings_pct:.1%}", "Ahorro calculado sobre precio base total.", f"SUM(ahorro) / SUM({base_price_col})", unit="%", status="positive" if savings_pct > 0 else "neutral")
+    elif savings_col:
+        declared = _to_numeric(frame[savings_col]).dropna()
+        if not declared.empty:
+            _append_kpi(kpis, "Ahorro declarado", _format_number(float(declared.sum())), f"Suma de la columna {savings_col}; validar criterio de origen.", f"SUM({savings_col})", confidence="medium", unit="monto", status="positive")
+    else:
+        warnings.append("No se calculo ahorro porque faltan precio base/anterior/presupuesto y precio negociado, o una columna de ahorro declarada.")
+
+    if status_col:
+        status_values = frame[status_col].dropna()
+        total = int(len(status_values))
+        if total:
+            complied = int(_truthy_status(status_values).sum())
+            not_complied = total - complied
+            compliance = complied / total
+            _append_kpi(kpis, "Cumplimiento simple", f"{compliance:.1%}", f"Registros cumplidos segun {status_col}. No equivale a OTIF completo.", f"Cumplidos / total registros en {status_col}", unit="%", status="positive" if compliance >= 0.9 else "warning")
+            data = [{"label": "Cumplidos", "value": complied}, {"label": "No cumplidos", "value": not_complied}]
+            _add_chart(charts, "simple_compliance", "Cumplimiento simple", "donut", "Distribucion de cumplidos y no cumplidos.", data, "Mide cumplimiento declarado; no mide entrega a tiempo y completa.", x_axis=status_col, y_axis="Registros", confidence="medium")
+            tables.append({"title": "Resumen de cumplimiento simple", "description": "Conteo por estado de cumplimiento.", "source": "python", "columns": ["Estado", "Registros"], "rows": [{"Estado": item["label"], "Registros": item["value"]} for item in data]})
+
+    if promised_date_col and actual_date_col and requested_qty_col and delivered_qty_col:
+        promised = _parse_dates_quiet(frame[promised_date_col])
+        actual = _parse_dates_quiet(frame[actual_date_col])
+        requested = _to_numeric(frame[requested_qty_col])
+        delivered = _to_numeric(frame[delivered_qty_col])
+        valid = promised.notna() & actual.notna() & requested.notna() & delivered.notna()
+        if valid.any():
+            on_time = actual[valid] <= promised[valid]
+            in_full = delivered[valid] >= requested[valid]
+            otif = on_time & in_full
+            total = int(valid.sum())
+            _append_kpi(kpis, "On Time", f"{float(on_time.mean()):.1%}", "Entregas realizadas en o antes de la fecha prometida.", f"{actual_date_col} <= {promised_date_col}", unit="%", status="positive" if float(on_time.mean()) >= 0.9 else "warning")
+            _append_kpi(kpis, "In Full", f"{float(in_full.mean()):.1%}", "Entregas con cantidad entregada mayor o igual a solicitada.", f"{delivered_qty_col} >= {requested_qty_col}", unit="%", status="positive" if float(in_full.mean()) >= 0.9 else "warning")
+            _append_kpi(kpis, "OTIF", f"{float(otif.mean()):.1%}", "Entregas completas y a tiempo.", "On Time AND In Full", unit="%", status="positive" if float(otif.mean()) >= 0.9 else "warning")
+            _add_chart(charts, "otif_breakdown", "OTIF", "bar", "On Time, In Full y OTIF calculados con fechas y cantidades.", [{"label": "On Time", "value": round(float(on_time.mean()) * 100, 2)}, {"label": "In Full", "value": round(float(in_full.mean()) * 100, 2)}, {"label": "OTIF", "value": round(float(otif.mean()) * 100, 2)}], f"OTIF calculado sobre {total} registros validos.", y_axis="%")
+    elif promised_date_col or actual_date_col or requested_qty_col or delivered_qty_col:
+        warnings.append("No se calculo OTIF porque faltan fecha prometida, fecha real, cantidad solicitada o cantidad entregada.")
+
+    score_col = nps_col or rating_col
+    if score_col:
+        scores = _to_numeric(frame[score_col]).dropna()
+        if not scores.empty and nps_col and _is_nps_scale(scores):
+            promoters = int((scores >= 9).sum())
+            passives = int(((scores >= 7) & (scores <= 8)).sum())
+            detractors = int((scores <= 6).sum())
+            total = len(scores)
+            nps_value = ((promoters / total) - (detractors / total)) * 100 if total else 0
+            _append_kpi(kpis, "NPS", f"{nps_value:.1f}", "NPS calculado con escala 0-10.", "(% promotores) - (% detractores)", unit="puntos", status="positive" if nps_value >= 30 else "warning")
+            _add_chart(charts, "nps_distribution", "Distribucion NPS", "bar", "Promotores, neutros y detractores.", [{"label": "Promotores", "value": promoters}, {"label": "Neutros", "value": passives}, {"label": "Detractores", "value": detractors}], "Clasifica respuestas NPS segun escala 0-10.", x_axis=score_col, y_axis="Respuestas")
+        elif not scores.empty:
+            _append_kpi(kpis, "Satisfaccion promedio", f"{float(scores.mean()):.2f}", f"Promedio de calificacion detectada en {score_col}. No se etiqueta como NPS.", f"AVG({score_col})", confidence="medium", unit="score", status="neutral")
+            counts = scores.round(0).value_counts().sort_index()
+            _add_chart(charts, "rating_distribution", "Distribucion de calificaciones", "bar", "Frecuencia por calificacion detectada.", [{"label": str(label), "value": int(value)} for label, value in counts.items()], "Muestra dispersion de satisfaccion/calificaciones.", x_axis=score_col, y_axis="Respuestas", confidence="medium")
+
+    if payment_col:
+        payment_text = _clean_text_series(frame[payment_col])
+        if not payment_text.empty:
+            credit = int(payment_text.str.lower().str.contains("credito|crédito", regex=True, na=False).sum())
+            cash = int(payment_text.str.lower().str.contains("contado", regex=True, na=False).sum())
+            _append_kpi(kpis, "Condiciones de pago detectadas", str(int(payment_text.nunique())), f"Valores unicos en {payment_col}.", f"COUNT DISTINCT({payment_col})", confidence="medium")
+            data = [{"label": "Credito", "value": credit}, {"label": "Contado", "value": cash}]
+            if credit or cash:
+                _add_chart(charts, "payment_terms", "Credito vs contado", "donut", "Distribucion de condiciones de pago detectadas.", data, "Solo clasifica condiciones explicitas.", x_axis=payment_col, y_axis="Registros", confidence="medium")
+            if amount_col:
+                payment_rows = _top_group(frame, payment_col, amount_col, limit=10)
+                tables.append({"title": "Monto por condicion de pago", "description": "Montos agrupados por condicion/plazo de pago.", "source": "python", "columns": ["Ranking", "Condicion", "Monto", "Participacion"], "rows": _summary_table(payment_rows, "Condicion", "Monto")})
+
+    if impact_col and supply_risk_col:
+        kraljic_frame = frame[[impact_col, supply_risk_col]].copy()
+        kraljic_frame[impact_col] = kraljic_frame[impact_col].astype(str).str.strip()
+        kraljic_frame[supply_risk_col] = kraljic_frame[supply_risk_col].astype(str).str.strip()
+        kraljic_frame = kraljic_frame.dropna()
+        if not kraljic_frame.empty:
+            grouped = kraljic_frame.groupby([impact_col, supply_risk_col]).size().sort_values(ascending=False).head(12)
+            rows = [
+                {"Impacto financiero": str(index[0]), "Riesgo de suministro": str(index[1]), "Registros": int(value)}
+                for index, value in grouped.items()
+                if isinstance(index, tuple)
+            ]
+            tables.append({"title": "Matriz Kraljic base", "description": "Cruce de impacto financiero y riesgo de suministro detectados. No clasifica si los datos no traen ambas dimensiones.", "source": "python", "columns": ["Impacto financiero", "Riesgo de suministro", "Registros"], "rows": rows})
+            _add_chart(charts, "kraljic_base_matrix", "Matriz Kraljic base", "matrix", "Conteo por impacto financiero y riesgo de suministro.", [{"label": f"{row['Impacto financiero']} / {row['Riesgo de suministro']}", "value": row["Registros"]} for row in rows], "Permite ubicar segmentos si el dataset trae riesgo e impacto.", x_axis=impact_col, y_axis=supply_risk_col, confidence="medium")
+
+    if request_col and po_col:
+        days = _date_diff_days(frame[request_col], frame[po_col]).dropna()
+        if not days.empty:
+            _append_kpi(kpis, "Ciclo solicitud a OC", f"{float(days.mean()):.1f}", f"Dias promedio entre {request_col} y {po_col}.", f"AVG({po_col} - {request_col})", unit="dias", status="neutral")
+    elif (request_col or po_col) and not (request_col and po_col):
+        warnings.append("No se calcularon ciclos de compra porque falta una segunda fecha comparable.")
+
+    if stock_col:
+        stock = _to_numeric(frame[stock_col]).dropna()
+        if not stock.empty:
+            _append_kpi(kpis, "Stock total detectado", _format_number(float(stock.sum())), f"Suma de {stock_col}.", f"SUM({stock_col})", confidence="medium", unit="unidades")
+            if product_col:
+                stock_frame = frame[[product_col, stock_col]].copy()
+                stock_frame[stock_col] = _to_numeric(stock_frame[stock_col])
+                stock_frame = stock_frame.dropna(subset=[product_col, stock_col])
+                grouped = stock_frame.groupby(product_col)[stock_col].sum().sort_values(ascending=False).head(10)
+                stock_rows = [{"label": str(label), "value": round(float(value), 2)} for label, value in grouped.items()]
+                _add_chart(charts, "inventory_stock", "Productos con mayor stock", "horizontal_bar", "Stock disponible por producto/servicio.", stock_rows, "Identifica potenciales excesos o focos de liquidacion.", x_axis=product_col, y_axis=stock_col, confidence="medium")
+            if not amount_col and not base_price_col and not negotiated_price_col:
+                warnings.append("Se detecto stock, pero no se calculo valor monetario de inventario porque falta costo/precio.")
+
+    return kpis, charts, tables, insights, warnings
+
+
 def _top_group(frame: pd.DataFrame, category: str, amount: str, limit: int = 10) -> list[dict[str, Any]]:
     values = frame[[category, amount]].copy()
     values[category] = values[category].astype(str).str.strip()
@@ -242,7 +706,7 @@ def _top_group(frame: pd.DataFrame, category: str, amount: str, limit: int = 10)
 
 def _monthly_trend(frame: pd.DataFrame, date_col: str, amount_col: str) -> list[dict[str, Any]]:
     values = frame[[date_col, amount_col]].copy()
-    values[date_col] = pd.to_datetime(values[date_col], errors="coerce", dayfirst=True)
+    values[date_col] = _parse_dates_quiet(values[date_col])
     values[amount_col] = _to_numeric(values[amount_col])
     values = values.dropna(subset=[date_col, amount_col])
     if values.empty:
@@ -423,7 +887,15 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
 
     for path, filename in files:
         file_type = detect_file_type(filename)
-        source_files.append({"file_name": filename, "detected_type": file_type})
+        source_files.append(
+            {
+                "file_name": filename,
+                "detected_type": file_type,
+                "size_bytes": path.stat().st_size if path.exists() else None,
+                "sheets": _excel_sheet_names(path, file_type),
+                "tables_detected": 0,
+            }
+        )
         if file_type in {"xlsx", "csv"}:
             frame = _read_table(path, file_type)
             if frame is None or frame.empty:
@@ -433,6 +905,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
             if frame.empty:
                 warnings.append(f"{filename}: la tabla queda vacia despues de limpiar filas/columnas vacias.")
                 continue
+            source_files[-1]["tables_detected"] = 1
             frame["__source_file"] = filename
             frames.append(frame)
             document_summaries.append(
@@ -491,7 +964,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         quantity_col = None
     usable_category_columns = _usable_category_columns(category_columns)
     supplier_col = _hint_column(usable_category_columns, SUPPLIER_HINTS) if not combined.empty else None
-    category_col = (_hint_column(usable_category_columns, CATEGORY_HINTS) or _best_column(usable_category_columns, CATEGORY_HINTS)) if not combined.empty else None
+    category_col = _hint_column(usable_category_columns, CATEGORY_HINTS) if not combined.empty else None
     date_col = _best_column(date_columns, DATE_HINTS) if not combined.empty else None
     status_col = _hint_column(category_columns, STATUS_HINTS) if not combined.empty else None
 
@@ -598,7 +1071,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
             )
 
     if date_col:
-        parsed_dates = pd.to_datetime(combined[date_col], errors="coerce", dayfirst=True).dropna()
+        parsed_dates = _parse_dates_quiet(combined[date_col]).dropna()
         if not parsed_dates.empty:
             kpis.append(
                 {
@@ -740,7 +1213,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                         }
                     )
 
-    if supplier_col and category_col and amount_col:
+    if supplier_col and category_col and amount_col and len({supplier_col, category_col, amount_col}) == 3:
         matrix_values = combined[[supplier_col, category_col, amount_col]].copy()
         matrix_values[supplier_col] = matrix_values[supplier_col].astype(str).str.strip()
         matrix_values[category_col] = matrix_values[category_col].astype(str).str.strip()
@@ -823,6 +1296,16 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
     if not category_col and total_rows:
         warnings.append("No se detecto una columna clara de categoria; no se puede armar resumen por categoria.")
 
+    candidates = _candidate_fields(detected_columns)
+    possible_analyses, not_possible_analyses = _analysis_capabilities(candidates)
+    deterministic_kpis, deterministic_charts, deterministic_tables, deterministic_insights, deterministic_warnings = _deterministic_procurement_outputs(combined, candidates)
+    kpis.extend(deterministic_kpis)
+    charts.extend(deterministic_charts)
+    tables.extend(deterministic_tables)
+    insights.extend(deterministic_insights)
+    warnings.extend(deterministic_warnings)
+    enriched_charts = [_with_chart_presentation(chart) for chart in charts]
+
     profile = {
         "files_processed": len(files),
         "rows_detected": total_rows,
@@ -831,7 +1314,14 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         "date_columns": date_columns,
         "numeric_columns": numeric_columns,
         "category_columns": category_columns,
-        "data_quality_warnings": list(dict.fromkeys(warnings))[:24],
+        "data_quality_warnings": list(dict.fromkeys(warnings))[:36],
+        "files": source_files,
+        "columns": _column_profiles(combined),
+        "candidateFields": candidates,
+        "rowSamples": _row_samples(combined),
+        "basicStats": _basic_stats(combined, numeric_columns, date_columns, category_columns),
+        "possibleAnalyses": possible_analyses,
+        "notPossibleAnalyses": not_possible_analyses,
     }
     understanding = _build_data_understanding(
         source_files=source_files,
@@ -842,14 +1332,15 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         category_columns=category_columns,
         document_summaries=document_summaries,
     )
+    profile["confidence"] = understanding.get("confidence_level", "medium")
 
     return {
         "profile": profile,
         **understanding,
-        "kpis": kpis[:12],
-        "charts": charts[:8],
-        "tables": tables[:6],
-        "insights": insights[:8],
+        "kpis": kpis[:24],
+        "charts": enriched_charts[:16],
+        "tables": tables[:12],
+        "insights": insights[:12],
         "document_summaries": document_summaries,
         "source_files": source_files,
         "suggested_title": suggested_title,
