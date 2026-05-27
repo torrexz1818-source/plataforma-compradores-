@@ -19,6 +19,9 @@ Principios obligatorios:
 - Analiza documentos, imagenes, cotizaciones, propuestas, Excel, CSV, fichas tecnicas,
   contratos y datos escritos por el usuario.
 - Detecta automaticamente el tipo de analisis y adapta la metodologia.
+- Antes de calcular, identifica: tipo de compra, tipo de activo/servicio/contrato,
+  alternativas, fuentes documentales usadas, datos faltantes, indicadores aplicables
+  e indicadores que NO aplican.
 - No respondas con una plantilla fija ni te limites a resumir archivos.
 - Extrae datos relevantes, separando datos entregados por el usuario, datos detectados
   en archivos, datos calculados, SUPUESTOS y datos faltantes.
@@ -62,6 +65,8 @@ Reglas de adaptacion por caso:
   experiencia del proveedor, tiempos de ejecucion, soporte, penalidades, riesgos de
   incumplimiento, dependencia, costos adicionales, costo total del contrato, calidad
   del servicio, continuidad operativa, mejor alternativa por alcance, riesgo y balance.
+  En servicios, no incluyas valor residual, energia, repuestos, TCO por kilometro ni
+  componentes de activos fisicos salvo que el contrato los mencione explicitamente.
 - Si compara compra local vs importacion, analiza precio de origen, precio local,
   flete, seguro, aduanas, aranceles, impuestos, nacionalizacion, transporte interno,
   almacenamiento, tipo de cambio, lead time, riesgo logistico, riesgo cambiario,
@@ -72,6 +77,9 @@ Reglas de adaptacion por caso:
   repuestos, productividad, paradas, vida util, garantia, valor residual, TCO por hora,
   TCO por unidad producida, riesgo tecnico, riesgo de repuestos, riesgo de soporte,
   mejor alternativa tecnica, economica y balanceada.
+- Si son repuestos o insumos, analiza precio unitario, cantidad, flete, almacenamiento,
+  lead time, obsolescencia, merma, calidad, riesgo de abastecimiento, costo por unidad
+  efectiva y TCO total.
 
 Indicadores TCO aplicables:
 - Precio inicial total.
@@ -116,11 +124,39 @@ Tablas comparativas:
   independiente: precio base, inversion inicial, flete/logistica, instalacion,
   implementacion, mantenimiento, operacion, energia/combustible, repuestos, soporte,
   seguros, riesgos, valor residual, TCO anualizado y TCO total estimado, segun aplique.
+- La matriz TCO debe ser dinamica por tipo de compra:
+  * Software/SaaS: licencia inicial, licencia mensual/anual, usuarios,
+    implementacion, configuracion, integraciones, migracion, capacitacion, soporte,
+    renovaciones, mantenimiento, riesgo contractual, costo de salida, TCO total,
+    TCO anualizado y TCO por usuario.
+  * Servicios: honorarios, alcance base, horas adicionales, SLA, penalidades,
+    supervision, soporte, costos administrativos, riesgo de incumplimiento,
+    continuidad operativa y TCO total del contrato.
+  * Importacion vs local: precio origen, precio local, flete internacional, seguro,
+    aduanas, aranceles, impuestos, nacionalizacion, transporte interno,
+    almacenamiento, tipo de cambio, lead time, garantia local, riesgo logistico y
+    TCO puesto en destino.
+  * Maquinaria/equipos: precio de compra, instalacion, implementacion, energia,
+    insumos, mantenimiento preventivo, mantenimiento correctivo, repuestos, paradas,
+    productividad, vida util, valor residual, TCO por hora y TCO por unidad producida.
+  * Repuestos/insumos: precio unitario, cantidad, flete, almacenamiento, lead time,
+    obsolescencia, merma, calidad, riesgo de abastecimiento, costo por unidad efectiva
+    y TCO total.
+  * Flota vehicular: SOAT, placa, seguro vehicular, consumo, mantenimiento, repuestos,
+    red de talleres, valor residual y TCO por kilometro.
 - Usa columnas que apliquen al caso: alternativa, proveedor, precio inicial,
   inversion total, costos logisticos, implementacion, operacion, mantenimiento,
   garantia, soporte, vida util, tiempo de entrega, riesgos, costos ocultos, TCO total,
   TCO anualizado, TCO por unidad de uso, ventajas, desventajas y observaciones clave.
 - No uses columnas que no aplican y no omitas columnas importantes para decidir.
+- No fuerces componentes fuera de contexto: no uses SOAT, placa, seguro vehicular,
+  combustible, talleres o TCO por kilometro fuera de casos de vehiculos/movilidad; no
+  uses licencias por usuario fuera de software o servicios medidos por usuario; no uses
+  flete internacional, aranceles o nacionalizacion si no hay importacion; no uses TCO
+  por hora o por unidad producida salvo maquinaria/equipos/productividad; no uses valor
+  residual si no aplica o no hay base suficiente.
+- Si un componente no aplica al tipo de compra, omitelo de tco_matrix; no lo agregues
+  como fila con "No especificado" solo para completar una plantilla.
 
 Calificacion y ranking:
 - Cuando existan varias alternativas, genera score de 0 a 100.
@@ -224,7 +260,7 @@ EXPECTED_JSON_SHAPE = {
     ],
     "tco_matrix": [
         {
-            "cost_component": "Precio base | Instalacion | Transporte | Flete | Seguro | Aduanas/impuestos | Mantenimiento | Operacion | Energia | Repuestos | Soporte | Capacitacion | Riesgos | Costos administrativos | Valor residual | TCO total estimado",
+            "cost_component": "Componente TCO dinamico y aplicable al caso, por ejemplo licencia, implementacion, honorarios, SLA, flete, mantenimiento, repuestos, soporte, riesgo, costo anualizado, TCO por usuario/hora/km si aplica, valor residual solo si aplica, TCO total estimado",
             "values": {"Alternativa": "numero o texto"},
             "notes": "string",
         }
@@ -334,12 +370,14 @@ def build_user_prompt(
         "document_context_available_to_model": documents,
         "methodology": [
             "Detecta automaticamente el tipo de analisis real segun documentos y contexto; si difiere del campo seleccionado por el usuario, explicalo como hallazgo dentro de interpretation.conditions_that_change_decision o assumptions_and_limits.",
+            "Devuelve analysis_type como el tipo de analisis detectado, por ejemplo: Analisis TCO de software/SaaS, Analisis TCO de servicios, Analisis TCO de importacion vs compra local, Analisis TCO de maquinaria, Analisis TCO de flota vehicular, Analisis TCO de repuestos/insumos o Analisis TCO comparativo de proveedores.",
             "Identifica alternativas/proveedores desde documentos e instrucciones.",
             "Extrae proveedor, marca/modelo, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas si aparece, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, riesgos y costos no incluidos. Si no aparece, escribe No especificado.",
             "Construye matriz TCO y tablas comparativas con datos reales cuando existan, datos calculados cuando haya base suficiente y 'No especificado' cuando no existan.",
-            "En tco_matrix, usa una fila por componente TCO disponible o relevante; no devuelvas solo una fila de TCO total si hay precio, mantenimiento, logistica, operacion, garantia, soporte, valor residual u otros componentes mencionados.",
+            "En tco_matrix, usa una fila por componente TCO disponible o relevante adaptado al tipo de compra; no devuelvas solo una fila de TCO total si hay componentes mencionados.",
+            "Omite de tco_matrix los componentes que no aplican al tipo de compra; no agregues filas genericas de valor residual, energia, repuestos, SOAT, licencias, flete internacional o TCO por km/usuario/hora si no corresponden.",
             "Incluye indicadores relevantes para el caso: inversion inicial, TCO estimado, costo logistico, instalacion/implementacion, operacion anual, mantenimiento anual, vida util, costo anualizado, costo por km/hora/usuario/unidad si aplica, valor residual, ahorro/sobrecosto, diferencia porcentual, lead time, riesgo total, score y confianza.",
-            "No fuerces indicadores que no aplican; adapta la formula TCO a vehiculos/flota, software, servicios, importacion, maquinaria, repuestos, insumos o contratos segun corresponda.",
+            "No fuerces indicadores que no aplican; adapta la formula TCO a vehiculos/flota, software, servicios, importacion, maquinaria, repuestos, insumos o contratos segun corresponda. No uses SOAT/placa/talleres fuera de flota, licencias por usuario fuera de software o servicios por usuario, ni flete/aranceles fuera de importacion.",
             "No uses conocimiento general externo para completar datos del proveedor. El analisis debe estar anclado en documentos/contexto del usuario.",
             "No pongas total_tco, tco_per_unit, tco_monthly, tco_annual o ahorro en 0 cuando falten montos. Usa null o No especificado y explica que no hay base cuantitativa.",
             "Genera ranking por menor TCO si hay numeros suficientes; si no, genera ranking preliminar por menor riesgo, mejor balance o mejor alternativa estrategica y explica la limitacion.",
