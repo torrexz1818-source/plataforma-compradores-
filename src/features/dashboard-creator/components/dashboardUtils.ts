@@ -62,6 +62,55 @@ export function sourceLabel(source?: string | null) {
   return 'calculado automaticamente';
 }
 
+const executiveTableBlocklist = [
+  /documentos procesados/i,
+  /archivos procesados/i,
+  /calidad/i,
+  /data\s*profile/i,
+  /analisis no calculables/i,
+  /datos faltantes/i,
+];
+
+export function sanitizeDashboardForPublicView(result: DashboardResult): DashboardResult {
+  return {
+    ...result,
+    observations: [],
+    missingData: [],
+    qualityWarnings: [],
+    missing_information: [],
+    source_files: [],
+    document_summaries: [],
+    suggested_filters: [],
+    layout_suggestion: [],
+    data_understanding: {},
+    data_profile: {
+      ...result.data_profile,
+      data_quality_warnings: [],
+      detected_columns: [],
+      date_columns: [],
+      numeric_columns: [],
+      category_columns: [],
+      columns: [],
+      candidateFields: {},
+      rowSamples: [],
+      basicStats: {},
+      possibleAnalyses: [],
+      notPossibleAnalyses: [],
+    },
+    dataProfile: undefined,
+    dashboardPlan: undefined,
+    tables: result.tables.filter((table) => {
+      const title = businessText(table.title);
+      return title && !executiveTableBlocklist.some((pattern) => pattern.test(title));
+    }).slice(0, 4),
+    findings: (result.findings ?? []).filter((item) => businessText(item.title) && businessText(item.description)).slice(0, 8),
+    recommendations: result.recommendations.filter((item) => businessText(item)).slice(0, 8),
+    insights: result.insights.filter((item) => businessText(item.title) || businessText(item.description)).slice(0, 8),
+    charts: result.charts.filter((chart) => chart.data?.length && businessText(chart.title)).slice(0, 8),
+    disclaimer: '',
+  };
+}
+
 export function uniqueId(prefix: string, index: number) {
   return `${prefix}-${index}`;
 }

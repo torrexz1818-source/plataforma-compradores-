@@ -4,16 +4,7 @@ import { businessText } from './dashboardUtils';
 
 export function DashboardFindings({ result }: { result: DashboardResult }) {
   const findings = result.findings?.filter((item) => businessText(item.title) && businessText(item.description)) ?? [];
-  const observations = result.observations.filter((item) => businessText(item.title) && businessText(item.description));
-  const items = findings.length
-    ? findings
-    : observations.map((item) => ({
-      title: item.title,
-      description: item.description,
-      evidence: item.type,
-      confidence: 'medium' as const,
-      inferred: false,
-    }));
+  const items = findings;
 
   if (!items.length) return null;
 

@@ -1,6 +1,9 @@
 import jsPDF from 'jspdf';
 import type { AgentPdfMode, AgentPdfOptions } from '@/types';
 
+const DASHBOARD_CREATOR_DISCLAIMER =
+  'Este dashboard de compras fue generado con asistencia de IA a partir de los archivos cargados por el usuario. La información, indicadores y recomendaciones deben ser revisados y validados por el comprador antes de tomar decisiones finales.';
+
 export type AgentExportFormat = 'pdf' | 'docx' | 'pptx' | 'xlsx';
 type DocxModule = typeof import('docx');
 type XlsxModule = typeof import('xlsx');
@@ -109,6 +112,7 @@ const sectionOrder = [
   'analysis_title',
   'title',
   'objective',
+  'metadata',
   'audience',
   'period',
   'data_type',
@@ -220,6 +224,43 @@ function dashboardBusinessFindings(result: Record<string, unknown>) {
     && dashboardBusinessText(item.description)
     && !['chart', 'kpi', 'table'].includes(dashboardBusinessText(item.description).toLowerCase())
   ));
+}
+
+const dashboardPublicKeyBlocklist = new Set([
+  'objective',
+  'analysis_mode',
+  'data_profile',
+  'dataProfile',
+  'dashboardPlan',
+  'data_understanding',
+  'extracted_data_quality',
+  'source_files',
+  'document_summaries',
+  'missing_information',
+  'missingData',
+  'qualityWarnings',
+  'observations',
+  'suggested_filters',
+  'layout_suggestion',
+  'visualConfig',
+  'disclaimer',
+]);
+
+function buildPublicDashboardResult(result: Record<string, unknown>) {
+  const cleaned: Record<string, unknown> = {};
+  Object.entries(result).forEach(([key, value]) => {
+    if (!dashboardPublicKeyBlocklist.has(key)) cleaned[key] = value;
+  });
+  cleaned.kpis = dashboardBusinessKpis(result);
+  cleaned.charts = asArray(result.charts).map(asRecord).filter((chart) => chart.data && dashboardBusinessText(chart.title)).slice(0, 8);
+  cleaned.tables = asArray(result.tables).map(asRecord).filter((table) => {
+    const title = dashboardBusinessText(table.title);
+    return title && !/documentos procesados|archivos procesados|calidad|data\s*profile|datos faltantes|analisis no calculables/i.test(title);
+  }).slice(0, 4);
+  cleaned.findings = dashboardBusinessFindings(result);
+  cleaned.recommendations = dashboardBusinessList(asArray(result.recommendations), 8);
+  cleaned.insights = asArray(result.insights).map(asRecord).filter((item) => dashboardBusinessText(item.title) || dashboardBusinessText(item.description)).slice(0, 8);
+  return cleaned;
 }
 
 function normalizeExtractedText(text: string) {
@@ -899,7 +940,7 @@ function addProposalComparisonPdf(input: PdfInput) {
 }
 
 function addDashboardResultPdf(input: PdfInput) {
-  const result = asRecord(input.result);
+  const result = buildPublicDashboardResult(asRecord(input.result));
   const ctx = createContext(input);
   ctx.primaryColor = '#0E109E';
   const subtitle = `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Confianza: ${asText(result.confidence_level)}`;
@@ -968,17 +1009,6 @@ function addDashboardResultPdf(input: PdfInput) {
     );
   }
 
-  const observations = asArray(result.observations).map(asRecord);
-  if (observations.length) {
-    addSection(ctx, 'Observaciones');
-    addTable(
-      ctx,
-      ['Observacion', 'Tipo', 'Descripcion'],
-      observations.map((item) => [item.title, item.type, item.description]),
-      [48, 28, ctx.maxWidth - 76],
-    );
-  }
-
   addSection(ctx, 'Recomendaciones');
   addBulletList(ctx, 'Acciones sugeridas', asArray(result.recommendations), 8);
   const findings = dashboardBusinessFindings(result);
@@ -991,36 +1021,6 @@ function addDashboardResultPdf(input: PdfInput) {
       [42, 62, 48, ctx.maxWidth - 152],
     );
   }
-  const missingData = asArray(result.missingData).map(asRecord);
-  if (missingData.length) {
-    addSection(ctx, 'Datos faltantes');
-    addTable(
-      ctx,
-      ['Indicador', 'Motivo', 'Campos necesarios'],
-      missingData.map((item) => [item.indicator, item.reason, asArray(item.required_fields).join(', ')]),
-      [42, 74, ctx.maxWidth - 116],
-    );
-  } else {
-    addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 8);
-  }
-
-  const qualityWarnings = dashboardBusinessWarnings(result);
-  if (qualityWarnings.length) {
-    addSection(ctx, 'Calidad de datos');
-    addBulletList(ctx, 'Advertencias de calidad', qualityWarnings, 8);
-  }
-
-  const sourceFiles = asArray(result.source_files).map(asRecord);
-  if (sourceFiles.length) {
-    addSection(ctx, 'Alcance del analisis');
-    addTable(
-      ctx,
-      ['Archivo', 'Tipo'],
-      sourceFiles.map((item) => [item.file_name ?? item.name, item.detected_type ?? item.type]),
-      [ctx.maxWidth * 0.65, ctx.maxWidth * 0.35],
-    );
-  }
-
   addAdditionalResultSections(ctx, result, [
     'dashboard_title',
     'metadata',
@@ -1055,7 +1055,7 @@ function addDashboardResultPdf(input: PdfInput) {
   ]);
 
   addSection(ctx, 'Disclaimer');
-  addText(ctx, asText(result.disclaimer, 'Dashboard generado por Nodus IA como apoyo ejecutivo. Validar los datos fuente antes de tomar decisiones finales.'), {
+  addText(ctx, DASHBOARD_CREATOR_DISCLAIMER, {
     size: 8.5,
     color: '#64748b',
   });
@@ -1617,6 +1617,8 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
   const workbook = XLSX.utils.book_new();
   addMetadataSheet(XLSX, workbook, input, result);
   const used = new Set<string>(['Resumen']);
+  const technicalResult = result;
+  result = buildPublicDashboardResult(result);
   const executiveSummary = asRecord(result.executiveSummary);
 
   appendJsonSheet(XLSX, workbook, used, 'Resumen Ejecutivo', [
@@ -1627,6 +1629,7 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
     { Campo: 'Audiencia', Valor: asText(result.audience) },
     { Campo: 'Periodo', Valor: asText(result.period) },
     { Campo: 'Confianza', Valor: asText(result.confidence_level) },
+    { Campo: 'Disclaimer', Valor: DASHBOARD_CREATOR_DISCLAIMER },
   ]);
 
   const businessKpis = dashboardBusinessKpis(result);
@@ -1653,11 +1656,6 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
     Impacto: item.impact,
     Accion: item.recommended_action,
   })));
-  appendJsonSheet(XLSX, workbook, used, 'Observaciones', asArray(result.observations).map(asRecord).map((item) => ({
-    Observacion: item.title,
-    Tipo: item.type,
-    Descripcion: item.description,
-  })));
   appendJsonSheet(XLSX, workbook, used, 'Hallazgos y Recomendaciones', [
     ...asArray(result.findings).map(asRecord).map((item) => ({
       Tipo: 'Hallazgo',
@@ -1675,12 +1673,8 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
     })),
   ]);
   appendJsonSheet(XLSX, workbook, used, 'Recomendaciones', dashboardListRows(asArray(result.recommendations), 'Recomendacion'));
-  appendJsonSheet(XLSX, workbook, used, 'Info faltante', dashboardListRows(asArray(result.missing_information), 'Informacion faltante'));
-  appendJsonSheet(XLSX, workbook, used, 'Missing data', asArray(result.missingData).map(asRecord));
-  appendJsonSheet(XLSX, workbook, used, 'Calidad datos', dashboardListRows(dashboardBusinessWarnings(result), 'Advertencia'));
-  appendJsonSheet(XLSX, workbook, used, 'DataProfile Tecnico', asArray(asRecord(result.dataProfile || result.data_profile).columns).map(asRecord));
-  appendJsonSheet(XLSX, workbook, used, 'Analisis no calculables', asArray(asRecord(result.dataProfile || result.data_profile).notPossibleAnalyses).map(asRecord));
-  appendJsonSheet(XLSX, workbook, used, 'Archivos', asArray(result.source_files).map(asRecord));
+  appendJsonSheet(XLSX, workbook, used, 'Disclaimer', [{ Disclaimer: DASHBOARD_CREATOR_DISCLAIMER }]);
+  appendJsonSheet(XLSX, workbook, used, 'Tecnico - DataProfile', asArray(asRecord(technicalResult.dataProfile || technicalResult.data_profile).columns).map(asRecord));
 
   XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
 }
@@ -2019,6 +2013,9 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     return;
   }
   if (isDashboardResult(result)) {
+    const publicResult = buildPublicDashboardResult(result);
+    Object.keys(result).forEach((key) => delete result[key]);
+    Object.assign(result, publicResult);
     const executiveSummary = asRecord(result.executiveSummary);
     const children: DocxChild[] = [
       docxParagraph(docx, asText(result.dashboard_title, input.title), { heading: true }),
@@ -2052,14 +2049,6 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
       if (nativeTable) children.push(nativeTable);
     });
 
-    children.push(docxParagraph(docx, 'Observaciones', { heading: true }));
-    const observationTable = docxTableFromRows(docx, asArray(result.observations).map(asRecord).map((item) => ({
-      Observacion: item.title,
-      Tipo: item.type,
-      Descripcion: item.description,
-    })));
-    if (observationTable) children.push(observationTable);
-
     children.push(docxParagraph(docx, 'Insights y recomendaciones', { heading: true }));
     asArray(result.insights).map(asRecord).forEach((item) => {
       children.push(docxParagraph(docx, `${asText(item.title)}: ${asText(item.description)} Accion: ${asText(item.recommended_action)}`));
@@ -2075,21 +2064,8 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     })));
     if (findingsTable) children.push(findingsTable);
 
-    children.push(docxParagraph(docx, 'Informacion faltante y calidad de datos', { heading: true }));
-    [
-      ...asArray(result.missing_information),
-      ...asArray(result.missingData).map((item) => {
-        const record = asRecord(item);
-        return `${asText(record.indicator)}: ${asText(record.reason)} ${asArray(record.required_fields).join(', ')}`;
-      }),
-      ...dashboardBusinessWarnings(result),
-    ]
-      .forEach((item) => children.push(docxParagraph(docx, `- ${asText(item)}`)));
-
-    if (result.disclaimer) {
-      children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
-      children.push(docxParagraph(docx, asText(result.disclaimer)));
-    }
+    children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
+    children.push(docxParagraph(docx, DASHBOARD_CREATOR_DISCLAIMER));
 
     const footerLeft = getFooterLeft(mode, input.pdfOptions);
     const footerRight = getFooterRight(mode, input.pdfOptions);
@@ -2337,6 +2313,7 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
 }
 
 async function downloadDashboardResultPptx(input: AgentExportInput, result: Record<string, unknown>) {
+  result = buildPublicDashboardResult(result);
   const pptxgen = (await import('pptxgenjs')).default;
   const pptx = new pptxgen();
   pptx.layout = 'LAYOUT_WIDE';
@@ -2351,7 +2328,7 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
   slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Dashboard ejecutivo', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: '6B63D9' });
   slide.addText(asText(result.dashboard_title, input.title), { x: 0.55, y: 1.0, w: 11.9, h: 0.85, fontSize: 29, bold: true, color: '09008B', fit: 'shrink' });
   slide.addText(dashboardBusinessText(asRecord(result.executiveSummary).information_found, asText(result.executive_summary)), { x: 0.6, y: 2.15, w: 11.7, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
-  slide.addText(`Audiencia: ${asText(result.audience)}\nPeriodo: ${asText(result.period)}\nConfianza: ${asText(result.confidence_level)}\nTipo de datos: ${asText(result.data_type)}`, {
+  slide.addText(`Audiencia: ${asText(result.audience)}\nPeriodo: ${asText(result.period)}\nTipo de datos: ${asText(result.data_type)}`, {
     x: 0.65,
     y: 3.85,
     w: 5.2,
@@ -2360,7 +2337,6 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
     color: '475569',
     fit: 'shrink',
   });
-  slide.addText(asText(result.confidence_reason), { x: 6.1, y: 3.85, w: 6.2, h: 1.1, fontSize: 11, color: '475569', fit: 'shrink' });
   addPptFooter(slide, input);
 
   const kpis = dashboardBusinessKpis(result);
@@ -2412,23 +2388,16 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
   }
 
   slide = pptx.addSlide();
-  addPptTitle(slide, 'Informacion faltante y calidad de datos');
-  slide.addText([
-    ...asArray(result.missing_information),
-    ...asArray(result.missingData).map((item) => {
-      const record = asRecord(item);
-      return `${asText(record.indicator)}: ${asText(record.reason)} ${asArray(record.required_fields).join(', ')}`;
-    }),
-    ...dashboardBusinessWarnings(result),
-  ].map((item) => `- ${asText(item)}`).join('\n') || 'Sin advertencias registradas.', {
-    x: 0.65,
-    y: 1.35,
-    w: 11.8,
-    h: 5.2,
+  slide.background = { color: 'FFFFFF' };
+  addPptTitle(slide, 'Disclaimer');
+  slide.addText(DASHBOARD_CREATOR_DISCLAIMER, {
+    x: 0.7,
+    y: 1.45,
+    w: 11.5,
+    h: 1.1,
     fontSize: 12,
     color: '334155',
     fit: 'shrink',
-    breakLine: false,
   });
   addPptFooter(slide, input);
 

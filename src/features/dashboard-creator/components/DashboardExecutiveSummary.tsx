@@ -10,7 +10,6 @@ export function DashboardExecutiveSummary({ result }: Props) {
   const indicators = asArray(summary?.main_indicators).length
     ? asArray(summary?.main_indicators)
     : result.kpis.slice(0, 6).map((kpi) => kpi.title);
-  const limitations = businessList(asArray(summary?.limitations).length ? asArray(summary?.limitations) : result.missing_information);
 
   return (
     <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
@@ -26,7 +25,7 @@ export function DashboardExecutiveSummary({ result }: Props) {
         ) : null}
       </div>
       <div className="rounded-[8px] border border-slate-200 bg-white p-5 shadow-sm">
-        <p className="text-sm font-semibold text-slate-950">Indicadores y limites</p>
+        <p className="text-sm font-semibold text-slate-950">Indicadores principales</p>
         {indicators.length ? (
           <div className="mt-3 flex flex-wrap gap-2">
             {businessList(indicators).slice(0, 8).map((item) => (
@@ -35,13 +34,6 @@ export function DashboardExecutiveSummary({ result }: Props) {
               </span>
             ))}
           </div>
-        ) : null}
-        {limitations.length ? (
-          <ul className="mt-4 space-y-2 text-xs leading-5 text-slate-600">
-            {limitations.slice(0, 5).map((item) => (
-              <li key={item} className="border-l-2 border-[#F3313F] pl-3">{item}</li>
-            ))}
-          </ul>
         ) : null}
       </div>
     </section>

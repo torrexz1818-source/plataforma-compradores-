@@ -8,13 +8,30 @@ TECHNICAL_KEYS = {
     "dataProfile",
     "dashboardPlan",
     "data_profile",
+    "metadata",
     "data_understanding",
     "visualConfig",
     "layout_suggestion",
     "suggested_filters",
     "document_summaries",
     "qualityWarnings",
+    "observations",
+    "missingData",
+    "missing_information",
+    "source_files",
+    "objective",
+    "analysis_mode",
+    "data_understanding",
+    "visualConfig",
+    "suggested_filters",
+    "layout_suggestion",
+    "disclaimer",
 }
+
+DASHBOARD_CREATOR_DISCLAIMER = (
+    "Este dashboard de compras fue generado con asistencia de IA a partir de los archivos cargados por el usuario. "
+    "La información, indicadores y recomendaciones deben ser revisados y validados por el comprador antes de tomar decisiones finales."
+)
 
 
 def _executive_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -29,6 +46,15 @@ def _executive_result(result: dict[str, Any]) -> dict[str, Any]:
         for item in result.get("kpis", [])
         if isinstance(item, dict) and item.get("title") not in {"Registros analizados", "Columnas detectadas"}
     ]
+    cleaned["tables"] = [
+        item for item in result.get("tables", [])
+        if isinstance(item, dict)
+        and not any(token in str(item.get("title", "")).lower() for token in ("documentos procesados", "archivos procesados", "calidad", "data profile", "datos faltantes"))
+    ][:4]
+    cleaned["charts"] = [item for item in result.get("charts", []) if isinstance(item, dict) and item.get("data")][:8]
+    cleaned["findings"] = [item for item in result.get("findings", []) if isinstance(item, dict) and item.get("title") and item.get("description")][:8]
+    cleaned["recommendations"] = [item for item in result.get("recommendations", []) if item][:8]
+    cleaned["disclaimer"] = DASHBOARD_CREATOR_DISCLAIMER
     return cleaned
 
 
