@@ -69,6 +69,13 @@ const labelMap: Record<string, string> = {
   risk_analysis: 'Analisis de riesgos',
   sensitivity_analysis: 'Analisis de sensibilidad',
   strategic_recommendation: 'Recomendacion estrategica',
+  recommended_action: 'Accion recomendada',
+  economic_option: 'Mejor opcion economica',
+  technical_option: 'Mejor opcion tecnica',
+  lowest_risk_option: 'Mejor opcion por menor riesgo',
+  balanced_option: 'Mejor opcion balanceada',
+  final_recommended_option: 'Opcion recomendada final',
+  recommendation_rationale: 'Justificacion de la recomendacion',
   insights: 'Insights',
   recommendations: 'Recomendaciones',
   recommended_supplier: 'Proveedor recomendado',
@@ -624,6 +631,67 @@ function tcoRiskRows(result: Record<string, unknown>) {
   }));
 }
 
+function tcoBaseRows(result: Record<string, unknown>) {
+  const summary = asRecord(result.executive_summary);
+  const quality = asRecord(result.extracted_data_quality);
+  return [
+    { Campo: 'Titulo del analisis', Valor: asText(result.analysis_title) },
+    { Campo: 'Producto o servicio', Valor: asText(result.item_name) },
+    { Campo: 'Tipo de analisis', Valor: asText(result.analysis_type) },
+    { Campo: 'Horizonte', Valor: asText(result.evaluation_horizon) },
+    { Campo: 'Unidad de comparacion', Valor: asText(result.comparison_unit) },
+    { Campo: 'Moneda', Valor: asText(result.currency) },
+    { Campo: 'Mejor alternativa', Valor: asText(summary.best_alternative) },
+    { Campo: 'Score ganador', Valor: `${asText(summary.best_alternative_score)} / 100 - ${asText(summary.best_alternative_score_label)}` },
+    { Campo: 'Ahorro o sobrecosto', Valor: asText(summary.estimated_saving_or_overcost) },
+    { Campo: 'Riesgo principal', Valor: asText(summary.main_risk) },
+    { Campo: 'Nivel de confianza', Valor: asText(quality.confidence_level) },
+    { Campo: 'Documentos procesados', Valor: asText(quality.documents_processed) },
+  ];
+}
+
+function tcoRecommendationRows(result: Record<string, unknown>) {
+  const summary = asRecord(result.executive_summary);
+  const recommendation = asRecord(result.strategic_recommendation);
+  const ranking = tcoRankingRows(result);
+  return [
+    { Seccion: 'Resumen ejecutivo', Campo: 'Recomendacion final', Valor: asText(summary.final_recommendation) },
+    { Seccion: 'Resumen ejecutivo', Campo: 'Motivo', Valor: asText(summary.why_it_wins) },
+    { Seccion: 'Recomendacion estrategica', Campo: 'Accion recomendada', Valor: asText(recommendation.recommended_action) },
+    { Seccion: 'Recomendacion estrategica', Campo: 'Mejor opcion economica', Valor: asText(recommendation.economic_option) },
+    { Seccion: 'Recomendacion estrategica', Campo: 'Mejor opcion tecnica', Valor: asText(recommendation.technical_option) },
+    { Seccion: 'Recomendacion estrategica', Campo: 'Mejor opcion por menor riesgo', Valor: asText(recommendation.lowest_risk_option) },
+    { Seccion: 'Recomendacion estrategica', Campo: 'Mejor opcion balanceada', Valor: asText(recommendation.balanced_option) },
+    { Seccion: 'Recomendacion estrategica', Campo: 'Opcion recomendada final', Valor: asText(recommendation.final_recommended_option) },
+    { Seccion: 'Recomendacion estrategica', Campo: 'Justificacion', Valor: asText(recommendation.recommendation_rationale) },
+    ...ranking.map((item) => ({
+      Seccion: 'Ranking',
+      Campo: `${asText(item.Posicion)}. ${asText(item.Alternativa)}`,
+      Valor: `Score ${asText(item.Calificacion)} (${asText(item.Nivel)}). TCO: ${asText(item.TCO)}. ${asText(item.Motivo)}`,
+    })),
+    ...asArray(recommendation.negotiation_points).map((item, index) => ({
+      Seccion: 'Puntos de negociacion',
+      Campo: `Punto ${index + 1}`,
+      Valor: asText(item),
+    })),
+    ...asArray(recommendation.next_steps).map((item, index) => ({
+      Seccion: 'Proximos pasos',
+      Campo: `Paso ${index + 1}`,
+      Valor: asText(item),
+    })),
+    ...asArray(result.missing_information).map((item, index) => ({
+      Seccion: 'Datos faltantes',
+      Campo: `Dato ${index + 1}`,
+      Valor: asText(item),
+    })),
+    ...asArray(result.assumptions_and_limits).map((item, index) => ({
+      Seccion: 'Supuestos y limites',
+      Campo: `Supuesto ${index + 1}`,
+      Valor: asText(item),
+    })),
+  ].filter((row) => row.Valor && row.Valor !== 'No especificado');
+}
+
 function getRecommendedRanking(result: Record<string, unknown>) {
   const recommended = asText(result.recommended_supplier, '');
   const ranking = asArray(result.ranking).map(asRecord);
@@ -949,17 +1017,25 @@ function addTcoAnalysisPdf(input: PdfInput) {
   const result = asRecord(input.result);
   const ctx = createContext(input);
   const summary = asRecord(result.executive_summary);
-  const recommendation = asRecord(result.strategic_recommendation);
   const subtitle = `Producto/servicio: ${asText(result.item_name)} | Horizonte: ${asText(result.evaluation_horizon)} | Moneda: ${asText(result.currency)}`;
 
   addHeader(ctx, input, subtitle);
   addCard(ctx, 'Resumen ejecutivo', [
     `Mejor alternativa preliminar: ${asText(summary.best_alternative)}`,
+    `Score ganador: ${asText(summary.best_alternative_score)} / 100 - ${asText(summary.best_alternative_score_label)}`,
     `Motivo: ${asText(summary.why_it_wins)}`,
     `Ahorro o sobrecosto: ${asText(summary.estimated_saving_or_overcost)}`,
     `Riesgo principal: ${asText(summary.main_risk)}`,
     `Recomendacion final: ${asText(summary.final_recommendation)}`,
   ], 'green');
+
+  addSection(ctx, 'Tipo de analisis e indicadores principales');
+  addTable(
+    ctx,
+    ['Campo', 'Valor'],
+    tcoBaseRows(result).map((item) => [item.Campo, item.Valor]),
+    [54, ctx.maxWidth - 54],
+  );
 
   const documents = asArray(result.supporting_documents_summary).map(asRecord);
   if (documents.length) {
@@ -1028,6 +1104,12 @@ function addTcoAnalysisPdf(input: PdfInput) {
     );
   }
 
+  const hiddenCosts = asArray(result.hidden_costs_detected);
+  if (hiddenCosts.length) {
+    addSection(ctx, 'Costos ocultos detectados');
+    addBulletList(ctx, 'Costos ocultos', hiddenCosts, 24);
+  }
+
   const risks = tcoRiskRows(result);
   if (risks.length) {
     addSection(ctx, 'Analisis de riesgos');
@@ -1052,9 +1134,9 @@ function addTcoAnalysisPdf(input: PdfInput) {
   addSection(ctx, 'Recomendacion estrategica');
   addTable(
     ctx,
-    ['Campo', 'Detalle'],
-    Object.entries(recommendation).map(([key, value]) => [formatLabel(key), asText(value)]),
-    [50, ctx.maxWidth - 50],
+    ['Seccion', 'Campo', 'Detalle'],
+    tcoRecommendationRows(result).map((item) => [item.Seccion, item.Campo, item.Valor]),
+    [38, 46, ctx.maxWidth - 84],
   );
 
   addSection(ctx, 'Validaciones pendientes');
@@ -1066,15 +1148,19 @@ function addTcoAnalysisPdf(input: PdfInput) {
   addAdditionalResultSections(ctx, result, [
     'analysis_title',
     'item_name',
+    'analysis_type',
     'evaluation_horizon',
+    'comparison_unit',
     'currency',
     'executive_summary',
     'supporting_documents_summary',
+    'extracted_data_quality',
     'detected_alternatives',
     'data_used',
     'tco_matrix',
     'tco_totals',
     'ranking',
+    'hidden_costs_detected',
     'risk_analysis',
     'interpretation',
     'sensitivity_analysis',
@@ -1565,16 +1651,27 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
     const workbook = XLSX.utils.book_new();
     addMetadataSheet(XLSX, workbook, input, result);
     const used = new Set<string>(['Resumen']);
+    appendJsonSheet(XLSX, workbook, used, 'Datos base', tcoBaseRows(result));
     appendJsonSheet(XLSX, workbook, used, 'Alternativas', tcoDetectedAlternativeRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Datos extraidos', tcoDetectedAlternativeRows(result));
     appendJsonSheet(XLSX, workbook, used, 'Datos usados', tcoDataUsedRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Datos procesados', tcoTotalsRows(result));
     appendJsonSheet(XLSX, workbook, used, 'Matriz TCO', tcoMatrixRows(result));
     appendJsonSheet(XLSX, workbook, used, 'Totales TCO', tcoTotalsRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Indicadores', tcoTotalsRows(result));
     appendJsonSheet(XLSX, workbook, used, 'Ranking', tcoRankingRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Recomendacion', tcoRecommendationRows(result));
     appendJsonSheet(XLSX, workbook, used, 'Costos ocultos', dashboardListRows(asArray(result.hidden_costs_detected), 'Costo oculto'));
     appendJsonSheet(XLSX, workbook, used, 'Riesgos', tcoRiskRows(result));
+    appendJsonSheet(XLSX, workbook, used, 'Escenarios', rowsFromValue(result.sensitivity_analysis));
     appendJsonSheet(XLSX, workbook, used, 'Info faltante', dashboardListRows(asArray(result.missing_information), 'Informacion faltante'));
     appendJsonSheet(XLSX, workbook, used, 'Preguntas', dashboardListRows(asArray(result.questions_for_user_or_suppliers), 'Pregunta'));
     appendJsonSheet(XLSX, workbook, used, 'Supuestos limites', dashboardListRows(asArray(result.assumptions_and_limits), 'Supuesto o limite'));
+    appendJsonSheet(XLSX, workbook, used, 'Conclusiones', [
+      { Campo: 'Recomendacion final', Valor: asText(asRecord(result.executive_summary).final_recommendation) },
+      { Campo: 'Justificacion', Valor: asText(asRecord(result.strategic_recommendation).recommendation_rationale || asRecord(result.executive_summary).why_it_wins) },
+      { Campo: 'Disclaimer', Valor: asText(result.disclaimer) },
+    ]);
     XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
     return;
   }
@@ -1807,7 +1904,21 @@ async function downloadTcoResultDocx(input: AgentExportInput, result: Record<str
     docxParagraph(docx, `Ahorro o sobrecosto: ${asText(summary.estimated_saving_or_overcost)}`),
     docxParagraph(docx, `Riesgo principal: ${asText(summary.main_risk)}`),
     docxParagraph(docx, `Recomendacion final: ${asText(summary.final_recommendation)}`),
+    docxParagraph(docx, 'Tipo de analisis e indicadores principales', { heading: true }),
   ];
+  const baseTable = docxTableFromRows(docx, tcoBaseRows(result));
+  if (baseTable) children.push(baseTable);
+
+  const documentTable = docxTableFromRows(docx, asArray(result.supporting_documents_summary).map(asRecord).map((item) => ({
+    Archivo: item.file_name ?? item.name,
+    Tipo: item.detected_type ?? item.type,
+    Hallazgos: asArray(item.relevant_findings).map((finding) => asText(finding, '')).join(' | '),
+    Limitaciones: asArray(item.limitations).map((limitation) => asText(limitation, '')).join(' | '),
+  })));
+  if (documentTable) {
+    children.push(docxParagraph(docx, 'Informacion utilizada', { heading: true }));
+    children.push(documentTable);
+  }
 
   [
     ['Alternativas detectadas', tcoDetectedAlternativeRows(result)],
@@ -1823,15 +1934,25 @@ async function downloadTcoResultDocx(input: AgentExportInput, result: Record<str
   });
 
   pushDocxList(docx, children, 'Costos ocultos detectados', asArray(result.hidden_costs_detected));
+  children.push(docxParagraph(docx, 'Hallazgos clave', { heading: true }));
+  formatValue(result.interpretation).slice(0, 30).forEach((line) => children.push(docxParagraph(docx, line)));
   children.push(docxParagraph(docx, 'Analisis de sensibilidad', { heading: true }));
   formatValue(result.sensitivity_analysis).slice(0, 40).forEach((line) => children.push(docxParagraph(docx, line)));
   children.push(docxParagraph(docx, 'Recomendacion estrategica', { heading: true }));
   children.push(docxParagraph(docx, `Accion recomendada: ${asText(recommendation.recommended_action)}`));
+  children.push(docxParagraph(docx, `Mejor opcion economica: ${asText(recommendation.economic_option)}`));
+  children.push(docxParagraph(docx, `Mejor opcion tecnica: ${asText(recommendation.technical_option)}`));
+  children.push(docxParagraph(docx, `Mejor opcion por menor riesgo: ${asText(recommendation.lowest_risk_option)}`));
+  children.push(docxParagraph(docx, `Mejor opcion balanceada: ${asText(recommendation.balanced_option)}`));
+  children.push(docxParagraph(docx, `Opcion recomendada final: ${asText(recommendation.final_recommended_option)}`));
+  children.push(docxParagraph(docx, `Justificacion: ${asText(recommendation.recommendation_rationale)}`));
   pushDocxList(docx, children, 'Puntos de negociacion', asArray(recommendation.negotiation_points));
   pushDocxList(docx, children, 'Siguientes pasos', asArray(recommendation.next_steps));
   pushDocxList(docx, children, 'Informacion faltante', asArray(result.missing_information));
   pushDocxList(docx, children, 'Preguntas sugeridas para proveedores', asArray(result.questions_for_user_or_suppliers));
   pushDocxList(docx, children, 'Supuestos y limites', asArray(result.assumptions_and_limits));
+  children.push(docxParagraph(docx, 'Conclusion', { heading: true }));
+  children.push(docxParagraph(docx, asText(recommendation.recommendation_rationale || summary.final_recommendation)));
   children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
   children.push(docxParagraph(docx, asText(result.disclaimer)));
 
@@ -2307,6 +2428,11 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   });
   addPptFooter(slide, input);
 
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Tipo de analisis e indicadores');
+  addPptRows(slide, tcoBaseRows(result), { maxRows: tcoBaseRows(result).length });
+  addPptFooter(slide, input);
+
   [
     ['Alternativas detectadas', tcoDetectedAlternativeRows(result)],
     ['Matriz TCO', tcoMatrixRows(result)],
@@ -2334,6 +2460,12 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   addPptTitle(slide, 'Recomendacion estrategica');
   slide.addText([
     `Accion recomendada: ${asText(recommendation.recommended_action)}`,
+    `Mejor opcion economica: ${asText(recommendation.economic_option)}`,
+    `Mejor opcion tecnica: ${asText(recommendation.technical_option)}`,
+    `Mejor opcion por menor riesgo: ${asText(recommendation.lowest_risk_option)}`,
+    `Mejor opcion balanceada: ${asText(recommendation.balanced_option)}`,
+    `Opcion recomendada final: ${asText(recommendation.final_recommended_option)}`,
+    `Justificacion: ${asText(recommendation.recommendation_rationale)}`,
     '',
     'Puntos de negociacion:',
     ...asArray(recommendation.negotiation_points).map((item) => `- ${asText(item)}`),
@@ -2348,9 +2480,25 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   slide.addText([
     ...asArray(result.missing_information).map((item) => `- ${asText(item)}`),
     '',
+    'Supuestos y limites:',
+    ...asArray(result.assumptions_and_limits).map((item) => `- ${asText(item)}`),
+    '',
     'Preguntas para proveedores:',
     ...asArray(result.questions_for_user_or_suppliers).map((item) => `- ${asText(item)}`),
   ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Conclusion');
+  slide.addText(asText(recommendation.recommendation_rationale || summary.final_recommendation), {
+    x: 0.65,
+    y: 1.4,
+    w: 11.8,
+    h: 4.4,
+    fontSize: 16,
+    color: '334155',
+    fit: 'shrink',
+  });
   addPptFooter(slide, input);
 
   await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });

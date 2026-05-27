@@ -77,7 +77,18 @@ export type TcoAnalysisResult = {
   interpretation: Record<string, unknown>;
   risk_analysis: Array<Record<string, unknown>>;
   sensitivity_analysis: Record<string, unknown>;
-  strategic_recommendation: Record<string, unknown>;
+  strategic_recommendation: {
+    recommended_action: string;
+    economic_option?: string | null;
+    technical_option?: string | null;
+    lowest_risk_option?: string | null;
+    balanced_option?: string | null;
+    final_recommended_option?: string | null;
+    recommendation_rationale?: string | null;
+    negotiation_points?: string[];
+    next_steps?: string[];
+    [key: string]: unknown;
+  };
   hidden_costs_detected?: string[];
   detected_alternatives?: Array<{
     supplier_name: string;

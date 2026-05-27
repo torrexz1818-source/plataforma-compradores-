@@ -975,36 +975,6 @@ const NexuIA = () => {
     'Disclaimer': result.disclaimer,
   });
 
-  const buildTcoVisibleExport = (result: NonNullable<typeof tcoAnalysisMutation.data>) => ({
-    'Resumen ejecutivo': [
-      { Campo: 'Recomendación final', Valor: result.executive_summary.final_recommendation },
-      { Campo: 'Mejor alternativa', Valor: result.executive_summary.best_alternative },
-      { Campo: 'Motivo', Valor: result.executive_summary.why_it_wins },
-      { Campo: 'Ahorro o sobrecosto', Valor: result.executive_summary.estimated_saving_or_overcost },
-      { Campo: 'Riesgo principal', Valor: result.executive_summary.main_risk },
-    ],
-    'Alternativas detectadas': result.detected_alternatives ?? [],
-    'Calidad de extracción': result.extracted_data_quality ? recordRows(result.extracted_data_quality as unknown as Record<string, unknown>) : [],
-    'Advertencias de extracción': listRows(result.extracted_data_quality?.warnings),
-    'Datos usados': result.data_used,
-    'Totales TCO': result.tco_totals,
-    'Matriz TCO': result.tco_matrix.map((row) => ({
-      Componente: row.cost_component,
-      ...row.values,
-      Notas: row.notes,
-    })),
-    'Ranking': result.ranking,
-    'Interpretación': recordRows(result.interpretation as unknown as Record<string, unknown>),
-    'Análisis de sensibilidad': recordRows(result.sensitivity_analysis as unknown as Record<string, unknown>),
-    'Recomendación estratégica': recordRows(result.strategic_recommendation as unknown as Record<string, unknown>),
-    'Costos ocultos detectados': listRows(result.hidden_costs_detected),
-    'Análisis de riesgos': result.risk_analysis,
-    'Preguntas o datos faltantes': listRows([...result.missing_information, ...result.questions_for_user_or_suppliers]),
-    'Supuestos y límites del análisis': listRows([...(result.assumptions_and_limits ?? []), ...(result.calculation_warnings ?? [])]),
-    'Documentos de apoyo leídos': result.supporting_documents_summary,
-    'Disclaimer': result.disclaimer,
-  });
-
   const buildProposalVisibleExport = (result: NonNullable<typeof proposalComparisonResult>) => ({
     'Resumen ejecutivo': result.executive_summary,
     'Proveedor recomendado': result.recommended_supplier,
@@ -1143,7 +1113,7 @@ const NexuIA = () => {
     if (!tcoAnalysisMutation.data) return;
     await handleExportResult({
       title: 'Análisis de Costo Total / TCO',
-      result: buildTcoVisibleExport(tcoAnalysisMutation.data) as unknown as Record<string, unknown>,
+      result: tcoAnalysisMutation.data as unknown as Record<string, unknown>,
       fileName: 'analisis-tco-nodus-ia',
       operationName: 'Descarga análisis TCO',
       captureElementId: 'tco-analysis-export-view',
@@ -1207,6 +1177,54 @@ const NexuIA = () => {
   const termsFormSchema = termsFormSchemaMutation.data;
   const termsResult = termsGenerateMutation.data;
   const tcoResult = tcoAnalysisMutation.data;
+  const tcoWinnerTotal = tcoResult?.tco_totals.find(
+    (item) => textValue(item.alternative, '') === tcoResult.executive_summary.best_alternative,
+  );
+  const tcoRecommendation = tcoResult?.strategic_recommendation;
+  const tcoExecutiveCards = tcoResult
+    ? [
+        {
+          label: 'TCO total estimado',
+          value: tcoWinnerTotal?.total_tco,
+          detail: tcoWinnerTotal ? `Alternativa: ${textValue(tcoWinnerTotal.alternative)}` : '',
+        },
+        {
+          label: 'Mejor alternativa',
+          value: tcoResult.executive_summary.best_alternative,
+          detail: tcoResult.executive_summary.why_it_wins,
+        },
+        {
+          label: 'Ahorro potencial',
+          value: tcoResult.executive_summary.estimated_saving_or_overcost,
+          detail: '',
+        },
+        {
+          label: 'Riesgo principal',
+          value: tcoResult.executive_summary.main_risk,
+          detail: '',
+        },
+        {
+          label: 'Score ganador',
+          value: tcoResult.executive_summary.best_alternative_score,
+          detail: tcoResult.executive_summary.best_alternative_score_label ?? '',
+        },
+        {
+          label: 'Confianza del análisis',
+          value: tcoResult.extracted_data_quality?.confidence_level,
+          detail: tcoResult.extracted_data_quality
+            ? `${tcoResult.extracted_data_quality.documents_processed} documentos procesados`
+            : '',
+        },
+        {
+          label: 'Datos faltantes críticos',
+          value: tcoResult.missing_information.length ? tcoResult.missing_information.length : undefined,
+          detail: tcoResult.missing_information.slice(0, 2).join(' | '),
+        },
+      ].filter((card) => {
+        const value = textValue(card.value, '');
+        return value && !['No especificado', 'No determinado', 'null', 'undefined'].includes(value);
+      })
+    : [];
   const dashboardResult = dashboardCreatorMutation.data;
   const termsSections = termsFormSchema?.form_sections ?? [];
   const termsTotalSteps = termsFormSchema ? termsSections.length + 2 : 1;
@@ -2637,12 +2655,31 @@ const NexuIA = () => {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">A. Resumen ejecutivo</p>
+                          <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
+                            Tipo de análisis: {tcoResult.analysis_type}. Horizonte: {tcoResult.evaluation_horizon}. Moneda: {tcoResult.currency}.
+                          </p>
                           <p className="mt-2 text-sm leading-6 text-muted-foreground">
                             {tcoResult.executive_summary.final_recommendation}
                           </p>
                         </div>
                         <div data-export-hidden="true">{renderExportControls(handleDownloadTcoPdf)}</div>
                       </div>
+
+                      {tcoExecutiveCards.length ? (
+                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                          {tcoExecutiveCards.map((card) => (
+                            <div key={card.label} className="rounded-2xl border border-primary/15 bg-white p-4">
+                              <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">{card.label}</p>
+                              <p className="mt-2 text-lg font-semibold text-foreground">
+                                {card.label === 'Score ganador' ? `${textValue(card.value)} / 100` : textValue(card.value)}
+                              </p>
+                              {card.detail ? (
+                                <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground/80">{card.detail}</p>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
 
                       <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -2785,6 +2822,26 @@ const NexuIA = () => {
                         </div>
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">G. Recomendación estratégica</p>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {[
+                              ['Mejor opción económica', tcoRecommendation?.economic_option],
+                              ['Mejor opción técnica', tcoRecommendation?.technical_option],
+                              ['Mejor opción por menor riesgo', tcoRecommendation?.lowest_risk_option],
+                              ['Mejor opción balanceada', tcoRecommendation?.balanced_option],
+                              ['Opción recomendada final', tcoRecommendation?.final_recommended_option],
+                              ['Justificación', tcoRecommendation?.recommendation_rationale],
+                            ]
+                              .filter(([, value]) => {
+                                const normalized = textValue(value, '');
+                                return normalized && !['No especificado', 'No determinado', 'null', 'undefined'].includes(normalized);
+                              })
+                              .map(([label, value]) => (
+                                <div key={String(label)} className="rounded-xl bg-primary/5 p-3">
+                                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">{String(label)}</p>
+                                  <p className="mt-1 text-sm leading-6 text-foreground/80">{textValue(value)}</p>
+                                </div>
+                              ))}
+                          </div>
                           {renderRecordBlock(tcoResult.strategic_recommendation)}
                         </div>
                       </div>
