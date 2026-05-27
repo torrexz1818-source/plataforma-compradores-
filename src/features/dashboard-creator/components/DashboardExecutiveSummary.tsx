@@ -1,5 +1,5 @@
 import type { DashboardResult } from '../dashboardCreatorApi';
-import { asArray } from './dashboardUtils';
+import { asArray, businessList, businessText } from './dashboardUtils';
 
 type Props = {
   result: DashboardResult;
@@ -10,18 +10,18 @@ export function DashboardExecutiveSummary({ result }: Props) {
   const indicators = asArray(summary?.main_indicators).length
     ? asArray(summary?.main_indicators)
     : result.kpis.slice(0, 6).map((kpi) => kpi.title);
-  const limitations = asArray(summary?.limitations).length ? asArray(summary?.limitations) : result.missing_information;
+  const limitations = businessList(asArray(summary?.limitations).length ? asArray(summary?.limitations) : result.missing_information);
 
   return (
     <section className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
       <div className="rounded-[8px] border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm font-semibold text-slate-950">Resumen ejecutivo</p>
         <p className="mt-3 text-sm leading-6 text-slate-600">
-          {summary?.information_found || result.executive_summary}
+          {businessText(summary?.information_found || result.executive_summary, 'Reporte ejecutivo generado a partir de los archivos cargados.')}
         </p>
-        {summary?.analysis_built ? (
+        {businessText(summary?.analysis_built) ? (
           <p className="mt-3 rounded-[8px] border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
-            {summary.analysis_built}
+            {businessText(summary.analysis_built)}
           </p>
         ) : null}
       </div>
@@ -29,7 +29,7 @@ export function DashboardExecutiveSummary({ result }: Props) {
         <p className="text-sm font-semibold text-slate-950">Indicadores y limites</p>
         {indicators.length ? (
           <div className="mt-3 flex flex-wrap gap-2">
-            {indicators.slice(0, 8).map((item) => (
+            {businessList(indicators).slice(0, 8).map((item) => (
               <span key={item} className="rounded-full bg-[#0E109E]/7 px-3 py-1 text-xs font-medium text-[#0E109E]">
                 {item}
               </span>

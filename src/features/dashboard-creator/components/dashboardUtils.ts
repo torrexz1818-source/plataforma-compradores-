@@ -30,6 +30,38 @@ export function asArray<T>(value: T[] | undefined | null): T[] {
   return Array.isArray(value) ? value : [];
 }
 
+const technicalPatterns = [
+  /python/i,
+  /\bllm\b/i,
+  /dataprofile/i,
+  /dashboardplan/i,
+  /candidatefields/i,
+  /anti[-\s]?invenci/i,
+  /backend/i,
+  /validaci[oó]n interna/i,
+  /indicador sugerido/i,
+  /source_component/i,
+  /calculated/i,
+];
+
+export function businessText(value: unknown, fallback = '') {
+  const text = formatValue(value).trim();
+  if (!text) return fallback;
+  if (technicalPatterns.some((pattern) => pattern.test(text))) return fallback;
+  return text;
+}
+
+export function businessList(values: unknown[] | undefined | null) {
+  return asArray(values)
+    .map((item) => businessText(item))
+    .filter(Boolean);
+}
+
+export function sourceLabel(source?: string | null) {
+  if (!source) return 'calculado automaticamente';
+  return 'calculado automaticamente';
+}
+
 export function uniqueId(prefix: string, index: number) {
   return `${prefix}-${index}`;
 }

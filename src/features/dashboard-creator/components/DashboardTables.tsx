@@ -10,7 +10,7 @@ import {
 } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
 import type { DashboardResult } from '../dashboardCreatorApi';
-import { formatValue } from './dashboardUtils';
+import { businessText, formatValue } from './dashboardUtils';
 
 type TableData = DashboardResult['tables'][number];
 
@@ -39,8 +39,8 @@ function DashboardDataTable({ table }: { table: TableData }) {
     <article className="rounded-[8px] border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-950">{table.title}</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">{table.description}</p>
+          <p className="text-sm font-semibold text-slate-950">{businessText(table.title, 'Tabla ejecutiva')}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">{businessText(table.description)}</p>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{table.rows.length} filas</span>
       </div>
@@ -97,7 +97,7 @@ export function DashboardTables({ result }: { result: DashboardResult }) {
     <section className="space-y-4">
       <div>
         <p className="text-sm font-semibold text-slate-950">Tablas del dashboard</p>
-        <p className="mt-1 text-xs text-slate-600">Datos procesados usados por el mismo resultado mostrado en plataforma.</p>
+        <p className="mt-1 text-xs text-slate-600">Tablas resumidas para revisar los principales cortes del analisis.</p>
       </div>
       {tables.map((table) => <DashboardDataTable key={table.title} table={table} />)}
     </section>

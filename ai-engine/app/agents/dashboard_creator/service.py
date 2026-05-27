@@ -256,8 +256,8 @@ def _validate_dashboard_plan(profiled: dict[str, Any], dashboard_plan: dict[str,
         if supported:
             selected.append(item)
         else:
-            skipped.append({"name": item.get("name") or item.get("metric") or "Indicador sugerido por LLM", "reason": "El dataProfile no respalda este indicador.", "missingFields": missing})
-            warnings.append(f"Se descarto indicador sugerido por LLM sin respaldo suficiente: {item.get('name') or item.get('metric')}.")
+            skipped.append({"name": item.get("name") or item.get("metric") or "Indicador no calculable", "reason": "No se calculo este indicador porque faltan columnas necesarias.", "missingFields": missing})
+            warnings.append(f"No se calculo {item.get('name') or item.get('metric') or 'un indicador'} porque faltan columnas necesarias.")
     dashboard_plan["selectedIndicators"] = selected
     dashboard_plan["skippedIndicators"] = skipped[:24]
     dashboard_plan["applicable_indicators"] = selected
@@ -272,11 +272,15 @@ def _normalize_findings(items: list[Any]) -> list[dict[str, Any]]:
             continue
         basis = str(item.get("basis") or item.get("source_component") or "")
         inferred = basis == "inference" or bool(item.get("inferred"))
+        description = str(item.get("description") or item.get("basis") or "").strip()
+        evidence = str(item.get("evidence") or item.get("basis") or "").strip()
+        if description.lower() in {"", "chart", "kpi", "table"}:
+            continue
         normalized.append(
             {
                 "title": str(item.get("title") or f"Hallazgo {index}")[:90],
-                "description": str(item.get("description") or item.get("basis") or "Hallazgo basado en el resultado disponible.")[:360],
-                "evidence": str(item.get("evidence") or item.get("basis") or "")[:220] or None,
+                "description": description[:360],
+                "evidence": evidence[:220] or None,
                 "source_component": basis[:80] or None,
                 "confidence": item.get("confidence") if item.get("confidence") in {"low", "medium", "high"} else ("low" if inferred else "medium"),
                 "inferred": inferred,
@@ -492,7 +496,7 @@ async def generate_dashboard(
                             chart["insight"] = str(explanation)
                 llm_used = True
             except HTTPException:
-                recommendations.append("El LLM no estuvo disponible; se genero el dashboard con calculos y sintesis basica de Python.")
+                recommendations.append("El analisis se genero con los datos estructurados disponibles; puede ampliarse si se cargan documentos mas completos.")
 
         anti_invention_warnings = _validate_dashboard_outputs(profiled, missing_information)
         if anti_invention_warnings:
@@ -502,7 +506,7 @@ async def generate_dashboard(
             )
             observations = _merge_unique(
                 observations,
-                [{"title": "Validacion anti-invencion", "description": warning, "type": "data_quality"} for warning in anti_invention_warnings],
+                [{"title": "Datos insuficientes para algunos indicadores", "description": warning, "type": "data_quality"} for warning in anti_invention_warnings],
             )
 
         result = build_dashboard_result(

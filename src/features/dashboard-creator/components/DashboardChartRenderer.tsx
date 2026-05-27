@@ -1,7 +1,7 @@
 import ReactECharts from 'echarts-for-react';
 import { Badge } from '@/components/ui/badge';
 import type { DashboardChart, DashboardResult } from '../dashboardCreatorApi';
-import { formatValue, getVisualConfig } from './dashboardUtils';
+import { businessText, formatValue, getVisualConfig } from './dashboardUtils';
 
 type Props = {
   chart: DashboardChart;
@@ -109,8 +109,8 @@ export function DashboardChartRenderer({ chart, result }: Props) {
     <article className="rounded-[8px] border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-950">{chart.title}</p>
-          <p className="mt-1 text-xs leading-5 text-slate-600">{chart.description}</p>
+          <p className="text-sm font-semibold text-slate-950">{businessText(chart.title, 'Grafico ejecutivo')}</p>
+          <p className="mt-1 text-xs leading-5 text-slate-600">{businessText(chart.description)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Badge variant="outline" className="border-slate-200 text-slate-600">{chart.type}</Badge>
@@ -129,7 +129,7 @@ export function DashboardChartRenderer({ chart, result }: Props) {
           </div>
         ))}
       </div>
-      {chart.insight ? <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600">{chart.insight}</p> : null}
+      {businessText(chart.insight) ? <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600">{businessText(chart.insight)}</p> : null}
     </article>
   );
 }

@@ -10,10 +10,48 @@ from app.agents.dashboard_creator.chart_recommender import recommend_chart_type
 from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type
 
-AMOUNT_HINTS = ("monto", "importe", "total", "precio", "costo", "gasto", "valor", "amount", "price", "cost")
+AMOUNT_HINTS = ("monto", "importe", "total", "precio", "gasto", "valor", "subtotal", "pagado", "ahorro", "amount", "price", "cost")
+AMOUNT_PRIORITY_HINTS = (
+    "monto oc final",
+    "monto oc original",
+    "total_pen",
+    "monto_pen",
+    "monto_usd",
+    "subtotal_pen",
+    "monto pagado",
+    "ahorro pen",
+    "ahorro negociado",
+    "precio referencia",
+)
+NON_AMOUNT_HINTS = (
+    "centro costo",
+    "centro de costo",
+    "codigo cc",
+    "código cc",
+    "departamento",
+    "proyecto",
+    "id",
+    "ruc",
+    "estado",
+)
 SUPPLIER_HINTS = ("proveedor", "supplier", "vendor", "empresa", "razon", "cliente")
-CATEGORY_HINTS = ("categoria", "category", "rubro", "familia", "tipo", "linea", "producto", "servicio", "religion", "religión")
+CATEGORY_HINTS = ("categoria", "category", "rubro", "familia", "tipo", "linea", "producto", "servicio", "centro costo", "centro de costo", "religion", "religión")
 DATE_HINTS = ("fecha", "date", "periodo", "mes", "month", "year", "ano")
+DATE_PRIORITY_HINTS = (
+    "f. solicitud",
+    "f. creacion oc",
+    "f. creación oc",
+    "f. aprobacion",
+    "f. aprobación",
+    "f. entrega esperada",
+    "f. entrega real",
+    "f. pago",
+    "fecha_solicitud",
+    "fecha_oc",
+    "fecha_aprobacion",
+    "fecha_entrega",
+    "fecha_pago",
+)
 QUANTITY_HINTS = ("cantidad", "qty", "quantity", "unidades", "items")
 STATUS_HINTS = ("estado", "status", "situacion")
 PRODUCT_HINTS = ("producto", "item", "sku", "material", "articulo")
@@ -27,8 +65,8 @@ NEGOTIATED_PRICE_HINTS = ("precio negociado", "precio final", "negociado")
 BUDGET_HINTS = ("presupuesto", "budget")
 QUOTE_HINTS = ("cotizacion", "quote", "propuesta")
 SAVINGS_HINTS = ("ahorro", "saving", "savings")
-PROMISED_DATE_HINTS = ("fecha prometida", "fecha compromiso", "prometida", "promised")
-ACTUAL_DATE_HINTS = ("fecha real", "fecha entrega", "entregado", "actual")
+PROMISED_DATE_HINTS = ("fecha prometida", "fecha compromiso", "fecha esperada", "entrega esperada", "f. entrega esperada", "prometida", "promised")
+ACTUAL_DATE_HINTS = ("fecha real", "fecha entrega", "entrega real", "f. entrega real", "entregado", "actual")
 REQUESTED_QTY_HINTS = ("cantidad solicitada", "qty solicitada", "solicitado")
 DELIVERED_QTY_HINTS = ("cantidad entregada", "qty entregada", "entregado")
 PAYMENT_TERMS_HINTS = ("condicion de pago", "pago", "credito", "contado", "plazo")
@@ -40,7 +78,9 @@ SUPPLY_RISK_HINTS = ("riesgo suministro", "riesgo de suministro", "riesgo", "ris
 STOCK_HINTS = ("stock", "existencia", "existencias")
 INVENTORY_HINTS = ("inventario", "almacen", "inventory")
 LIQUIDATION_HINTS = ("liquidacion", "liquidation")
-NUMERIC_EXCLUDE_HINTS = ("telefono", "teléfono", "celular", "dni", "ruc", "documento", "edad")
+BUYER_HINTS = ("comprador", "buyer", "responsable", "solicitante", "usuario compra")
+ORDER_STATUS_HINTS = ("estado oc", "estado_oc", "estado orden", "estado orden compra")
+NUMERIC_EXCLUDE_HINTS = ("telefono", "teléfono", "celular", "dni", "ruc", "documento", "edad", "centro costo", "centro de costo", "codigo cc", "código cc")
 TEXT_KEYWORDS = (
     "proveedor",
     "precio",
@@ -65,6 +105,16 @@ ANALYSIS_KEYWORDS = {
     "financiero": ("financiero", "presupuesto", "costo", "margen", "factura"),
 }
 BUYER_NODUS_COLORS = ["#0E109E", "#5A31D5", "#F3313F", "#B2EB4A", "#2F80ED", "#22A06B", "#F59E0B", "#64748B"]
+BUSINESS_SHEET_PRIORITY = (
+    "oc_maestro",
+    "resumen_mensual",
+    "compradores_kpi",
+    "categorias_kpi",
+    "condiciones_pago",
+    "t_transacciones",
+    "t_proveedores",
+    "t_categorias",
+)
 FIELD_HINTS = {
     "proveedor": SUPPLIER_HINTS,
     "categoria": CATEGORY_HINTS,
@@ -72,7 +122,7 @@ FIELD_HINTS = {
     "servicio": SERVICE_HINTS,
     "monto": AMOUNT_HINTS,
     "moneda": CURRENCY_HINTS,
-    "fecha": DATE_HINTS,
+    "fecha": DATE_HINTS + DATE_PRIORITY_HINTS,
     "orden_compra": PO_HINTS,
     "solicitud": REQUEST_HINTS,
     "requerimiento": REQUEST_HINTS,
@@ -99,7 +149,17 @@ FIELD_HINTS = {
     "stock": STOCK_HINTS,
     "inventario": INVENTORY_HINTS,
     "liquidacion": LIQUIDATION_HINTS,
+    "comprador": BUYER_HINTS,
+    "estado_oc": ORDER_STATUS_HINTS,
 }
+
+
+def _sheet_rank(sheet_name: str) -> int:
+    normalized = _normalize_column_name(sheet_name)
+    for index, name in enumerate(BUSINESS_SHEET_PRIORITY):
+        if name in normalized:
+            return index
+    return len(BUSINESS_SHEET_PRIORITY) + 1
 
 
 def _read_table(path: Path, file_type: str) -> pd.DataFrame | None:
@@ -111,15 +171,22 @@ def _read_table(path: Path, file_type: str) -> pd.DataFrame | None:
         except pd.errors.ParserError:
             return pd.read_csv(path, sep=None, engine="python")
     if file_type == "xlsx":
-        workbook = pd.read_excel(path, sheet_name=None)
-        frames = []
+        workbook = pd.read_excel(path, sheet_name=None, header=None)
+        prepared: list[tuple[int, str, pd.DataFrame]] = []
         for sheet_name, frame in workbook.items():
             if frame.empty:
                 continue
-            frame = frame.copy()
-            frame["__sheet"] = sheet_name
-            frames.append(frame)
-        return pd.concat(frames, ignore_index=True) if frames else None
+            cleaned = _clean_frame(frame.copy())
+            if cleaned.empty:
+                continue
+            cleaned["__sheet"] = sheet_name
+            prepared.append((_sheet_rank(str(sheet_name)), str(sheet_name), cleaned))
+        if not prepared:
+            return None
+        has_priority = any(rank <= len(BUSINESS_SHEET_PRIORITY) for rank, _, _ in prepared)
+        selected = [item for item in prepared if item[0] <= len(BUSINESS_SHEET_PRIORITY)] if has_priority else prepared
+        selected = sorted(selected, key=lambda item: (item[0], item[1].lower()))
+        return pd.concat([frame for _, _, frame in selected], ignore_index=True, sort=False)
     return None
 
 
@@ -138,18 +205,22 @@ def _header_score(row: pd.Series) -> int:
         "fecha",
         "pago",
         "monto",
+        "monto_usd",
+        "monto_pen",
+        "total_pen",
+        "subtotal_pen",
+        "fecha_solicitud",
+        "estado_oc",
         "nombre",
         "proveedor",
+        "comprador",
         "categoria",
-        "religion",
-        "telefono",
-        "direccion",
-        "edad",
-        "niño",
-        "nino",
+        "orden",
+        "oc",
     )
     non_empty = row.dropna().astype(str).str.strip()
-    return sum(1 for hint in hints if hint in text) + min(len(non_empty), 6)
+    generic_penalty = sum(1 for value in non_empty if str(value).strip().lower().startswith("columna"))
+    return sum(2 for hint in hints if hint in text) + min(len(non_empty), 8) - generic_penalty
 
 
 def _dedupe_columns(columns: list[str]) -> list[str]:
@@ -167,8 +238,10 @@ def _dedupe_columns(columns: list[str]) -> list[str]:
 
 def _promote_embedded_header(frame: pd.DataFrame) -> pd.DataFrame:
     raw_columns = [str(column).lower() for column in frame.columns]
+    if _header_score(pd.Series(list(frame.columns))) >= 9:
+        return frame
     unnamed_ratio = sum(column.startswith("unnamed") for column in raw_columns) / max(len(raw_columns), 1)
-    candidate_rows = frame.head(8)
+    candidate_rows = frame.head(10)
     best_index = None
     best_score = 0
 
@@ -178,7 +251,7 @@ def _promote_embedded_header(frame: pd.DataFrame) -> pd.DataFrame:
             best_score = score
             best_index = index
 
-    if best_index is None or (unnamed_ratio < 0.45 and best_score < 7):
+    if best_index is None or (unnamed_ratio < 0.45 and best_score < 9):
         return frame
 
     promoted = frame.loc[best_index + 1 :].copy()
@@ -231,6 +304,44 @@ def _parse_dates_quiet(values: pd.Series) -> pd.Series:
         return pd.to_datetime(values, errors="coerce", dayfirst=True)
 
 
+def _has_date_hint(column: str) -> bool:
+    lower = str(column).lower()
+    return any(hint in lower for hint in DATE_HINTS + DATE_PRIORITY_HINTS)
+
+
+def _valid_dates(values: pd.Series, column: str) -> pd.Series:
+    if not _has_date_hint(column):
+        sample = values.dropna().astype(str).head(20)
+        if sample.empty or not sample.str.contains(r"[/\-.]|20\d{2}|19\d{2}", regex=True).any():
+            return pd.Series(pd.NaT, index=values.index)
+    parsed = _parse_dates_quiet(values)
+    valid = parsed.notna()
+    if not valid.any():
+        return parsed
+    plausible = parsed.dt.year.between(1990, 2100)
+    if (valid & plausible).mean() < 0.55:
+        return pd.Series(pd.NaT, index=values.index)
+    return parsed.where(plausible)
+
+
+def _is_non_amount_column(column: str | None) -> bool:
+    if not column:
+        return True
+    lower = str(column).strip().lower()
+    if any(hint in lower for hint in NON_AMOUNT_HINTS):
+        return True
+    if lower.startswith("cc") or lower.startswith("id"):
+        return True
+    return False
+
+
+def _looks_like_cost_center(values: pd.Series) -> bool:
+    sample = values.dropna().astype(str).str.strip().head(40)
+    if sample.empty:
+        return False
+    return sample.str.match(r"^(cc[-_\s]?\d+|\d{2,6}[-_/]\d{1,6})$", case=False).mean() >= 0.5
+
+
 def _detect_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str]]:
     numeric_columns: list[str] = []
     date_columns: list[str] = []
@@ -246,18 +357,18 @@ def _detect_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str
         numeric = _to_numeric(values)
         numeric_ratio = numeric.notna().mean()
         numeric_likeness = _numeric_likeness(values)
-        parsed_dates = _parse_dates_quiet(values)
+        parsed_dates = _valid_dates(values, column)
         date_ratio = parsed_dates.notna().mean()
 
         has_numeric_hint = any(hint in lower for hint in AMOUNT_HINTS + QUANTITY_HINTS)
-        is_excluded_numeric = any(hint in lower for hint in NUMERIC_EXCLUDE_HINTS)
+        is_excluded_numeric = any(hint in lower for hint in NUMERIC_EXCLUDE_HINTS) or _looks_like_cost_center(values)
         is_generic_numeric = lower.startswith("columna") or lower.startswith("column") or lower.startswith("unnamed")
 
-        if has_numeric_hint and not is_excluded_numeric:
+        if has_numeric_hint and not is_excluded_numeric and not _is_non_amount_column(column):
             numeric_columns.append(column)
         elif numeric_likeness >= 0.65 and not is_excluded_numeric and not is_generic_numeric:
             numeric_columns.append(column)
-        elif date_ratio >= 0.55 or any(hint in lower for hint in DATE_HINTS):
+        elif date_ratio >= 0.55 or _has_date_hint(column):
             date_columns.append(column)
         elif values.nunique(dropna=True) <= max(35, len(values) * 0.72):
             category_columns.append(column)
@@ -266,6 +377,10 @@ def _detect_columns(frame: pd.DataFrame) -> tuple[list[str], list[str], list[str
 
 
 def _best_column(columns: list[str], hints: tuple[str, ...]) -> str | None:
+    if hints == DATE_HINTS:
+        priority = _hint_column(columns, DATE_PRIORITY_HINTS)
+        if priority:
+            return priority
     for column in columns:
         lower = column.lower()
         if any(hint in lower for hint in hints):
@@ -281,17 +396,21 @@ def _is_generic_column(column: str | None) -> bool:
 
 
 def _best_amount_column(columns: list[str]) -> str | None:
-    hinted = _hint_column(columns, AMOUNT_HINTS)
-    if hinted and not _is_generic_column(hinted):
+    usable = [column for column in columns if not _is_non_amount_column(column)]
+    priority = _hint_column(usable, AMOUNT_PRIORITY_HINTS)
+    if priority and not _is_generic_column(priority):
+        return priority
+    hinted = _hint_column(usable, AMOUNT_HINTS)
+    if hinted and not _is_generic_column(hinted) and not _is_non_amount_column(hinted):
         return hinted
     return None
 
 
 def _hint_column(columns: list[str], hints: tuple[str, ...]) -> str | None:
-    for column in columns:
-        lower = column.lower()
-        if any(hint in lower for hint in hints):
-            return column
+    for hint in hints:
+        for column in columns:
+            if hint in column.lower():
+                return column
     return None
 
 
@@ -327,7 +446,7 @@ def _column_type(series: pd.Series) -> str:
         return "empty"
     if _numeric_likeness(values) >= 0.65:
         return "number"
-    if _parse_dates_quiet(values).notna().mean() >= 0.55:
+    if _valid_dates(values, str(series.name or "")).notna().mean() >= 0.55:
         return "date"
     return "category" if values.nunique(dropna=True) <= max(35, len(values) * 0.72) else "text"
 
@@ -356,6 +475,20 @@ def _candidate_fields(columns: list[str]) -> dict[str, list[str]]:
     candidates: dict[str, list[str]] = {}
     for field, hints in FIELD_HINTS.items():
         matches = [column for column in columns if any(hint in column.lower() for hint in hints)]
+        if field == "monto":
+            matches = [column for column in matches if not _is_non_amount_column(column)]
+            priority = _hint_column(matches, AMOUNT_PRIORITY_HINTS)
+            if priority:
+                matches = [priority] + [column for column in matches if column != priority]
+        if field == "fecha":
+            priority = _hint_column(matches, DATE_PRIORITY_HINTS)
+            if priority:
+                matches = [priority] + [column for column in matches if column != priority]
+        if field == "orden_compra":
+            matches = [column for column in matches if "estado" not in column.lower() and not any(hint in column.lower() for hint in AMOUNT_HINTS)]
+            priority = _hint_column(matches, ("orden compra", "orden de compra", "oc numero", "numero oc", "nro oc"))
+            if priority:
+                matches = [priority] + [column for column in matches if column != priority]
         if matches:
             candidates[field] = matches[:5]
     return candidates
@@ -380,7 +513,7 @@ def _row_samples(frame: pd.DataFrame, max_rows: int = 5) -> list[dict[str, Any]]
 
 def _date_range(frame: pd.DataFrame, date_columns: list[str]) -> dict[str, str] | None:
     for column in date_columns:
-        parsed = _parse_dates_quiet(frame[column]).dropna() if column in frame else pd.Series(dtype="datetime64[ns]")
+        parsed = _valid_dates(frame[column], column).dropna() if column in frame else pd.Series(dtype="datetime64[ns]")
         if not parsed.empty:
             return {"column": column, "min": str(parsed.min().date()), "max": str(parsed.max().date())}
     return None
@@ -500,8 +633,8 @@ def _is_nps_scale(values: pd.Series) -> bool:
 
 
 def _date_diff_days(start: pd.Series, end: pd.Series) -> pd.Series:
-    start_dates = _parse_dates_quiet(start)
-    end_dates = _parse_dates_quiet(end)
+    start_dates = _valid_dates(start, str(start.name or "fecha"))
+    end_dates = _valid_dates(end, str(end.name or "fecha"))
     return (end_dates - start_dates).dt.days
 
 
@@ -558,8 +691,14 @@ def _deterministic_procurement_outputs(
     stock_col = _candidate_col(candidates, "stock", "inventario", "liquidacion")
     impact_col = _candidate_col(candidates, "impacto_financiero")
     supply_risk_col = _candidate_col(candidates, "riesgo_suministro")
+    buyer_col = _candidate_col(candidates, "comprador")
     po_col = _candidate_col(candidates, "orden_compra")
     request_col = _candidate_col(candidates, "solicitud", "requerimiento")
+
+    if po_col:
+        orders = _clean_text_series(frame[po_col])
+        if not orders.empty:
+            _append_kpi(kpis, "Total de ordenes", str(int(orders.nunique())), f"Ordenes de compra distintas detectadas en {po_col}.", f"COUNT DISTINCT({po_col})", confidence="medium")
 
     if currency_col and amount_col:
         currency_rows = _top_group(frame, currency_col, amount_col, limit=8)
@@ -587,12 +726,24 @@ def _deterministic_procurement_outputs(
             savings_pct = total_savings / float(valid_base.sum()) if float(valid_base.sum()) else 0
             _append_kpi(kpis, "Ahorro calculado", _format_number(total_savings), f"Diferencia entre {base_price_col} y {negotiated_price_col}.", f"SUM({base_price_col} - {negotiated_price_col})", unit="monto", status="positive" if total_savings > 0 else "neutral")
             _append_kpi(kpis, "Porcentaje de ahorro", f"{savings_pct:.1%}", "Ahorro calculado sobre precio base total.", f"SUM(ahorro) / SUM({base_price_col})", unit="%", status="positive" if savings_pct > 0 else "neutral")
+            if buyer_col:
+                savings_frame = frame[[buyer_col]].copy()
+                savings_frame["__savings"] = base - negotiated
+                savings_rows = _top_group(savings_frame, buyer_col, "__savings", limit=10)
+                _add_chart(charts, "savings_by_buyer", "Ahorro por comprador", "horizontal_bar", "Ahorro calculado agrupado por comprador o responsable.", savings_rows, "Permite ubicar responsables con mayor ahorro calculado.", x_axis=buyer_col, y_axis="Ahorro", confidence="medium")
     elif savings_col:
         declared = _to_numeric(frame[savings_col]).dropna()
         if not declared.empty:
             _append_kpi(kpis, "Ahorro declarado", _format_number(float(declared.sum())), f"Suma de la columna {savings_col}; validar criterio de origen.", f"SUM({savings_col})", confidence="medium", unit="monto", status="positive")
+            if buyer_col:
+                savings_by_buyer = _top_group(frame, buyer_col, savings_col, limit=10)
+                _add_chart(charts, "savings_by_buyer", "Ahorro por comprador", "horizontal_bar", "Ahorro agrupado por comprador o responsable.", savings_by_buyer, "Permite ubicar responsables con mayor ahorro declarado.", x_axis=buyer_col, y_axis=savings_col, confidence="medium")
     else:
         warnings.append("No se calculo ahorro porque faltan precio base/anterior/presupuesto y precio negociado, o una columna de ahorro declarada.")
+
+    if buyer_col and amount_col:
+        buyer_rows = _top_group(frame, buyer_col, amount_col, limit=10)
+        _add_chart(charts, "spend_by_buyer", "Compras por comprador", "horizontal_bar", "Monto agrupado por comprador o responsable.", buyer_rows, "Ayuda a comparar concentracion de compras por responsable.", x_axis=buyer_col, y_axis=amount_col, confidence="medium")
 
     if status_col:
         status_values = frame[status_col].dropna()
@@ -607,8 +758,8 @@ def _deterministic_procurement_outputs(
             tables.append({"title": "Resumen de cumplimiento simple", "description": "Conteo por estado de cumplimiento.", "source": "python", "columns": ["Estado", "Registros"], "rows": [{"Estado": item["label"], "Registros": item["value"]} for item in data]})
 
     if promised_date_col and actual_date_col and requested_qty_col and delivered_qty_col:
-        promised = _parse_dates_quiet(frame[promised_date_col])
-        actual = _parse_dates_quiet(frame[actual_date_col])
+        promised = _valid_dates(frame[promised_date_col], promised_date_col)
+        actual = _valid_dates(frame[actual_date_col], actual_date_col)
         requested = _to_numeric(frame[requested_qty_col])
         delivered = _to_numeric(frame[delivered_qty_col])
         valid = promised.notna() & actual.notna() & requested.notna() & delivered.notna()
@@ -623,6 +774,26 @@ def _deterministic_procurement_outputs(
             _add_chart(charts, "otif_breakdown", "OTIF", "bar", "On Time, In Full y OTIF calculados con fechas y cantidades.", [{"label": "On Time", "value": round(float(on_time.mean()) * 100, 2)}, {"label": "In Full", "value": round(float(in_full.mean()) * 100, 2)}, {"label": "OTIF", "value": round(float(otif.mean()) * 100, 2)}], f"OTIF calculado sobre {total} registros validos.", y_axis="%")
     elif promised_date_col or actual_date_col or requested_qty_col or delivered_qty_col:
         warnings.append("No se calculo OTIF porque faltan fecha prometida, fecha real, cantidad solicitada o cantidad entregada.")
+
+    if promised_date_col and actual_date_col:
+        promised = _valid_dates(frame[promised_date_col], promised_date_col)
+        actual = _valid_dates(frame[actual_date_col], actual_date_col)
+        valid_dates = promised.notna() & actual.notna()
+        if valid_dates.any():
+            monthly = pd.DataFrame({"period": promised[valid_dates].dt.to_period("M").astype(str), "on_time": actual[valid_dates] <= promised[valid_dates]})
+            grouped = monthly.groupby("period")["on_time"].mean().sort_index().tail(12)
+            _add_chart(
+                charts,
+                "monthly_on_time",
+                "% entrega a tiempo mensual",
+                "line",
+                "Porcentaje de entregas realizadas en o antes de la fecha prometida.",
+                [{"label": str(label), "value": round(float(value) * 100, 2)} for label, value in grouped.items()],
+                "Permite revisar meses con deterioro o mejora de puntualidad.",
+                x_axis=promised_date_col,
+                y_axis="%",
+                confidence="medium",
+            )
 
     score_col = nps_col or rating_col
     if score_col:
@@ -706,7 +877,7 @@ def _top_group(frame: pd.DataFrame, category: str, amount: str, limit: int = 10)
 
 def _monthly_trend(frame: pd.DataFrame, date_col: str, amount_col: str) -> list[dict[str, Any]]:
     values = frame[[date_col, amount_col]].copy()
-    values[date_col] = _parse_dates_quiet(values[date_col])
+    values[date_col] = _valid_dates(values[date_col], date_col)
     values[amount_col] = _to_numeric(values[amount_col])
     values = values.dropna(subset=[date_col, amount_col])
     if values.empty:
@@ -973,28 +1144,6 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
     tables: list[dict[str, Any]] = []
     insights: list[dict[str, Any]] = []
 
-    if total_rows:
-        kpis.append(
-            {
-                "title": "Registros analizados",
-                "value": f"{total_rows:,}",
-                "description": "Filas validas detectadas en archivos tabulares.",
-                "calculation_logic": "Conteo de filas despues de limpiar filas vacias.",
-                "source": "python",
-                "confidence": "high",
-            }
-        )
-        kpis.append(
-            {
-                "title": "Columnas detectadas",
-                "value": str(len(detected_columns)),
-                "description": "Campos disponibles para armar filtros, KPIs y graficos.",
-                "calculation_logic": "Conteo de columnas no tecnicas.",
-                "source": "python",
-                "confidence": "high",
-            }
-        )
-
     if amount_col:
         amount_values = _to_numeric(combined[amount_col])
         valid_amounts = amount_values.dropna()
@@ -1004,7 +1153,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         kpis.extend(
             [
                 {
-                    "title": "Monto total",
+                    "title": "Total comprado",
                     "value": _format_number(total_amount),
                     "description": f"Suma de la columna {amount_col}.",
                     "calculation_logic": f"SUM({amount_col})",
@@ -1012,7 +1161,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "confidence": "high",
                 },
                 {
-                    "title": "Ticket promedio",
+                    "title": "Compra promedio",
                     "value": _format_number(avg_amount),
                     "description": f"Promedio de la columna {amount_col}.",
                     "calculation_logic": f"AVG({amount_col})",
@@ -1020,7 +1169,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
                     "confidence": "high",
                 },
                 {
-                    "title": "Mayor registro",
+                    "title": "Orden de mayor monto",
                     "value": _format_number(max_amount),
                     "description": f"Valor maximo detectado en {amount_col}.",
                     "calculation_logic": f"MAX({amount_col})",
@@ -1034,7 +1183,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         supplier_count = int(combined[supplier_col].dropna().astype(str).str.strip().nunique())
         kpis.append(
             {
-                "title": "Proveedores detectados",
+                    "title": "Proveedores analizados",
                 "value": str(supplier_count),
                 "description": f"Valores unicos en {supplier_col}.",
                 "calculation_logic": f"COUNT DISTINCT({supplier_col})",
@@ -1047,7 +1196,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         category_count = int(combined[category_col].dropna().astype(str).str.strip().nunique())
         kpis.append(
             {
-                "title": "Categorias detectadas",
+                    "title": "Categorias analizadas",
                 "value": str(category_count),
                 "description": f"Valores unicos en {category_col}.",
                 "calculation_logic": f"COUNT DISTINCT({category_col})",
@@ -1071,18 +1220,11 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
             )
 
     if date_col:
-        parsed_dates = _parse_dates_quiet(combined[date_col]).dropna()
+        parsed_dates = _valid_dates(combined[date_col], date_col).dropna()
         if not parsed_dates.empty:
-            kpis.append(
-                {
-                    "title": "Periodo detectado",
-                    "value": f"{parsed_dates.min().date()} a {parsed_dates.max().date()}",
-                    "description": f"Rango de fechas encontrado en {date_col}.",
-                    "calculation_logic": f"MIN/MAX({date_col})",
-                    "source": "python",
-                    "confidence": "medium",
-                }
-            )
+            pass
+        elif total_rows:
+            warnings.append("No se detecto un periodo confiable para analisis temporal.")
 
     if supplier_col and amount_col:
         top_suppliers = _top_group(combined, supplier_col, amount_col)

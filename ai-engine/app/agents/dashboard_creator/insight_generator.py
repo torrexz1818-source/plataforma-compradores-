@@ -28,7 +28,7 @@ def build_basic_insights(profiled: dict[str, Any]) -> tuple[str, list[dict[str, 
             insights.append(
                 {
                     "title": "Dashboard construido desde datos tabulares",
-                    "description": "Se calcularon KPIs, rankings, tablas y graficos con Python a partir de las columnas detectadas.",
+                    "description": "Se identificaron indicadores, rankings, tablas y graficos de compras a partir de la informacion disponible.",
                     "impact": "medium",
                     "recommended_action": "Revisar los campos detectados y ajustar nombres de columnas si algun KPI no representa el negocio.",
                     "basis": "data_profile",
@@ -61,7 +61,7 @@ def build_basic_insights(profiled: dict[str, Any]) -> tuple[str, list[dict[str, 
 
     summary = (
         ". ".join(summary_parts)
-        + ". El dashboard fue generado principalmente con calculos de Python; la IA solo interpreta resultados cuando esta disponible."
+        + ". El dashboard resume indicadores de negocio calculados segun la informacion disponible."
     )
 
     layout = [

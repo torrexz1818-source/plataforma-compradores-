@@ -16,7 +16,7 @@ def _summary_block(executive_summary: str, profiled: dict[str, Any], missing_inf
     kpis = [str(item.get("title")) for item in profiled.get("kpis", []) if isinstance(item, dict) and item.get("title")]
     return {
         "information_found": executive_summary,
-        "analysis_built": "Dashboard construido desde dataProfile, calculos Python/backend e interpretacion controlada del LLM.",
+        "analysis_built": "Reporte ejecutivo generado a partir de los archivos cargados, con indicadores calculados segun la informacion disponible.",
         "main_indicators": kpis[:8],
         "limitations": missing_information[:10],
     }
@@ -45,7 +45,13 @@ def _non_empty_tables(tables: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _evidence_findings(profiled: dict[str, Any], findings: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    prepared = list(findings or [])
+    prepared = [
+        item for item in list(findings or [])
+        if isinstance(item, dict)
+        and item.get("title")
+        and item.get("description")
+        and str(item.get("description")).strip().lower() not in {"chart", "kpi", "table"}
+    ]
     if prepared:
         return prepared[:12]
     for kpi in profiled.get("kpis", [])[:4]:
@@ -67,8 +73,8 @@ def _evidence_findings(profiled: dict[str, Any], findings: list[dict[str, Any]] 
         prepared.append(
             {
                 "title": str(chart.get("title") or "Grafico calculado"),
-                "description": str(chart.get("insight") or chart.get("description") or "Grafico construido con datos reales."),
-                "evidence": f"{len(chart.get('data', []))} puntos de datos",
+                "description": str(chart.get("insight") or chart.get("description") or "Visualizacion construida con informacion disponible para priorizar decisiones de compra."),
+                "evidence": f"{len(chart.get('data', []))} segmentos analizados",
                 "source_component": "chart",
                 "confidence": chart.get("confidence", "medium"),
                 "inferred": False,
