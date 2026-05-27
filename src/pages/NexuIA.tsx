@@ -90,7 +90,7 @@ const tcoComparisonUnits = ['Por unidad', 'Por lote', 'Por usuario', 'Por km', '
 const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
 const dashboardAudiences = ['Gerencia', 'Compras', 'Finanzas', 'Operaciones', 'Proveedores', 'Auditoría', 'Otro'];
 const dashboardDataTypes = ['Gastos', 'Proveedores', 'Compras', 'Contratos', 'Inventario', 'Cotizaciones', 'Indicadores KPI', 'Datos mixtos', 'Otro'];
-const dashboardFocusOptions = ['Automático', 'Ejecutivo', 'Operativo', 'Financiero', 'Proveedores', 'Gastos', 'Compras', 'Auditoría'];
+const dashboardFocusOptions = ['Automático', 'Categorías', 'Proveedores', 'Ahorro', 'Cumplimiento', 'Compradores', 'Pagos', 'Ejecutivo', 'Operativo', 'Financiero', 'Gastos', 'Compras', 'Auditoría'];
 const dashboardLoadingSteps = [
   'Leyendo archivos',
   'Extrayendo información',
@@ -773,11 +773,14 @@ const NexuIA = () => {
     dashboardCreatorMutation.mutate(
       {
         title: dashboardForm.title.trim(),
+        dashboardName: dashboardForm.title.trim(),
         objective: dashboardForm.objective.trim(),
+        objectiveInstructions: dashboardForm.objective.trim(),
         audience: dashboardForm.audience,
         period: dashboardForm.period,
         dataType: dashboardForm.dataType,
         visualizationFocus: dashboardForm.visualizationFocus,
+        dashboardFocus: dashboardForm.visualizationFocus,
         additionalContext: dashboardForm.additionalContext,
         useLlmInsights: true,
         files: dashboardFiles,
@@ -1988,8 +1991,8 @@ const NexuIA = () => {
                                   </select>
                                 </div>
                                 <div className="space-y-1.5 md:col-span-2">
-                                  <label className="text-sm font-medium text-foreground/80">Objetivo del dashboard *</label>
-                                  <Textarea value={dashboardForm.objective} onChange={(event) => updateDashboardForm('objective', event.target.value)} placeholder="Ejemplo: visualizar gastos por proveedor, detectar categorías con mayor consumo, identificar oportunidades de ahorro..." className="min-h-[88px] rounded-2xl border-primary/15" />
+                                  <label className="text-sm font-medium text-foreground/80">Objetivo e instrucciones del dashboard *</label>
+                                  <Textarea value={dashboardForm.objective} onChange={(event) => updateDashboardForm('objective', event.target.value)} placeholder="Indica qué quieres analizar, qué columnas priorizar, qué datos excluir, qué enfoque deseas, qué filtros aplicar o qué resultado esperas del dashboard." className="min-h-[88px] rounded-2xl border-primary/15" />
                                 </div>
                                 <div className="space-y-1.5">
                                   <label className="text-sm font-medium text-foreground/80">Periodo</label>

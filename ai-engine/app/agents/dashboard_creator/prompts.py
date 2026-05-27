@@ -24,6 +24,8 @@ Recibiras:
 - limitaciones de extraccion.
 
 Debes:
+- interpretar primero el pedido del usuario: objetivo/instrucciones, contexto adicional, audiencia, periodo, tipo de datos y enfoque del dashboard,
+- respetar instrucciones del usuario sobre columnas, hojas, filtros, moneda, estados excluidos y enfoque analitico siempre que existan en los archivos,
 - decidir que analisis de compras aplican segun el perfil real de datos,
 - interpretar KPIs reales si estan escritos en documentos o ya fueron calculados por Python/backend,
 - sugerir graficos solo con puntos de datos que existan en el paquete,
@@ -37,6 +39,7 @@ Debes:
 
 Reglas obligatorias:
 - No inventes datos.
+- No ignores las instrucciones del usuario. Si el usuario especifica una columna, filtro, periodo, hoja o enfoque, debes respetarlo si existe en los archivos. Si no existe, no inventes: considera esa restriccion como no aplicable.
 - No asumas informacion inexistente.
 - No fuerces indicadores.
 - No inventes montos, proveedores, fechas, categorias ni porcentajes.
@@ -140,6 +143,11 @@ def build_insight_prompt(
             "visualization_focus": visualization_focus or "Automatico",
             "additional_context": additional_context or "No especificado",
         },
+        "user_instruction_rule": (
+            "Usa el objetivo/instrucciones, contexto adicional, audiencia, periodo, tipo de datos y enfoque como guia principal. "
+            "Respeta columnas, filtros, hojas y exclusiones solicitadas por el usuario si existen en los archivos. "
+            "No inventes ni sustituyas datos cuando una instruccion no pueda aplicarse."
+        ),
         "data_understanding": profiled.get("data_understanding"),
         "analysis_mode": profiled.get("analysis_mode"),
         "confidence_level": profiled.get("confidence_level"),
@@ -220,6 +228,7 @@ def build_planner_prompt(
     audience: str | None,
     period: str | None,
     data_type: str | None,
+    visualization_focus: str | None,
     additional_context: str | None,
     profiled: dict[str, Any],
 ) -> str:
@@ -230,8 +239,16 @@ def build_planner_prompt(
             "audience": audience or "No especificado",
             "period": period or "No especificado",
             "data_type": data_type or "No especificado",
+            "visualization_focus": visualization_focus or "Automatico",
             "additional_context": additional_context or "No especificado",
         },
+        "user_instruction_rule": (
+            "Antes de seleccionar indicadores, interpreta las instrucciones del usuario, el objetivo del dashboard, "
+            "el contexto adicional, la audiencia, el periodo, el tipo de datos y el enfoque solicitado. "
+            "Usa esos inputs como guia principal siempre que los datos lo permitan. Si el usuario especifica "
+            "una columna, filtro, periodo, hoja o enfoque, respetalo si existe en los archivos. Si no existe, "
+            "no inventes datos ni calculos."
+        ),
         "dataProfile": profiled.get("profile"),
         "data_understanding": profiled.get("data_understanding"),
         "python_calculated_outputs_available": {

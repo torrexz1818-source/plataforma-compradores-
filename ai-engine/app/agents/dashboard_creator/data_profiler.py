@@ -115,6 +115,15 @@ BUSINESS_SHEET_PRIORITY = (
     "t_proveedores",
     "t_categorias",
 )
+
+FOCUS_KEYWORDS = {
+    "categorias": ("category", "categoria", "categor"),
+    "proveedores": ("supplier", "proveedor"),
+    "ahorro": ("savings", "ahorro"),
+    "cumplimiento": ("compliance", "otif", "estado", "cumpl"),
+    "compradores": ("buyer", "comprador"),
+    "pagos": ("payment", "pago", "condicion"),
+}
 FIELD_HINTS = {
     "proveedor": SUPPLIER_HINTS,
     "categoria": CATEGORY_HINTS,
@@ -154,15 +163,24 @@ FIELD_HINTS = {
 }
 
 
-def _sheet_rank(sheet_name: str) -> int:
+def _user_text(user_context: dict[str, Any] | None) -> str:
+    if not user_context:
+        return ""
+    return " ".join(str(value or "") for value in user_context.values()).lower()
+
+
+def _sheet_rank(sheet_name: str, user_context: dict[str, Any] | None = None) -> int:
     normalized = _normalize_column_name(sheet_name)
+    requested = _user_text(user_context)
+    if normalized and normalized in _normalize_column_name(requested):
+        return -2
     for index, name in enumerate(BUSINESS_SHEET_PRIORITY):
         if name in normalized:
             return index
     return len(BUSINESS_SHEET_PRIORITY) + 1
 
 
-def _read_table(path: Path, file_type: str) -> pd.DataFrame | None:
+def _read_table(path: Path, file_type: str, user_context: dict[str, Any] | None = None) -> pd.DataFrame | None:
     if file_type == "csv":
         try:
             return pd.read_csv(path)
@@ -180,7 +198,7 @@ def _read_table(path: Path, file_type: str) -> pd.DataFrame | None:
             if cleaned.empty:
                 continue
             cleaned["__sheet"] = sheet_name
-            prepared.append((_sheet_rank(str(sheet_name)), str(sheet_name), cleaned))
+            prepared.append((_sheet_rank(str(sheet_name), user_context), str(sheet_name), cleaned))
         if not prepared:
             return None
         has_priority = any(rank <= len(BUSINESS_SHEET_PRIORITY) for rank, _, _ in prepared)
@@ -388,6 +406,16 @@ def _best_column(columns: list[str], hints: tuple[str, ...]) -> str | None:
     return columns[0] if columns else None
 
 
+def _requested_column(columns: list[str], user_context: dict[str, Any] | None, hints: tuple[str, ...] = ()) -> str | None:
+    haystack = _normalize_column_name(_user_text(user_context))
+    if not haystack:
+        return None
+    exact_matches = [column for column in columns if _normalize_column_name(column) and _normalize_column_name(column) in haystack]
+    if hints:
+        exact_matches = [column for column in exact_matches if any(hint in column.lower() for hint in hints)]
+    return exact_matches[0] if exact_matches else None
+
+
 def _is_generic_column(column: str | None) -> bool:
     if not column:
         return True
@@ -395,8 +423,11 @@ def _is_generic_column(column: str | None) -> bool:
     return lower.startswith("columna") or lower.startswith("column") or lower.startswith("unnamed")
 
 
-def _best_amount_column(columns: list[str]) -> str | None:
+def _best_amount_column(columns: list[str], user_context: dict[str, Any] | None = None) -> str | None:
     usable = [column for column in columns if not _is_non_amount_column(column)]
+    requested = _requested_column(usable, user_context, AMOUNT_HINTS + AMOUNT_PRIORITY_HINTS)
+    if requested and not _is_generic_column(requested):
+        return requested
     priority = _hint_column(usable, AMOUNT_PRIORITY_HINTS)
     if priority and not _is_generic_column(priority):
         return priority
@@ -659,9 +690,82 @@ def _add_chart(charts: list[dict[str, Any]], chart_id: str, title: str, chart_ty
     )
 
 
+def _should_exclude_cancelled(user_context: dict[str, Any] | None) -> bool:
+    text = _user_text(user_context)
+    return "cancelad" in text and any(token in text for token in ("no considerar", "excluir", "sin ", "no incluir", "no tomar"))
+
+
+def _requested_currency(user_context: dict[str, Any] | None) -> str | None:
+    text = _user_text(user_context)
+    if "solo moneda usd" in text or "moneda principal es usd" in text or " usd" in f" {text}":
+        return "USD"
+    if "solo moneda pen" in text or "moneda principal es pen" in text or " pen" in f" {text}":
+        return "PEN"
+    return None
+
+
+def _requested_years(user_context: dict[str, Any] | None) -> list[int]:
+    import re
+
+    years = [int(match) for match in re.findall(r"\b(20\d{2}|19\d{2})\b", _user_text(user_context))]
+    return sorted(set(years))
+
+
+def _apply_user_filters(frame: pd.DataFrame, candidates: dict[str, list[str]], user_context: dict[str, Any] | None) -> tuple[pd.DataFrame, list[str]]:
+    filtered = frame.copy()
+    notes: list[str] = []
+    if filtered.empty:
+        return filtered, notes
+    status_col = _candidate_col(candidates, "estado_oc", "estado_cumplimiento")
+    if status_col and status_col in filtered and _should_exclude_cancelled(user_context):
+        before = len(filtered)
+        filtered = filtered[~filtered[status_col].astype(str).str.lower().str.contains("cancelad", na=False)].copy()
+        if before != len(filtered):
+            notes.append(f"Se excluyeron ordenes canceladas segun instruccion del usuario: {before - len(filtered)} registros.")
+    currency = _requested_currency(user_context)
+    currency_col = _candidate_col(candidates, "moneda")
+    if currency and currency_col and currency_col in filtered:
+        before = len(filtered)
+        filtered = filtered[filtered[currency_col].astype(str).str.upper().str.contains(currency, na=False)].copy()
+        if before != len(filtered):
+            notes.append(f"Se filtro moneda {currency} segun instruccion del usuario: {len(filtered)} de {before} registros.")
+    years = _requested_years(user_context)
+    date_col = _candidate_col(candidates, "fecha", "fecha_prometida", "fecha_real")
+    if years and date_col and date_col in filtered:
+        parsed = _valid_dates(filtered[date_col], date_col)
+        before = len(filtered)
+        filtered = filtered[parsed.dt.year.isin(years).fillna(False)].copy()
+        if before != len(filtered):
+            notes.append(f"Se filtro el periodo solicitado ({', '.join(map(str, years))}): {len(filtered)} de {before} registros.")
+    return filtered, notes
+
+
+def _focus_tokens(user_context: dict[str, Any] | None) -> tuple[str, ...]:
+    text = _user_text(user_context)
+    focus = _normalize_column_name(str((user_context or {}).get("visualization_focus") or ""))
+    tokens: list[str] = []
+    for key, values in FOCUS_KEYWORDS.items():
+        if key in focus or key in text or any(value in text for value in values):
+            tokens.extend(values)
+    return tuple(dict.fromkeys(tokens))
+
+
+def _priority_score(item: dict[str, Any], focus_tokens: tuple[str, ...]) -> int:
+    text = " ".join(str(item.get(key, "")) for key in ("title", "description", "chart_id", "x_axis", "y_axis")).lower()
+    return sum(1 for token in focus_tokens if token in text)
+
+
+def _prioritize_outputs(items: list[dict[str, Any]], user_context: dict[str, Any] | None) -> list[dict[str, Any]]:
+    tokens = _focus_tokens(user_context)
+    if not tokens:
+        return items
+    return sorted(items, key=lambda item: _priority_score(item, tokens), reverse=True)
+
+
 def _deterministic_procurement_outputs(
     frame: pd.DataFrame,
     candidates: dict[str, list[str]],
+    user_context: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     kpis: list[dict[str, Any]] = []
     charts: list[dict[str, Any]] = []
@@ -669,6 +773,12 @@ def _deterministic_procurement_outputs(
     insights: list[dict[str, Any]] = []
     warnings: list[str] = []
     if frame.empty:
+        return kpis, charts, tables, insights, warnings
+
+    frame, filter_notes = _apply_user_filters(frame, candidates, user_context)
+    warnings.extend(filter_notes)
+    if frame.empty:
+        warnings.append("Los filtros solicitados por el usuario dejaron el dataset sin registros disponibles.")
         return kpis, charts, tables, insights, warnings
 
     amount_col = _candidate_col(candidates, "monto")
@@ -860,7 +970,13 @@ def _deterministic_procurement_outputs(
             if not amount_col and not base_price_col and not negotiated_price_col:
                 warnings.append("Se detecto stock, pero no se calculo valor monetario de inventario porque falta costo/precio.")
 
-    return kpis, charts, tables, insights, warnings
+    return (
+        _prioritize_outputs(kpis, user_context),
+        _prioritize_outputs(charts, user_context),
+        _prioritize_outputs(tables, user_context),
+        _prioritize_outputs(insights, user_context),
+        warnings,
+    )
 
 
 def _top_group(frame: pd.DataFrame, category: str, amount: str, limit: int = 10) -> list[dict[str, Any]]:
@@ -1045,7 +1161,7 @@ def _build_document_only_outputs(document_summaries: list[dict[str, Any]]) -> tu
     return kpis, tables, insights
 
 
-def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
+def profile_files(files: list[tuple[Path, str]], user_context: dict[str, Any] | None = None) -> dict[str, Any]:
     frames: list[pd.DataFrame] = []
     document_summaries: list[dict[str, Any]] = []
     warnings: list[str] = []
@@ -1068,7 +1184,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
             }
         )
         if file_type in {"xlsx", "csv"}:
-            frame = _read_table(path, file_type)
+            frame = _read_table(path, file_type, user_context)
             if frame is None or frame.empty:
                 warnings.append(f"{filename}: no se detectaron filas tabulares.")
                 continue
@@ -1129,7 +1245,14 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
     if combined.empty:
         warnings.append("No se detectaron datos tabulares suficientes; el dashboard se basara en texto extraido si existe.")
 
-    amount_col = _best_amount_column(numeric_columns) if not combined.empty else None
+    candidates = _candidate_fields(detected_columns)
+    if not combined.empty:
+        filtered_combined, filter_notes = _apply_user_filters(combined, candidates, user_context)
+        if filter_notes:
+            warnings.extend(filter_notes)
+            combined = filtered_combined
+
+    amount_col = _best_amount_column(numeric_columns, user_context) if not combined.empty else None
     quantity_col = _hint_column(numeric_columns, QUANTITY_HINTS) if not combined.empty else None
     if _is_generic_column(quantity_col):
         quantity_col = None
@@ -1438,14 +1561,17 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
     if not category_col and total_rows:
         warnings.append("No se detecto una columna clara de categoria; no se puede armar resumen por categoria.")
 
-    candidates = _candidate_fields(detected_columns)
     possible_analyses, not_possible_analyses = _analysis_capabilities(candidates)
-    deterministic_kpis, deterministic_charts, deterministic_tables, deterministic_insights, deterministic_warnings = _deterministic_procurement_outputs(combined, candidates)
+    deterministic_kpis, deterministic_charts, deterministic_tables, deterministic_insights, deterministic_warnings = _deterministic_procurement_outputs(combined, candidates, user_context)
     kpis.extend(deterministic_kpis)
     charts.extend(deterministic_charts)
     tables.extend(deterministic_tables)
     insights.extend(deterministic_insights)
     warnings.extend(deterministic_warnings)
+    kpis = _prioritize_outputs(kpis, user_context)
+    charts = _prioritize_outputs(charts, user_context)
+    tables = _prioritize_outputs(tables, user_context)
+    insights = _prioritize_outputs(insights, user_context)
     enriched_charts = [_with_chart_presentation(chart) for chart in charts]
 
     profile = {
@@ -1464,6 +1590,7 @@ def profile_files(files: list[tuple[Path, str]]) -> dict[str, Any]:
         "basicStats": _basic_stats(combined, numeric_columns, date_columns, category_columns),
         "possibleAnalyses": possible_analyses,
         "notPossibleAnalyses": not_possible_analyses,
+        "userInput": user_context or {},
     }
     understanding = _build_data_understanding(
         source_files=source_files,

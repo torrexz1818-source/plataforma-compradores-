@@ -382,7 +382,17 @@ async def generate_dashboard(
             validate_allowed_file(upload.filename or "")
             temp_paths.append(await save_upload_temporarily(upload, settings.max_file_size_mb))
 
-        profiled = profile_files([(path, upload.filename or path.name) for path, upload in zip(temp_paths, files)])
+        user_context = {
+            "dashboard_name": title,
+            "audience": audience,
+            "objective_instructions": objective,
+            "period": period,
+            "data_type": data_type,
+            "additional_context": additional_context,
+            "visualization_focus": visualization_focus or "Automático",
+            "uploaded_files": [upload.filename or path.name for path, upload in zip(temp_paths, files)],
+        }
+        profiled = profile_files([(path, upload.filename or path.name) for path, upload in zip(temp_paths, files)], user_context=user_context)
         basic_summary, basic_insights, basic_recommendations, _ = build_basic_insights(profiled)
 
         executive_summary = basic_summary
@@ -408,7 +418,8 @@ async def generate_dashboard(
 
         has_document_sources = any(item.get("detected_type") not in {"xlsx", "csv"} for item in profiled.get("source_files", []))
         has_low_structure = profiled.get("data_understanding", {}).get("structure_level") in {"low", "medium"}
-        should_use_llm = use_llm_insights or has_document_sources or has_low_structure
+        has_user_instructions = any(str(user_context.get(key) or "").strip() for key in ("objective_instructions", "additional_context", "period", "data_type", "visualization_focus", "audience"))
+        should_use_llm = use_llm_insights or has_document_sources or has_low_structure or has_user_instructions
 
         if should_use_llm:
             try:
@@ -419,6 +430,7 @@ async def generate_dashboard(
                         audience=audience,
                         period=period,
                         data_type=data_type,
+                        visualization_focus=visualization_focus,
                         additional_context=additional_context,
                         profiled=profiled,
                     ),

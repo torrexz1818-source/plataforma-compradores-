@@ -121,11 +121,14 @@ export type DashboardResult = {
 
 export type GenerateDashboardPayload = {
   title: string;
+  dashboardName?: string;
   objective: string;
+  objectiveInstructions?: string;
   audience?: string;
   period?: string;
   dataType?: string;
   visualizationFocus?: string;
+  dashboardFocus?: string;
   additionalContext?: string;
   useLlmInsights?: boolean;
   files: File[];
@@ -160,13 +163,14 @@ async function readError(response: Response, fallback: string) {
 
 export async function generateDashboard(payload: GenerateDashboardPayload): Promise<DashboardResult> {
   const formData = new FormData();
-  formData.append('title', payload.title);
-  formData.append('objective', payload.objective);
+  formData.append('title', (payload.dashboardName || payload.title).trim());
+  formData.append('objective', (payload.objectiveInstructions || payload.objective).trim());
   formData.append('use_llm_insights', String(payload.useLlmInsights ?? false));
   if (payload.audience?.trim()) formData.append('audience', payload.audience.trim());
   if (payload.period?.trim()) formData.append('period', payload.period.trim());
   if (payload.dataType?.trim()) formData.append('data_type', payload.dataType.trim());
-  if (payload.visualizationFocus?.trim()) formData.append('visualization_focus', payload.visualizationFocus.trim());
+  const focus = payload.dashboardFocus || payload.visualizationFocus;
+  if (focus?.trim()) formData.append('visualization_focus', focus.trim());
   if (payload.additionalContext?.trim()) formData.append('additional_context', payload.additionalContext.trim());
   payload.files.forEach((file) => formData.append('files', file, file.name));
 

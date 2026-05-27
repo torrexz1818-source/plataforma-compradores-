@@ -44,6 +44,7 @@ class DataProfile(BaseModel):
     basicStats: dict[str, Any] = Field(default_factory=dict)
     possibleAnalyses: list[dict[str, Any]] = Field(default_factory=list)
     notPossibleAnalyses: list[dict[str, Any]] = Field(default_factory=list)
+    userInput: dict[str, Any] = Field(default_factory=dict)
     confidence: Confidence = "medium"
 
 
