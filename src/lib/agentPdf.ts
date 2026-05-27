@@ -4,6 +4,7 @@ import {
   flattenTcoMatrixRows,
   normalizeTcoForPresentation,
   tcoKpiRows,
+  type TcoPresentationModel,
 } from '@/features/tco-analysis/tcoPresentation';
 import type { TcoAnalysisResult } from '@/features/tco-analysis/tcoAnalysisApi';
 
@@ -172,6 +173,9 @@ const technicalKeys = new Set([
   'cost_output',
   'cost_total',
   'latency_ms',
+  'tco_dashboard_matrix',
+  'dashboard_matrix',
+  'presentationModel',
 ]);
 
 function formatLabel(value: string) {
@@ -879,6 +883,56 @@ function tcoRecommendationRows(result: Record<string, unknown>) {
   ].filter((row) => row.Valor && row.Valor !== 'No especificado');
 }
 
+function renderTcoMatrixForPdf(ctx: PdfContext, model: TcoPresentationModel) {
+  const alternatives = model.alternatives.slice(0, 5);
+  const headers = ['Componente', ...alternatives.map((item) => item.label), 'Nota'];
+  const componentWidth = 46;
+  const noteWidth = 36;
+  const altWidth = Math.max((ctx.maxWidth - componentWidth - noteWidth) / Math.max(alternatives.length, 1), 24);
+  const widths = [componentWidth, ...alternatives.map(() => altWidth), noteWidth];
+
+  model.matrix.forEach((section) => {
+    const rows = [...section.rows, ...(section.totalRow ? [section.totalRow] : [])];
+    if (!rows.length) return;
+    addText(ctx, section.title, { size: 9.4, bold: true, color: '#0f172a', gap: 2 });
+    if (section.description) addText(ctx, section.description, { size: 8, color: '#64748b', gap: 1 });
+    addTable(
+      ctx,
+      headers,
+      rows.map((row) => [
+        row.isTotal ? row.component.toUpperCase() : row.component,
+        ...alternatives.map((alternative) => row.values[alternative.label] ?? 'Dato faltante'),
+        [row.source, row.unit, row.note].filter(Boolean).join(' - ') || '-',
+      ]),
+      widths,
+    );
+  });
+}
+
+function renderTcoMatrixForWordRows(model: TcoPresentationModel) {
+  return model.matrix.flatMap((section) => [
+    { Seccion: section.title, Componente: section.description || section.title },
+    ...[...section.rows, ...(section.totalRow ? [section.totalRow] : [])].map((row) => ({
+      Seccion: section.title,
+      Componente: row.isTotal ? row.component.toUpperCase() : row.component,
+      ...row.values,
+      Nota: [row.source, row.unit, row.note].filter(Boolean).join(' - '),
+    })),
+  ]);
+}
+
+function renderTcoMatrixForPptRows(model: TcoPresentationModel, sectionTitle?: string) {
+  const sections = sectionTitle ? model.matrix.filter((section) => section.title === sectionTitle) : model.matrix;
+  return sections.flatMap((section) =>
+    [...section.rows, ...(section.totalRow ? [section.totalRow] : [])].map((row) => ({
+      Seccion: section.title,
+      Componente: row.component,
+      ...row.values,
+      Nota: [row.source, row.unit, row.note].filter(Boolean).join(' - '),
+    })),
+  );
+}
+
 function getRecommendedRanking(result: Record<string, unknown>) {
   const recommended = asText(result.recommended_supplier, '');
   const ranking = asArray(result.ranking).map(asRecord);
@@ -1128,71 +1182,30 @@ function addDashboardResultPdf(input: PdfInput) {
 function addTcoAnalysisPdf(input: PdfInput) {
   const result = asRecord(input.result);
   const ctx = createContext(input);
+  const model = tcoPresentationModel(result);
   const summary = asRecord(result.executive_summary);
-  const subtitle = `Producto/servicio: ${asText(result.item_name)} | Horizonte: ${asText(result.evaluation_horizon)} | Moneda: ${asText(result.currency)}`;
+  const subtitle = `${model.header.analysisType} | Horizonte: ${model.header.horizon} | Moneda: ${model.header.currency}`;
 
   addHeader(ctx, input, subtitle);
   addCard(ctx, 'Resumen ejecutivo', [
-    `Mejor alternativa preliminar: ${asText(summary.best_alternative)}`,
+    `Mejor alternativa: ${asText(summary.best_alternative)}`,
     `Score ganador: ${asText(summary.best_alternative_score)} / 100 - ${asText(summary.best_alternative_score_label)}`,
-    `Motivo: ${asText(summary.why_it_wins)}`,
+    `Motivo: ${asText(summary.why_it_wins).slice(0, 260)}`,
     `Ahorro o sobrecosto: ${asText(summary.estimated_saving_or_overcost)}`,
     `Riesgo principal: ${asText(summary.main_risk)}`,
-    `Recomendacion final: ${asText(summary.final_recommendation)}`,
+    `Recomendacion final: ${model.recommendation.finalRecommendedOption}`,
   ], 'green');
 
-  addSection(ctx, 'Tipo de analisis e indicadores principales');
+  addSection(ctx, 'KPIs principales');
   addTable(
     ctx,
-    ['Campo', 'Valor'],
-    tcoBaseRows(result).map((item) => [item.Campo, item.Valor]),
-    [54, ctx.maxWidth - 54],
+    ['KPI', 'Valor', 'Nota'],
+    model.kpis.map((item) => [item.label, item.value, item.note ?? '']),
+    [44, 42, ctx.maxWidth - 86],
   );
 
-  const documents = asArray(result.supporting_documents_summary).map(asRecord);
-  if (documents.length) {
-    addSection(ctx, 'Resumen de documentos procesados');
-    addTable(
-      ctx,
-      ['Archivo', 'Tipo detectado', 'Hallazgos relevantes', 'Limitaciones'],
-      documents.map((item) => [
-        item.file_name ?? item.name,
-        item.detected_type ?? item.type,
-        asArray(item.relevant_findings).map((finding) => asText(finding, '')).join('\n'),
-        asArray(item.limitations).map((limitation) => asText(limitation, '')).join('\n'),
-      ]),
-      [38, 24, 78, ctx.maxWidth - 140],
-    );
-  }
-
-  const alternatives = tcoDetectedAlternativeRows(result);
-  if (alternatives.length) {
-    addSection(ctx, 'Alternativas detectadas');
-    addTable(
-      ctx,
-      ['Proveedor', 'Archivo', 'Precio', 'Garantia', 'Plazo', 'Datos faltantes'],
-      alternatives.map((item) => [item.Proveedor, item.Archivo, item.Precio, item.Garantia, item.Plazo, item['Datos faltantes']]),
-      [34, 42, 24, 28, 24, ctx.maxWidth - 152],
-    );
-  }
-
-  const dataUsed = tcoDataUsedRows(result);
-  if (dataUsed.length) {
-    addSection(ctx, 'Datos usados por alternativa');
-    addTable(
-      ctx,
-      ['Alternativa', 'Precio base', 'Cantidad', 'Moneda', 'Horizonte', 'Supuestos'],
-      dataUsed.map((item) => [item.Alternativa, item['Precio base'], item.Cantidad, item.Moneda, item.Horizonte, item.Supuestos]),
-      [36, 26, 20, 20, 26, ctx.maxWidth - 128],
-    );
-  }
-
-  const matrix = tcoMatrixRows(result);
-  if (matrix.length) {
-    addSection(ctx, 'Matriz TCO comparativa');
-    const keys = Object.keys(matrix[0] ?? {}).slice(0, 6);
-    addTable(ctx, keys, matrix.map((row) => keys.map((key) => row[key])), keys.map(() => ctx.maxWidth / keys.length));
-  }
+  addSection(ctx, 'Matriz TCO comparativa');
+  renderTcoMatrixForPdf(ctx, model);
 
   const totals = tcoTotalsRows(result);
   if (totals.length) {
@@ -1216,12 +1229,6 @@ function addTcoAnalysisPdf(input: PdfInput) {
     );
   }
 
-  const hiddenCosts = asArray(result.hidden_costs_detected);
-  if (hiddenCosts.length) {
-    addSection(ctx, 'Costos ocultos detectados');
-    addBulletList(ctx, 'Costos ocultos', hiddenCosts, 24);
-  }
-
   const risks = tcoRiskRows(result);
   if (risks.length) {
     addSection(ctx, 'Analisis de riesgos');
@@ -1233,56 +1240,22 @@ function addTcoAnalysisPdf(input: PdfInput) {
     );
   }
 
-  if (result.interpretation) {
-    addSection(ctx, 'Interpretacion');
-    addValueBlock(ctx, 'interpretation', result.interpretation);
-  }
+  addSection(ctx, 'Datos faltantes y supuestos');
+  addBulletList(ctx, 'Datos faltantes', model.missingData, 8);
+  addBulletList(ctx, 'Supuestos y limites', model.assumptions, 8);
 
-  if (result.sensitivity_analysis) {
-    addSection(ctx, 'Analisis de sensibilidad');
-    addValueBlock(ctx, 'sensitivity_analysis', result.sensitivity_analysis);
-  }
-
-  addSection(ctx, 'Recomendacion estrategica');
+  addSection(ctx, 'Recomendacion final');
   addTable(
     ctx,
-    ['Seccion', 'Campo', 'Detalle'],
-    tcoRecommendationRows(result).map((item) => [item.Seccion, item.Campo, item.Valor]),
-    [38, 46, ctx.maxWidth - 84],
+    ['Campo', 'Detalle'],
+    [
+      ['Opcion recomendada', model.recommendation.finalRecommendedOption],
+      ['Accion', model.recommendation.recommendedAction],
+      ['Justificacion', model.recommendation.rationale],
+      ['Proximos pasos', model.recommendation.nextSteps.slice(0, 5).join(' | ')],
+    ],
+    [42, ctx.maxWidth - 42],
   );
-
-  addSection(ctx, 'Validaciones pendientes');
-  addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 20);
-  addBulletList(ctx, 'Preguntas para usuario o proveedores', asArray(result.questions_for_user_or_suppliers), 20);
-  addBulletList(ctx, 'Supuestos y limites', asArray(result.assumptions_and_limits), 20);
-  addBulletList(ctx, 'Advertencias de calculo', asArray(result.calculation_warnings), 20);
-
-  addAdditionalResultSections(ctx, result, [
-    'analysis_title',
-    'item_name',
-    'analysis_type',
-    'evaluation_horizon',
-    'comparison_unit',
-    'currency',
-    'executive_summary',
-    'supporting_documents_summary',
-    'extracted_data_quality',
-    'detected_alternatives',
-    'data_used',
-    'tco_matrix',
-    'tco_totals',
-    'ranking',
-    'hidden_costs_detected',
-    'risk_analysis',
-    'interpretation',
-    'sensitivity_analysis',
-    'strategic_recommendation',
-    'missing_information',
-    'questions_for_user_or_suppliers',
-    'assumptions_and_limits',
-    'calculation_warnings',
-    'disclaimer',
-  ]);
 
   addSection(ctx, 'Disclaimer');
   addText(ctx, asText(result.disclaimer, 'Analisis generado por Nodus IA como apoyo a decisiones de compra. Validar datos criticos antes de tomar decisiones finales.'), {
@@ -1989,6 +1962,7 @@ async function downloadTermsOfReferenceDocx(input: AgentExportInput, result: Rec
 
 async function downloadTcoResultDocx(input: AgentExportInput, result: Record<string, unknown>) {
   const docx = await import('docx');
+  const model = tcoPresentationModel(result);
   const summary = asRecord(result.executive_summary);
   const recommendation = asRecord(result.strategic_recommendation);
   const children: DocxChild[] = [
@@ -2022,7 +1996,7 @@ async function downloadTcoResultDocx(input: AgentExportInput, result: Record<str
   [
     ['Alternativas detectadas', tcoDetectedAlternativeRows(result)],
     ['Datos usados', tcoDataUsedRows(result)],
-    ['Matriz TCO', tcoMatrixRows(result)],
+    ['Matriz TCO', renderTcoMatrixForWordRows(model)],
     ['Totales TCO', tcoTotalsRows(result)],
     ['Ranking', tcoRankingRows(result)],
     ['Riesgos', tcoRiskRows(result)],
@@ -2469,6 +2443,7 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
 
   const summary = asRecord(result.executive_summary);
   const recommendation = asRecord(result.strategic_recommendation);
+  const model = tcoPresentationModel(result);
   let slide = pptx.addSlide();
   addPptTitle(slide, asText(result.analysis_title, input.title));
   slide.addText(asText(summary.final_recommendation || summary.why_it_wins), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
@@ -2499,7 +2474,7 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
 
   [
     ['Alternativas detectadas', tcoDetectedAlternativeRows(result)],
-    ['Matriz TCO', tcoMatrixRows(result)],
+    ['Matriz TCO', renderTcoMatrixForPptRows(model)],
     ['Ranking', tcoRankingRows(result)],
     ['Riesgos', tcoRiskRows(result)],
   ].forEach(([title, rows]) => {
