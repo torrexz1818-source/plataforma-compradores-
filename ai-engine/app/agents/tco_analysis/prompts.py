@@ -111,6 +111,11 @@ Tablas comparativas:
 - Si hay varias alternativas, incluye tabla de costos TCO, tabla comparativa de
   alternativas, tabla de riesgos, tabla de ranking/calificacion y tabla de supuestos
   o datos faltantes.
+- La matriz TCO no debe limitarse a una sola fila de total si existen componentes
+  disponibles. Debe desagregar cada componente encontrado o calculable como fila
+  independiente: precio base, inversion inicial, flete/logistica, instalacion,
+  implementacion, mantenimiento, operacion, energia/combustible, repuestos, soporte,
+  seguros, riesgos, valor residual, TCO anualizado y TCO total estimado, segun aplique.
 - Usa columnas que apliquen al caso: alternativa, proveedor, precio inicial,
   inversion total, costos logisticos, implementacion, operacion, mantenimiento,
   garantia, soporte, vida util, tiempo de entrega, riesgos, costos ocultos, TCO total,
@@ -332,6 +337,7 @@ def build_user_prompt(
             "Identifica alternativas/proveedores desde documentos e instrucciones.",
             "Extrae proveedor, marca/modelo, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas si aparece, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, riesgos y costos no incluidos. Si no aparece, escribe No especificado.",
             "Construye matriz TCO y tablas comparativas con datos reales cuando existan, datos calculados cuando haya base suficiente y 'No especificado' cuando no existan.",
+            "En tco_matrix, usa una fila por componente TCO disponible o relevante; no devuelvas solo una fila de TCO total si hay precio, mantenimiento, logistica, operacion, garantia, soporte, valor residual u otros componentes mencionados.",
             "Incluye indicadores relevantes para el caso: inversion inicial, TCO estimado, costo logistico, instalacion/implementacion, operacion anual, mantenimiento anual, vida util, costo anualizado, costo por km/hora/usuario/unidad si aplica, valor residual, ahorro/sobrecosto, diferencia porcentual, lead time, riesgo total, score y confianza.",
             "No fuerces indicadores que no aplican; adapta la formula TCO a vehiculos/flota, software, servicios, importacion, maquinaria, repuestos, insumos o contratos segun corresponda.",
             "No uses conocimiento general externo para completar datos del proveedor. El analisis debe estar anclado en documentos/contexto del usuario.",
