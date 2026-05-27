@@ -81,6 +81,54 @@ class TcoMatrixRow(BaseModel):
     notes: str = ""
 
 
+class TcoDashboardAlternative(BaseModel):
+    id: str | None = None
+    name: str
+    provider: str | None = None
+    label: str
+
+
+class TcoDashboardMatrixRow(BaseModel):
+    component: str
+    values: dict[str, float | int | str | None] = Field(default_factory=dict)
+    unit: str | None = None
+    source: str | None = None
+    note: str | None = None
+
+
+class TcoDashboardSection(BaseModel):
+    title: str
+    description: str | None = None
+    rows: list[TcoDashboardMatrixRow] = Field(default_factory=list)
+    total_row: TcoDashboardMatrixRow | None = None
+
+
+class TcoDashboardTotal(BaseModel):
+    metric: str
+    values: dict[str, float | int | str | None] = Field(default_factory=dict)
+    unit: str | None = None
+    note: str | None = None
+
+
+class TcoDashboardKpi(BaseModel):
+    label: str
+    value: str | float | int | None
+    note: str | None = None
+
+
+class TcoDashboardMatrix(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    analysis_type: str | None = None
+    currency: str | None = None
+    horizon: str | None = None
+    unit_of_comparison: str | None = None
+    alternatives: list[TcoDashboardAlternative] = Field(default_factory=list)
+    sections: list[TcoDashboardSection] = Field(default_factory=list)
+    totals: list[TcoDashboardTotal] = Field(default_factory=list)
+    kpis: list[TcoDashboardKpi] = Field(default_factory=list)
+
+
 class TcoTotalItem(BaseModel):
     alternative: str
     initial_price: float | None = None
@@ -154,6 +202,7 @@ class TcoAnalysisResult(BaseModel):
     executive_summary: ExecutiveSummary
     data_used: list[DataUsedItem] = Field(default_factory=list)
     tco_matrix: list[TcoMatrixRow] = Field(default_factory=list)
+    tco_dashboard_matrix: TcoDashboardMatrix | None = None
     tco_totals: list[TcoTotalItem] = Field(default_factory=list)
     ranking: list[RankingItem] = Field(default_factory=list)
     interpretation: Interpretation

@@ -62,6 +62,7 @@ export type TcoAnalysisResult = {
   };
   data_used: Array<Record<string, unknown>>;
   tco_matrix: Array<{ cost_component: string; values: Record<string, number | string | null>; notes?: string }>;
+  tco_dashboard_matrix?: Record<string, unknown> | null;
   tco_totals: Array<Record<string, unknown>>;
   ranking: Array<{
     position: number;

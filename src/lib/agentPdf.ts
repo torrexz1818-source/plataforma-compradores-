@@ -1,5 +1,11 @@
 import jsPDF from 'jspdf';
 import type { AgentPdfMode, AgentPdfOptions } from '@/types';
+import {
+  flattenTcoMatrixRows,
+  normalizeTcoForPresentation,
+  tcoKpiRows,
+} from '@/features/tco-analysis/tcoPresentation';
+import type { TcoAnalysisResult } from '@/features/tco-analysis/tcoAnalysisApi';
 
 const DASHBOARD_CREATOR_DISCLAIMER =
   'Este dashboard de compras fue generado con asistencia de IA a partir de los archivos cargados por el usuario. La información, indicadores y recomendaciones deben ser revisados y validados por el comprador antes de tomar decisiones finales.';
@@ -648,6 +654,10 @@ function isTcoAnalysisResult(result: unknown) {
   return Boolean(data.analysis_title && data.tco_matrix && data.ranking && data.strategic_recommendation);
 }
 
+function tcoPresentationModel(result: Record<string, unknown>) {
+  return normalizeTcoForPresentation(result as unknown as TcoAnalysisResult);
+}
+
 function dashboardTableRows(table: Record<string, unknown>) {
   const columns = asArray(table.columns).map((item) => asText(item, '')).filter(Boolean);
   return asArray(table.rows).map(asRecord).map((row) => {
@@ -709,11 +719,7 @@ function tcoDataUsedRows(result: Record<string, unknown>) {
 }
 
 function tcoMatrixRows(result: Record<string, unknown>) {
-  return asArray(result.tco_matrix).map(asRecord).map((row) => ({
-    Componente: row.cost_component,
-    ...asRecord(row.values),
-    Notas: row.notes,
-  }));
+  return flattenTcoMatrixRows(tcoPresentationModel(result));
 }
 
 function tcoRankingRows(result: Record<string, unknown>) {
@@ -755,21 +761,20 @@ function tcoRiskRows(result: Record<string, unknown>) {
 }
 
 function tcoBaseRows(result: Record<string, unknown>) {
+  const model = tcoPresentationModel(result);
   const summary = asRecord(result.executive_summary);
-  const quality = asRecord(result.extracted_data_quality);
   return [
-    { Campo: 'Titulo del analisis', Valor: asText(result.analysis_title) },
-    { Campo: 'Producto o servicio', Valor: asText(result.item_name) },
-    { Campo: 'Tipo de analisis', Valor: asText(result.analysis_type) },
-    { Campo: 'Horizonte', Valor: asText(result.evaluation_horizon) },
-    { Campo: 'Unidad de comparacion', Valor: asText(result.comparison_unit) },
-    { Campo: 'Moneda', Valor: asText(result.currency) },
+    { Campo: 'Titulo del analisis', Valor: model.header.title },
+    { Campo: 'Producto o servicio', Valor: model.header.itemName },
+    { Campo: 'Tipo de analisis', Valor: model.header.analysisType },
+    { Campo: 'Horizonte', Valor: model.header.horizon },
+    { Campo: 'Unidad de comparacion', Valor: model.header.unitOfComparison },
+    { Campo: 'Moneda', Valor: model.header.currency },
     { Campo: 'Mejor alternativa', Valor: asText(summary.best_alternative) },
     { Campo: 'Score ganador', Valor: `${asText(summary.best_alternative_score)} / 100 - ${asText(summary.best_alternative_score_label)}` },
     { Campo: 'Ahorro o sobrecosto', Valor: asText(summary.estimated_saving_or_overcost) },
     { Campo: 'Riesgo principal', Valor: asText(summary.main_risk) },
-    { Campo: 'Nivel de confianza', Valor: asText(quality.confidence_level) },
-    { Campo: 'Documentos procesados', Valor: asText(quality.documents_processed) },
+    ...tcoKpiRows(model).map((item) => ({ Campo: item.KPI, Valor: item.Valor, Nota: item.Nota })),
   ];
 }
 
@@ -1677,9 +1682,14 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
     return;
   }
   if (isTcoAnalysisResult(result)) {
+    const model = tcoPresentationModel(result);
     const workbook = XLSX.utils.book_new();
     addMetadataSheet(XLSX, workbook, input, result);
     const used = new Set<string>(['Resumen']);
+    appendJsonSheet(XLSX, workbook, used, 'Dashboard TCO', [
+      ...tcoKpiRows(model),
+      { KPI: 'Recomendacion', Valor: model.recommendation.finalRecommendation, Nota: model.recommendation.rationale },
+    ]);
     appendJsonSheet(XLSX, workbook, used, 'Datos base', tcoBaseRows(result));
     appendJsonSheet(XLSX, workbook, used, 'Alternativas', tcoDetectedAlternativeRows(result));
     appendJsonSheet(XLSX, workbook, used, 'Datos extraidos', tcoDetectedAlternativeRows(result));

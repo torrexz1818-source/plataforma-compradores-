@@ -59,6 +59,7 @@ import {
 import { useDashboardCreator } from '@/features/dashboard-creator/useDashboardCreator';
 import { DashboardReportView } from '@/features/dashboard-creator/components/DashboardReportView';
 import { useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
+import { normalizeTcoForPresentation } from '@/features/tco-analysis/tcoPresentation';
 import { downloadAgentResult, type AgentExportFormat } from '@/lib/agentPdf';
 import MonetizationPanel from '@/components/MonetizationPanel';
 
@@ -1177,54 +1178,9 @@ const NexuIA = () => {
   const termsFormSchema = termsFormSchemaMutation.data;
   const termsResult = termsGenerateMutation.data;
   const tcoResult = tcoAnalysisMutation.data;
-  const tcoWinnerTotal = tcoResult?.tco_totals.find(
-    (item) => textValue(item.alternative, '') === tcoResult.executive_summary.best_alternative,
-  );
+  const tcoPresentation = tcoResult ? normalizeTcoForPresentation(tcoResult) : undefined;
   const tcoRecommendation = tcoResult?.strategic_recommendation;
-  const tcoExecutiveCards = tcoResult
-    ? [
-        {
-          label: 'TCO total estimado',
-          value: tcoWinnerTotal?.total_tco,
-          detail: tcoWinnerTotal ? `Alternativa: ${textValue(tcoWinnerTotal.alternative)}` : '',
-        },
-        {
-          label: 'Mejor alternativa',
-          value: tcoResult.executive_summary.best_alternative,
-          detail: tcoResult.executive_summary.why_it_wins,
-        },
-        {
-          label: 'Ahorro potencial',
-          value: tcoResult.executive_summary.estimated_saving_or_overcost,
-          detail: '',
-        },
-        {
-          label: 'Riesgo principal',
-          value: tcoResult.executive_summary.main_risk,
-          detail: '',
-        },
-        {
-          label: 'Score ganador',
-          value: tcoResult.executive_summary.best_alternative_score,
-          detail: tcoResult.executive_summary.best_alternative_score_label ?? '',
-        },
-        {
-          label: 'Confianza del análisis',
-          value: tcoResult.extracted_data_quality?.confidence_level,
-          detail: tcoResult.extracted_data_quality
-            ? `${tcoResult.extracted_data_quality.documents_processed} documentos procesados`
-            : '',
-        },
-        {
-          label: 'Datos faltantes críticos',
-          value: tcoResult.missing_information.length ? tcoResult.missing_information.length : undefined,
-          detail: tcoResult.missing_information.slice(0, 2).join(' | '),
-        },
-      ].filter((card) => {
-        const value = textValue(card.value, '');
-        return value && !['No especificado', 'No determinado', 'null', 'undefined'].includes(value);
-      })
-    : [];
+  const tcoExecutiveCards = tcoPresentation?.kpis ?? [];
   const dashboardResult = dashboardCreatorMutation.data;
   const termsSections = termsFormSchema?.form_sections ?? [];
   const termsTotalSteps = termsFormSchema ? termsSections.length + 2 : 1;
@@ -2671,10 +2627,10 @@ const NexuIA = () => {
                             <div key={card.label} className="rounded-2xl border border-primary/15 bg-white p-4">
                               <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">{card.label}</p>
                               <p className="mt-2 text-lg font-semibold text-foreground">
-                                {card.label === 'Score ganador' ? `${textValue(card.value)} / 100` : textValue(card.value)}
+                                {textValue(card.value)}
                               </p>
-                              {card.detail ? (
-                                <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground/80">{card.detail}</p>
+                              {card.note ? (
+                                <p className="mt-1 line-clamp-3 text-xs leading-5 text-muted-foreground/80">{card.note}</p>
                               ) : null}
                             </div>
                           ))}
@@ -2762,28 +2718,54 @@ const NexuIA = () => {
 
                       <div>
                         <p className="text-sm font-medium text-foreground">C. Matriz TCO comparativa</p>
-                        <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white">
-                          <table className="w-full min-w-[760px] text-left text-sm">
-                            <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
-                              <tr>
-                                <th className="px-4 py-3 font-medium">Componente</th>
-                                {tcoResult.tco_totals.map((item) => (
-                                  <th key={String(item.alternative)} className="px-4 py-3 font-medium">{String(item.alternative)}</th>
+                        <div className="mt-3 overflow-x-auto rounded-2xl border border-primary/15 bg-white shadow-sm">
+                          <table className="w-full min-w-[980px] border-separate border-spacing-0 text-left text-sm">
+                            <thead>
+                              <tr className="bg-[#0d1b3e] text-white">
+                                <th className="sticky left-0 z-10 min-w-[260px] bg-[#0d1b3e] px-4 py-3 font-semibold">Componente</th>
+                                {tcoPresentation?.alternatives.map((alternative) => (
+                                  <th key={alternative.id} className="min-w-[170px] px-4 py-3 text-right font-semibold">{alternative.label}</th>
                                 ))}
-                                <th className="px-4 py-3 font-medium">Notas</th>
+                                <th className="min-w-[220px] px-4 py-3 font-semibold">Nota / fuente</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {tcoResult.tco_matrix.map((row) => (
-                                <tr key={row.cost_component} className="border-t border-primary/10">
-                                  <td className="px-4 py-3 font-medium text-foreground">{row.cost_component}</td>
-                                  {tcoResult.tco_totals.map((item) => (
-                                    <td key={`${row.cost_component}-${String(item.alternative)}`} className="px-4 py-3 text-muted-foreground">
-                                      {String(row.values[String(item.alternative)] ?? 'No especificado')}
+                              {tcoPresentation?.matrix.map((section) => (
+                                <>
+                                  <tr key={`${section.title}-header`} className="bg-primary/10">
+                                    <td className="sticky left-0 z-10 bg-primary/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-primary">
+                                      {section.title}
                                     </td>
+                                    <td colSpan={(tcoPresentation?.alternatives.length ?? 0) + 1} className="px-4 py-2 text-xs text-muted-foreground">
+                                      {section.description || 'Componentes del TCO aplicables al caso'}
+                                    </td>
+                                  </tr>
+                                  {[...section.rows, ...(section.totalRow ? [section.totalRow] : [])].map((row) => (
+                                    <tr key={`${section.title}-${row.component}`} className={row.isTotal ? 'bg-emerald-50' : 'bg-white'}>
+                                      <td className={`sticky left-0 z-10 border-t border-primary/10 px-4 py-3 ${row.isTotal ? 'bg-emerald-50 font-semibold text-emerald-900' : 'bg-white font-medium text-foreground'}`}>
+                                        {row.component}
+                                      </td>
+                                      {tcoPresentation?.alternatives.map((alternative) => {
+                                        const cell = row.values[alternative.label] || 'Dato faltante';
+                                        const isStatus = ['Dato faltante', 'No aplica', 'No calculable con datos actuales', 'Requiere base de uso', 'Requiere km/año o vida útil', 'Requiere número de usuarios'].includes(cell);
+                                        return (
+                                          <td key={`${row.component}-${alternative.label}`} className={`border-t border-primary/10 px-4 py-3 text-right ${row.isTotal ? 'font-semibold text-emerald-900' : 'text-muted-foreground'}`}>
+                                            {isStatus ? (
+                                              <span className="inline-flex rounded-full bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">{cell}</span>
+                                            ) : cell.toLowerCase().includes('supuesto') ? (
+                                              <span className="inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">{cell}</span>
+                                            ) : (
+                                              cell
+                                            )}
+                                          </td>
+                                        );
+                                      })}
+                                      <td className="border-t border-primary/10 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                                        {[row.source, row.unit, row.note].filter(Boolean).join(' · ') || '-'}
+                                      </td>
+                                    </tr>
                                   ))}
-                                  <td className="px-4 py-3 text-muted-foreground">{row.notes || '-'}</td>
-                                </tr>
+                                </>
                               ))}
                             </tbody>
                           </table>
@@ -2842,7 +2824,15 @@ const NexuIA = () => {
                                 </div>
                               ))}
                           </div>
-                          {renderRecordBlock(tcoResult.strategic_recommendation)}
+                          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                            {tcoPresentation?.recommendation.finalRecommendation}
+                          </p>
+                          {tcoPresentation?.recommendation.nextSteps.length ? (
+                            <div className="mt-3">
+                              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">Próximos pasos</p>
+                              <div className="mt-2">{renderValueList(tcoPresentation.recommendation.nextSteps.slice(0, 5))}</div>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
 

@@ -33,6 +33,12 @@ Principios obligatorios:
 - La opcion recomendada no siempre debe ser la mas barata.
 - Siempre entrega un analisis preliminar util aunque falten datos.
 - Si falta informacion, incluye exactamente esta idea: "Con la informacion disponible se puede realizar este analisis preliminar. Para mejorar la precision del TCO, seria recomendable contar con los siguientes datos..."
+- Si el usuario sube un Excel con matriz TCO, datos base, formulas, KPIs, hojas de
+  costos, totales, ranking o supuestos, usalo como fuente estructural prioritaria para
+  construir tco_dashboard_matrix, tco_matrix, totales y KPIs. Usa PDFs y documentos
+  comerciales para validar precios, garantias, condiciones, postventa y datos faltantes.
+  Si hay conflicto entre Excel y PDFs, adviertelo y prioriza el dato mas estructurado,
+  marcando la limitacion.
 
 Tipos de analisis que debes detectar:
 - Comparativo de proveedores.
@@ -265,6 +271,36 @@ EXPECTED_JSON_SHAPE = {
             "notes": "string",
         }
     ],
+    "tco_dashboard_matrix": {
+        "analysis_type": "string",
+        "currency": "string",
+        "horizon": "string",
+        "unit_of_comparison": "string",
+        "alternatives": [{"id": "string", "name": "string", "provider": "string", "label": "string"}],
+        "sections": [
+            {
+                "title": "string",
+                "description": "string",
+                "rows": [
+                    {
+                        "component": "string",
+                        "values": {"Alternativa": "numero, texto, Dato faltante, No aplica, Supuesto o No calculable con datos actuales"},
+                        "unit": "string",
+                        "source": "documento|usuario|calculado|supuesto|faltante|no_aplica",
+                        "note": "string",
+                    }
+                ],
+                "total_row": {
+                    "component": "string",
+                    "values": {"Alternativa": "numero o texto"},
+                    "unit": "string",
+                    "note": "string",
+                },
+            }
+        ],
+        "totals": [{"metric": "string", "values": {"Alternativa": "numero o texto"}, "unit": "string", "note": "string"}],
+        "kpis": [{"label": "string", "value": "string", "note": "string"}],
+    },
     "tco_totals": [
         {
             "alternative": "string",
@@ -375,6 +411,9 @@ def build_user_prompt(
             "Extrae proveedor, marca/modelo, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas si aparece, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, riesgos y costos no incluidos. Si no aparece, escribe No especificado.",
             "Construye matriz TCO y tablas comparativas con datos reales cuando existan, datos calculados cuando haya base suficiente y 'No especificado' cuando no existan.",
             "En tco_matrix, usa una fila por componente TCO disponible o relevante adaptado al tipo de compra; no devuelvas solo una fila de TCO total si hay componentes mencionados.",
+            "Ademas construye tco_dashboard_matrix como matriz visual universal: secciones por bloque de costo, filas por componente, columnas por alternativa, totales, KPIs compactos y celdas sin vacios.",
+            "Si existe un Excel TCO o una hoja estructurada, usala como referencia principal para secciones, componentes, totales, KPIs y formulas visibles; no ignores esa estructura.",
+            "En tco_dashboard_matrix.values no dejes valores vacios: usa Dato faltante, No aplica, Supuesto, No calculable con datos actuales, Requiere base de uso, Requiere km/año o vida util, o Requiere numero de usuarios segun corresponda.",
             "Omite de tco_matrix los componentes que no aplican al tipo de compra; no agregues filas genericas de valor residual, energia, repuestos, SOAT, licencias, flete internacional o TCO por km/usuario/hora si no corresponden.",
             "Incluye indicadores relevantes para el caso: inversion inicial, TCO estimado, costo logistico, instalacion/implementacion, operacion anual, mantenimiento anual, vida util, costo anualizado, costo por km/hora/usuario/unidad si aplica, valor residual, ahorro/sobrecosto, diferencia porcentual, lead time, riesgo total, score y confianza.",
             "No fuerces indicadores que no aplican; adapta la formula TCO a vehiculos/flota, software, servicios, importacion, maquinaria, repuestos, insumos o contratos segun corresponda. No uses SOAT/placa/talleres fuera de flota, licencias por usuario fuera de software o servicios por usuario, ni flete/aranceles fuera de importacion.",
