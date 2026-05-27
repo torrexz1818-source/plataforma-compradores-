@@ -323,10 +323,10 @@ def build_fallback_result(
             "best_alternative": best,
             "best_alternative_score": 60,
             "best_alternative_score_label": "Regular",
-            "why_it_wins": "Analisis preliminar construido con la informacion disponible. Falta interpretacion avanzada de OpenAI.",
+            "why_it_wins": "Fallback tecnico construido con la informacion disponible. OpenAI no completo el analisis, por lo que no existe una recomendacion analitica final.",
             "estimated_saving_or_overcost": "No determinado",
-            "main_risk": "Informacion incompleta",
-            "final_recommendation": "Pedir informacion faltante antes de adjudicar.",
+            "main_risk": "Analisis no completado por indisponibilidad del modelo o error temporal.",
+            "final_recommendation": "No adjudicar con este fallback. Reintentar el analisis y pedir informacion faltante antes de decidir.",
         },
         "data_used": [],
         "tco_matrix": [
@@ -354,7 +354,7 @@ def build_fallback_result(
                     "weighted_formula": "35% TCO/costo, 25% riesgo, 20% garantia/soporte, 10% disponibilidad/lead time, 10% confianza de informacion",
                 },
                 "source_basis": ["Analisis preliminar sin montos numericos completos."],
-                "reason": "No hay suficientes datos numericos para ordenar por menor TCO. Se requiere validacion documental adicional.",
+                "reason": "Ranking fallback no concluyente. No hay interpretacion avanzada ni suficientes datos numericos para ordenar por menor TCO.",
             }
         ] if detected else [],
         "interpretation": {
@@ -369,6 +369,12 @@ def build_fallback_result(
         "sensitivity_analysis": build_sensitivity_from_totals([]),
         "strategic_recommendation": {
             "recommended_action": "Pedir mas informacion",
+            "economic_option": "No determinado",
+            "technical_option": "No determinado",
+            "lowest_risk_option": "No determinado",
+            "balanced_option": "No determinado",
+            "final_recommended_option": "No determinado",
+            "recommendation_rationale": "No se completo el analisis con OpenAI; este fallback no debe usarse como recomendacion final.",
             "negotiation_points": ["Solicitar desglose de costos ocultos, garantia, soporte y lead time."],
             "next_steps": ["Completar costos faltantes y validar condiciones comerciales."],
         },
@@ -381,7 +387,7 @@ def build_fallback_result(
             "detected_alternatives_count": len(detected),
             "documents_processed": len(documents),
             "confidence_level": "low",
-            "warnings": ["OpenAI no estuvo disponible; se genero una lectura preliminar basica sin interpretacion avanzada."]
+            "warnings": ["OpenAI no estuvo disponible; se genero un fallback tecnico basico que no reemplaza el analisis TCO completo."]
             if documents
             else [],
         },
@@ -432,6 +438,12 @@ def ensure_result_defaults(
         "strategic_recommendation",
         {
             "recommended_action": "Pedir mas informacion",
+            "economic_option": None,
+            "technical_option": None,
+            "lowest_risk_option": None,
+            "balanced_option": None,
+            "final_recommended_option": None,
+            "recommendation_rationale": "Falta informacion para emitir una recomendacion final robusta.",
             "negotiation_points": [],
             "next_steps": [],
         },
@@ -594,6 +606,12 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
     recommendation = result.get("strategic_recommendation") if isinstance(result.get("strategic_recommendation"), dict) else {}
     result["strategic_recommendation"] = {
         "recommended_action": _as_text(recommendation.get("recommended_action"), "Pedir mas informacion"),
+        "economic_option": None if recommendation.get("economic_option") is None else _as_text(recommendation.get("economic_option")),
+        "technical_option": None if recommendation.get("technical_option") is None else _as_text(recommendation.get("technical_option")),
+        "lowest_risk_option": None if recommendation.get("lowest_risk_option") is None else _as_text(recommendation.get("lowest_risk_option")),
+        "balanced_option": None if recommendation.get("balanced_option") is None else _as_text(recommendation.get("balanced_option")),
+        "final_recommended_option": None if recommendation.get("final_recommended_option") is None else _as_text(recommendation.get("final_recommended_option")),
+        "recommendation_rationale": None if recommendation.get("recommendation_rationale") is None else _as_text(recommendation.get("recommendation_rationale")),
         "negotiation_points": [_as_text(value) for value in _as_list(recommendation.get("negotiation_points"))],
         "next_steps": [_as_text(value) for value in _as_list(recommendation.get("next_steps"))],
     }

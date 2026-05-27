@@ -132,6 +132,12 @@ class SensitivityAnalysis(BaseModel):
 
 class StrategicRecommendation(BaseModel):
     recommended_action: str
+    economic_option: str | None = None
+    technical_option: str | None = None
+    lowest_risk_option: str | None = None
+    balanced_option: str | None = None
+    final_recommended_option: str | None = None
+    recommendation_rationale: str | None = None
     negotiation_points: list[str] = Field(default_factory=list)
     next_steps: list[str] = Field(default_factory=list)
 
