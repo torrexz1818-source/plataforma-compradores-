@@ -14,6 +14,7 @@ export function getVisualConfig(result?: Pick<DashboardResult, 'visualConfig'>) 
 
 export function formatValue(value: unknown) {
   if (typeof value === 'number' && Number.isFinite(value)) return value.toLocaleString('es-PE');
+  if (typeof value === 'number' && Number.isNaN(value)) return '';
   if (typeof value === 'string') return value;
   if (value === null || value === undefined) return '';
   return String(value);
@@ -71,6 +72,69 @@ const executiveTableBlocklist = [
   /datos faltantes/i,
 ];
 
+const emptyExecutiveValuePattern = /^(nan|null|undefined|none|n\/a|na)$/i;
+const amountColumnPattern = /monto|total|importe|valor|subtotal|saldo|precio|ahorro|gasto|cantidad|%|porcentaje/i;
+
+function isEmptyExecutiveValue(value: unknown) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'number') return Number.isNaN(value);
+  const text = formatValue(value).trim();
+  return !text || emptyExecutiveValuePattern.test(text);
+}
+
+function hasNumericExecutiveValue(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value);
+  const numeric = Number(formatValue(value).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(numeric) && numeric !== 0;
+}
+
+function isUsefulExecutiveRow(row: Record<string, unknown>, columns: string[]) {
+  const dimensionColumns = columns.filter((column) => !amountColumnPattern.test(column));
+  const hasDimension = dimensionColumns.some((column) => !isEmptyExecutiveValue(row[column]));
+  const hasAnyValue = columns.some((column) => !isEmptyExecutiveValue(row[column]));
+  return hasAnyValue && (dimensionColumns.length ? hasDimension : true);
+}
+
+export function sanitizePublicTables(tables: DashboardResult['tables']): DashboardResult['tables'] {
+  return asArray(tables).map((table) => {
+    const title = businessText(table.title);
+    const columns = asArray(table.columns).map((column) => businessText(column)).filter(Boolean);
+    const proveedorColumn = columns.find((column) => /proveedor/i.test(column));
+    const categoriaColumn = columns.find((column) => /categor/i.test(column));
+    const montoColumn = columns.find((column) => amountColumnPattern.test(column));
+    const requiresProviderCategory = /matriz.*concentraci[oó]n.*proveedor.*categor/i.test(title)
+      || Boolean(proveedorColumn && categoriaColumn && montoColumn);
+
+    const rows = asArray(table.rows).map((row) => {
+      const record = row as Record<string, unknown>;
+      return columns.reduce<Record<string, unknown>>((cleaned, column) => {
+        cleaned[column] = isEmptyExecutiveValue(record[column]) ? '' : record[column];
+        return cleaned;
+      }, {});
+    }).filter((row) => {
+      if (requiresProviderCategory) {
+        return Boolean(
+          proveedorColumn
+          && categoriaColumn
+          && montoColumn
+          && !isEmptyExecutiveValue(row[proveedorColumn])
+          && !isEmptyExecutiveValue(row[categoriaColumn])
+          && hasNumericExecutiveValue(row[montoColumn]),
+        );
+      }
+      return isUsefulExecutiveRow(row, columns);
+    });
+
+    return { ...table, title, columns, rows };
+  }).filter((table) => {
+    const title = businessText(table.title);
+    return title
+      && table.columns.length
+      && table.rows.length
+      && !executiveTableBlocklist.some((pattern) => pattern.test(title));
+  }).slice(0, 4);
+}
+
 export function sanitizeDashboardForPublicView(result: DashboardResult): DashboardResult {
   return {
     ...result,
@@ -99,10 +163,7 @@ export function sanitizeDashboardForPublicView(result: DashboardResult): Dashboa
     },
     dataProfile: undefined,
     dashboardPlan: undefined,
-    tables: result.tables.filter((table) => {
-      const title = businessText(table.title);
-      return title && !executiveTableBlocklist.some((pattern) => pattern.test(title));
-    }).slice(0, 4),
+    tables: sanitizePublicTables(result.tables),
     findings: (result.findings ?? []).filter((item) => businessText(item.title) && businessText(item.description)).slice(0, 8),
     recommendations: result.recommendations.filter((item) => businessText(item)).slice(0, 8),
     insights: result.insights.filter((item) => businessText(item.title) || businessText(item.description)).slice(0, 8),

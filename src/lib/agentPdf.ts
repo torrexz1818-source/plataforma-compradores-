@@ -206,6 +206,61 @@ function dashboardBusinessText(value: unknown, fallback = '') {
   return text;
 }
 
+const dashboardEmptyValuePattern = /^(nan|null|undefined|none|n\/a|na)$/i;
+const dashboardAmountColumnPattern = /monto|total|importe|valor|subtotal|saldo|precio|ahorro|gasto|cantidad|%|porcentaje/i;
+
+function isDashboardEmptyValue(value: unknown) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'number') return Number.isNaN(value);
+  const text = asText(value, '').trim();
+  return !text || dashboardEmptyValuePattern.test(text);
+}
+
+function hasDashboardNumericValue(value: unknown) {
+  if (typeof value === 'number') return Number.isFinite(value);
+  const numeric = Number(asText(value, '').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(numeric) && numeric !== 0;
+}
+
+function isDashboardUsefulRow(row: Record<string, unknown>, columns: string[]) {
+  const dimensionColumns = columns.filter((column) => !dashboardAmountColumnPattern.test(column));
+  const hasDimension = dimensionColumns.some((column) => !isDashboardEmptyValue(row[column]));
+  const hasAnyValue = columns.some((column) => !isDashboardEmptyValue(row[column]));
+  return hasAnyValue && (dimensionColumns.length ? hasDimension : true);
+}
+
+function sanitizeDashboardTable(table: Record<string, unknown>) {
+  const title = dashboardBusinessText(table.title);
+  const columns = asArray(table.columns).map((item) => dashboardBusinessText(item)).filter(Boolean);
+  const proveedorColumn = columns.find((column) => /proveedor/i.test(column));
+  const categoriaColumn = columns.find((column) => /categor/i.test(column));
+  const montoColumn = columns.find((column) => dashboardAmountColumnPattern.test(column));
+  const requiresProviderCategory = /matriz.*concentraci[oó]n.*proveedor.*categor/i.test(title)
+    || Boolean(proveedorColumn && categoriaColumn && montoColumn);
+  const rows = asArray(table.rows).map(asRecord).map((row) => columns.reduce<Record<string, unknown>>((cleaned, column) => {
+    cleaned[column] = isDashboardEmptyValue(row[column]) ? '' : row[column];
+    return cleaned;
+  }, {})).filter((row) => {
+    if (requiresProviderCategory) {
+      return Boolean(
+        proveedorColumn
+        && categoriaColumn
+        && montoColumn
+        && !isDashboardEmptyValue(row[proveedorColumn])
+        && !isDashboardEmptyValue(row[categoriaColumn])
+        && hasDashboardNumericValue(row[montoColumn]),
+      );
+    }
+    return isDashboardUsefulRow(row, columns);
+  });
+  return {
+    title,
+    description: dashboardBusinessText(table.description),
+    columns,
+    rows,
+  };
+}
+
 function dashboardBusinessList(values: unknown[], limit = 12) {
   return values.map((item) => dashboardBusinessText(item)).filter(Boolean).slice(0, limit);
 }
@@ -257,12 +312,7 @@ function cleanPublicChart(chart: Record<string, unknown>) {
 }
 
 function cleanPublicTable(table: Record<string, unknown>) {
-  return {
-    title: table.title,
-    description: dashboardBusinessText(table.description),
-    columns: table.columns,
-    rows: table.rows,
-  };
+  return sanitizeDashboardTable(table);
 }
 
 const dashboardPublicKeyBlocklist = new Set([
@@ -296,9 +346,12 @@ function buildPublicDashboardResult(result: Record<string, unknown>) {
   });
   cleaned.kpis = dashboardBusinessKpis(result).map(cleanPublicKpi);
   cleaned.charts = asArray(result.charts).map(asRecord).filter((chart) => chart.data && dashboardBusinessText(chart.title)).slice(0, 8).map(cleanPublicChart);
-  cleaned.tables = asArray(result.tables).map(asRecord).filter((table) => {
+  cleaned.tables = asArray(result.tables).map(asRecord).map(sanitizeDashboardTable).filter((table) => {
     const title = dashboardBusinessText(table.title);
-    return title && !/documentos procesados|archivos procesados|calidad|data\s*profile|datos faltantes|analisis no calculables/i.test(title);
+    return title
+      && table.columns.length
+      && table.rows.length
+      && !/documentos procesados|archivos procesados|calidad|data\s*profile|datos faltantes|analisis no calculables/i.test(title);
   }).slice(0, 4).map(cleanPublicTable);
   cleaned.findings = dashboardBusinessFindings(result).map((item) => ({
     title: item.title,
@@ -416,6 +469,10 @@ function ensurePage(ctx: PdfContext, needed = 12) {
   ctx.y = 16;
 }
 
+function ensureBlock(ctx: PdfContext, minimumHeight = 28) {
+  ensurePage(ctx, minimumHeight);
+}
+
 function addText(ctx: PdfContext, text: string, options: { size?: number; bold?: boolean; color?: string; width?: number; gap?: number } = {}) {
   const { doc } = ctx;
   const size = options.size ?? 9;
@@ -431,8 +488,8 @@ function addText(ctx: PdfContext, text: string, options: { size?: number; bold?:
   ctx.y += options.gap ?? 0;
 }
 
-function addSection(ctx: PdfContext, title: string) {
-  ensurePage(ctx, 12);
+function addSection(ctx: PdfContext, title: string, minimumBlockHeight = 22) {
+  ensureBlock(ctx, minimumBlockHeight);
   ctx.y += 2;
   addText(ctx, title, { size: 12, bold: true, color: ctx.primaryColor, gap: 1 });
 }
@@ -512,6 +569,7 @@ function addDashboardKpiCards(ctx: PdfContext, kpis: Record<string, unknown>[]) 
 function addDashboardChartVisual(ctx: PdfContext, chart: Record<string, unknown>) {
   const points = asArray(chart.data).map(asRecord).filter((point) => point.label && Number.isFinite(Number(point.value))).slice(0, 8);
   if (!points.length) return;
+  ensureBlock(ctx, 44);
   addText(ctx, asText(chart.title, 'Grafico'), { size: 9.5, bold: true, color: '#0f172a' });
   const maxValue = Math.max(...points.map((point) => Number(point.value) || 0), 1);
   points.forEach((point, index) => {
@@ -548,6 +606,7 @@ function addTable(ctx: PdfContext, headers: string[], rows: unknown[][], widths?
   const headerHeight = 9;
   const fontSize = 7.1;
   const lineHeight = 3.7;
+  ensureBlock(ctx, headerHeight + 31);
   const drawHeader = () => {
     ensurePage(ctx, headerHeight + 4);
     doc.setFillColor('#eef2ff');
@@ -999,6 +1058,7 @@ function addDashboardResultPdf(input: PdfInput) {
   const kpis = dashboardBusinessKpis(result);
   if (kpis.length) {
     addDashboardKpiCards(ctx, kpis);
+    ensureBlock(ctx, 42);
     addTable(
       ctx,
       ['Indicador', 'Valor', 'Interpretacion breve'],
@@ -1009,26 +1069,26 @@ function addDashboardResultPdf(input: PdfInput) {
 
   const charts = asArray(result.charts).map(asRecord);
   if (charts.length) {
-    addSection(ctx, 'Graficos principales');
+    addSection(ctx, 'Graficos principales', 48);
     charts.slice(0, 5).forEach((chart) => addDashboardChartVisual(ctx, chart));
   }
 
   const tables = asArray(result.tables).map(asRecord);
   if (tables.length) {
-    addSection(ctx, 'Tablas del dashboard');
+    addSection(ctx, 'Tablas del dashboard', 44);
     tables.slice(0, 2).forEach((table) => {
-      addText(ctx, asText(table.title, 'Tabla resumen'), { size: 9.5, bold: true, color: '#0f172a' });
-      if (table.description) addText(ctx, asText(table.description), { size: 8.5, color: '#64748b' });
       const rows = dashboardTableRows(table);
       const keys = Object.keys(rows[0] ?? {}).slice(0, 5);
-      if (keys.length) {
-        addTable(
-          ctx,
-          keys,
-          rows.slice(0, 10).map((row) => keys.map((key) => row[key])),
-          keys.map(() => ctx.maxWidth / keys.length),
-        );
-      }
+      if (!keys.length) return;
+      ensureBlock(ctx, 42);
+      addText(ctx, asText(table.title, 'Tabla resumen'), { size: 9.5, bold: true, color: '#0f172a' });
+      if (table.description) addText(ctx, asText(table.description), { size: 8.5, color: '#64748b' });
+      addTable(
+        ctx,
+        keys,
+        rows.slice(0, 10).map((row) => keys.map((key) => row[key])),
+        keys.map(() => ctx.maxWidth / keys.length),
+      );
     });
   }
 
@@ -1047,7 +1107,7 @@ function addDashboardResultPdf(input: PdfInput) {
   addBulletList(ctx, 'Acciones sugeridas', asArray(result.recommendations), 8);
   const findings = dashboardBusinessFindings(result);
   if (findings.length) {
-    addSection(ctx, 'Hallazgos con evidencia');
+    addSection(ctx, 'Hallazgos con evidencia', 42);
     addTable(
       ctx,
       ['Hallazgo', 'Descripcion'],
@@ -2025,8 +2085,6 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
       docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
       docxParagraph(docx, dashboardBusinessText(executiveSummary.information_found, asText(result.executive_summary))),
       docxParagraph(docx, dashboardBusinessText(executiveSummary.analysis_built, 'Reporte ejecutivo generado a partir de los archivos cargados.')),
-      docxParagraph(docx, 'Nivel de confianza', { heading: true }),
-      docxParagraph(docx, `${asText(result.confidence_level).toUpperCase()}: ${asText(result.confidence_reason)}`),
       docxParagraph(docx, 'KPIs principales', { heading: true }),
     ];
 
@@ -2038,7 +2096,7 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     if (kpiTable) children.push(kpiTable);
 
     children.push(docxParagraph(docx, 'Graficos generados', { heading: true }));
-    const chartTable = docxTableFromRows(docx, chartRows(result.charts));
+    const chartTable = docxTableFromRows(docx, asArray(result.charts).map(asRecord).flatMap(dashboardChartDataRows));
     if (chartTable) children.push(chartTable);
 
     asArray(result.tables).map(asRecord).forEach((table) => {
