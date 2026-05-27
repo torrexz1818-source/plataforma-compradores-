@@ -1647,26 +1647,53 @@ function appendJsonSheet(
   XLSX.utils.book_append_sheet(workbook, sheet, normalizeSheetName(name, used));
 }
 
+function appendAoaSheet(
+  XLSX: XlsxModule,
+  workbook: import('xlsx').WorkBook,
+  used: Set<string>,
+  name: string,
+  rows: unknown[][],
+  widths: number[] = [],
+) {
+  if (!rows.length) return;
+  const sheet = XLSX.utils.aoa_to_sheet(rows);
+  sheet['!cols'] = widths.map((wch) => ({ wch }));
+  XLSX.utils.book_append_sheet(workbook, sheet, normalizeSheetName(name, used));
+}
+
 async function downloadDashboardResultXlsx(input: AgentExportInput, result: Record<string, unknown>) {
   const XLSX = await import('xlsx');
   const workbook = XLSX.utils.book_new();
-  addMetadataSheet(XLSX, workbook, input, result);
-  const used = new Set<string>(['Resumen']);
+  const used = new Set<string>();
   const technicalResult = result;
   result = buildPublicDashboardResult(result);
   const executiveSummary = asRecord(result.executiveSummary);
-
-  appendJsonSheet(XLSX, workbook, used, 'Resumen Ejecutivo', [
-    { Campo: 'Titulo', Valor: asText(result.dashboard_title, input.title) },
-    { Campo: 'Reporte', Valor: asText(asRecord(result.metadata).report_name, asText(result.dashboard_title)) },
-    { Campo: 'Resumen', Valor: dashboardBusinessText(executiveSummary.information_found, asText(result.executive_summary)) },
-    { Campo: 'Analisis construido', Valor: dashboardBusinessText(executiveSummary.analysis_built, 'Reporte ejecutivo generado a partir de los archivos cargados.') },
-    { Campo: 'Audiencia', Valor: asText(result.audience) },
-    { Campo: 'Periodo', Valor: asText(result.period) },
-    { Campo: 'Disclaimer', Valor: DASHBOARD_CREATOR_DISCLAIMER },
-  ]);
-
   const businessKpis = dashboardBusinessKpis(result);
+  const charts = asArray(result.charts).map(asRecord);
+  const tables = asArray(result.tables).map(asRecord);
+
+  appendAoaSheet(XLSX, workbook, used, 'Resumen Ejecutivo', [
+    ['BUYER NODUS', 'Dashboard ejecutivo de compras'],
+    ['Titulo', asText(result.dashboard_title, input.title)],
+    ['Fecha de generacion', formatDate()],
+    ['Audiencia', asText(result.audience)],
+    ['Periodo', asText(result.period)],
+    [],
+    ['Resumen ejecutivo', dashboardBusinessText(executiveSummary.information_found, asText(result.executive_summary))],
+    ['Analisis construido', dashboardBusinessText(executiveSummary.analysis_built, 'Reporte ejecutivo generado a partir de los archivos cargados.')],
+    [],
+    ['KPIs principales', 'Valor', 'Interpretacion'],
+    ...businessKpis.slice(0, 8).map((kpi) => [dashboardBusinessText(kpi.title), asText(kpi.value), dashboardBusinessText(kpi.description)]),
+    [],
+    ['Hallazgos principales'],
+    ...asArray(result.findings).map(asRecord).slice(0, 6).map((item) => [dashboardBusinessText(item.title), dashboardBusinessText(item.description)]),
+    [],
+    ['Recomendaciones'],
+    ...asArray(result.recommendations).slice(0, 8).map((item, index) => [`${index + 1}.`, asText(item)]),
+    [],
+    ['Disclaimer', DASHBOARD_CREATOR_DISCLAIMER],
+  ], [26, 42, 70]);
+
   appendJsonSheet(XLSX, workbook, used, 'KPIs', businessKpis.map((kpi) => ({
     KPI: kpi.title,
     Valor: kpi.value,
@@ -1674,11 +1701,11 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
     Descripcion: kpi.description,
   })));
 
-  appendJsonSheet(XLSX, workbook, used, 'Graficos data', asArray(result.charts).map(asRecord).flatMap(dashboardChartDataRows));
+  appendJsonSheet(XLSX, workbook, used, 'Graficos', charts.flatMap(dashboardChartDataRows));
   appendJsonSheet(XLSX, workbook, used, 'Indicadores Calculados', businessKpis);
-  appendJsonSheet(XLSX, workbook, used, 'Datos Procesados', asArray(result.charts).map(asRecord).flatMap(dashboardChartDataRows));
+  appendJsonSheet(XLSX, workbook, used, 'Datos Procesados', charts.flatMap(dashboardChartDataRows));
 
-  asArray(result.tables).map(asRecord).forEach((table) => {
+  tables.forEach((table) => {
     appendJsonSheet(XLSX, workbook, used, asText(table.title, 'Tabla'), dashboardTableRows(table));
   });
 
@@ -1859,6 +1886,47 @@ function docxTableFromRows(docx: DocxModule, rows: Array<Record<string, unknown>
         })),
       })),
     ],
+  });
+}
+
+function docxKpiCards(docx: DocxModule, kpis: Record<string, unknown>[]): import('docx').Table | undefined {
+  const visible = kpis.slice(0, 6);
+  if (!visible.length) return undefined;
+  const rows = [];
+  for (let index = 0; index < visible.length; index += 2) {
+    const pair = visible.slice(index, index + 2);
+    rows.push(new docx.TableRow({
+      children: pair.map((kpi) => new docx.TableCell({
+        shading: { fill: 'F8FAFC' },
+        margins: { top: 180, bottom: 180, left: 180, right: 180 },
+        borders: {
+          top: { style: docx.BorderStyle.SINGLE, size: 1, color: 'CBD5E1' },
+          bottom: { style: docx.BorderStyle.SINGLE, size: 1, color: 'CBD5E1' },
+          left: { style: docx.BorderStyle.SINGLE, size: 1, color: 'CBD5E1' },
+          right: { style: docx.BorderStyle.SINGLE, size: 1, color: 'CBD5E1' },
+        },
+        children: [
+          docxParagraph(docx, dashboardBusinessText(kpi.title), { bold: true, color: '09008B' }),
+          docxParagraph(docx, asText(kpi.value), { bold: true, color: '0F172A' }),
+          docxParagraph(docx, dashboardBusinessText(kpi.description), { color: '475569' }),
+        ],
+      })),
+    }));
+  }
+  return new docx.Table({ width: { size: 100, type: docx.WidthType.PERCENTAGE }, rows });
+}
+
+function dashboardChartVisualRows(chart: Record<string, unknown>) {
+  const rows = dashboardChartDataRows(chart).slice(0, 10);
+  const max = Math.max(...rows.map((row) => Number(row.Valor) || 0), 1);
+  return rows.map((row) => {
+    const value = Number(row.Valor) || 0;
+    const barLength = Math.max(1, Math.round((value / max) * 18));
+    return {
+      Segmento: row.Etiqueta,
+      Valor: row.Valor,
+      Visual: '█'.repeat(barLength),
+    };
   });
 }
 
@@ -2051,10 +2119,12 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
     Object.keys(result).forEach((key) => delete result[key]);
     Object.assign(result, publicResult);
     const executiveSummary = asRecord(result.executiveSummary);
+    const kpis = dashboardBusinessKpis(result);
+    const charts = asArray(result.charts).map(asRecord);
+    const tables = asArray(result.tables).map(asRecord);
     const children: DocxChild[] = [
       docxParagraph(docx, asText(result.dashboard_title, input.title), { heading: true }),
-      docxParagraph(docx, `Fecha de generacion: ${formatDate()}`),
-      docxParagraph(docx, `Agente usado: ${input.agentName || input.title}`),
+      docxParagraph(docx, `Buyer Nodus | Fecha de generacion: ${formatDate()}`),
       docxParagraph(docx, `Audiencia: ${asText(result.audience)} | Periodo: ${asText(result.period)} | Tipo de datos: ${asText(result.data_type)}`),
       docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
       docxParagraph(docx, dashboardBusinessText(executiveSummary.information_found, asText(result.executive_summary))),
@@ -2062,18 +2132,19 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
       docxParagraph(docx, 'KPIs principales', { heading: true }),
     ];
 
-    const kpiTable = docxTableFromRows(docx, dashboardBusinessKpis(result).map((kpi) => ({
-      Indicador: kpi.title,
-      Valor: kpi.value,
-      Interpretacion: dashboardBusinessText(kpi.description),
-    })));
-    if (kpiTable) children.push(kpiTable);
+    const kpiCards = docxKpiCards(docx, kpis);
+    if (kpiCards) children.push(kpiCards);
 
-    children.push(docxParagraph(docx, 'Graficos generados', { heading: true }));
-    const chartTable = docxTableFromRows(docx, asArray(result.charts).map(asRecord).flatMap(dashboardChartDataRows));
-    if (chartTable) children.push(chartTable);
+    children.push(docxParagraph(docx, 'Graficos principales', { heading: true }));
+    charts.slice(0, 5).forEach((chart) => {
+      children.push(docxParagraph(docx, asText(chart.title, 'Grafico'), { bold: true, color: '09008B' }));
+      if (chart.description) children.push(docxParagraph(docx, dashboardBusinessText(chart.description), { color: '475569' }));
+      const visualTable = docxTableFromRows(docx, dashboardChartVisualRows(chart));
+      if (visualTable) children.push(visualTable);
+      if (chart.insight) children.push(docxParagraph(docx, dashboardBusinessText(chart.insight), { color: '475569' }));
+    });
 
-    asArray(result.tables).map(asRecord).forEach((table) => {
+    tables.forEach((table) => {
       children.push(docxParagraph(docx, asText(table.title, 'Tabla resumen'), { heading: true }));
       if (table.description) children.push(docxParagraph(docx, asText(table.description)));
       const nativeTable = docxTableFromRows(docx, dashboardTableRows(table));
@@ -2206,6 +2277,48 @@ function addPptRows(slide: PptxSlide, rows: Array<Record<string, unknown>>, opti
       valign: 'mid',
     },
   );
+}
+
+function addPptKpiCards(slide: PptxSlide, kpis: Record<string, unknown>[]) {
+  const visible = kpis.slice(0, 6);
+  const colors = ['0E109E', '5A31D5', 'F3313F', 'B2EB4A', '2F80ED', '22A06B'];
+  visible.forEach((kpi, index) => {
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+    const x = 0.6 + col * 4.1;
+    const y = 1.35 + row * 2.1;
+    slide.addShape('roundRect', {
+      x,
+      y,
+      w: 3.75,
+      h: 1.55,
+      fill: { color: 'FFFFFF' },
+      line: { color: 'CBD5E1', pt: 1 },
+      radius: 0.12,
+    });
+    slide.addShape('rect', { x, y, w: 0.08, h: 1.55, fill: { color: colors[index % colors.length] }, line: { color: colors[index % colors.length] } });
+    slide.addText(dashboardBusinessText(kpi.title), { x: x + 0.18, y: y + 0.14, w: 3.35, h: 0.25, fontSize: 8, bold: true, color: '64748B', fit: 'shrink' });
+    slide.addText(asText(kpi.value), { x: x + 0.18, y: y + 0.45, w: 3.35, h: 0.42, fontSize: 18, bold: true, color: '0F172A', fit: 'shrink' });
+    slide.addText(dashboardBusinessText(kpi.description), { x: x + 0.18, y: y + 0.95, w: 3.35, h: 0.38, fontSize: 7, color: '64748B', fit: 'shrink' });
+  });
+}
+
+function addPptChartVisual(slide: PptxSlide, chart: Record<string, unknown>, options: { x?: number; y?: number; w?: number; h?: number } = {}) {
+  const x = options.x ?? 0.7;
+  const y = options.y ?? 1.35;
+  const w = options.w ?? 7.1;
+  const rows = dashboardChartDataRows(chart).slice(0, 8);
+  if (!rows.length) return;
+  const max = Math.max(...rows.map((row) => Number(row.Valor) || 0), 1);
+  rows.forEach((row, index) => {
+    const lineY = y + index * 0.47;
+    const value = Number(row.Valor) || 0;
+    const barW = Math.max(0.2, (value / max) * (w - 2.8));
+    slide.addText(asText(row.Etiqueta), { x, y: lineY, w: 2.25, h: 0.22, fontSize: 7.5, color: '475569', fit: 'shrink' });
+    slide.addShape('rect', { x: x + 2.35, y: lineY + 0.04, w: w - 3.1, h: 0.18, fill: { color: 'EEF2FF' }, line: { color: 'EEF2FF' } });
+    slide.addShape('rect', { x: x + 2.35, y: lineY + 0.04, w: barW, h: 0.18, fill: { color: index % 4 === 0 ? '0E109E' : index % 4 === 1 ? '5A31D5' : index % 4 === 2 ? 'F3313F' : 'B2EB4A' }, line: { color: 'FFFFFF' } });
+    slide.addText(asText(row.Valor), { x: x + w - 0.7, y: lineY - 0.01, w: 0.8, h: 0.22, fontSize: 7, color: '0F172A', align: 'right', fit: 'shrink' });
+  });
 }
 
 async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Record<string, unknown>) {
@@ -2371,20 +2484,30 @@ async function downloadDashboardResultPptx(input: AgentExportInput, result: Reco
   const kpis = dashboardBusinessKpis(result);
   if (kpis.length) {
     slide = pptx.addSlide();
-    addPptTitle(slide, 'KPIs principales');
-    addPptRows(slide, kpis.map((kpi) => ({
-      Indicador: kpi.title,
-      Valor: kpi.value,
-      Interpretacion: dashboardBusinessText(kpi.description),
-    })), { maxRows: kpis.length });
+    addPptTitle(slide, 'KPIs principales', 'Indicadores de negocio del mismo dashboard visible en plataforma.');
+    addPptKpiCards(slide, kpis);
     addPptFooter(slide, input);
   }
 
-  asArray(result.charts).map(asRecord).forEach((chart) => {
+  const charts = asArray(result.charts).map(asRecord);
+  if (charts.length) {
     slide = pptx.addSlide();
-    addPptTitle(slide, asText(chart.title, 'Grafico'), asText(chart.description, ''));
-    addPptRows(slide, dashboardChartDataRows(chart), { x: 0.6, y: 1.35, w: 6.2, h: 4.7, maxRows: 9 });
-    slide.addText(asText(chart.insight), { x: 7.05, y: 1.45, w: 5.55, h: 1.4, fontSize: 13, color: '334155', fit: 'shrink' });
+    addPptTitle(slide, 'Graficos principales', 'Visualizaciones ejecutivas generadas desde el dashboard.');
+    charts.slice(0, 2).forEach((chart, index) => {
+      const x = index === 0 ? 0.6 : 6.8;
+      slide.addText(asText(chart.title, 'Grafico'), { x, y: 1.28, w: 5.7, h: 0.25, fontSize: 12, bold: true, color: '09008B', fit: 'shrink' });
+      slide.addText(dashboardBusinessText(chart.description), { x, y: 1.58, w: 5.7, h: 0.34, fontSize: 8, color: '64748B', fit: 'shrink' });
+      addPptChartVisual(slide, chart, { x, y: 2.05, w: 5.7, h: 3.2 });
+      slide.addText(dashboardBusinessText(chart.insight), { x, y: 5.88, w: 5.7, h: 0.42, fontSize: 8, color: '334155', fit: 'shrink' });
+    });
+    addPptFooter(slide, input);
+  }
+
+  charts.slice(2, 5).forEach((chart) => {
+    slide = pptx.addSlide();
+    addPptTitle(slide, asText(chart.title, 'Grafico'), dashboardBusinessText(chart.description));
+    addPptChartVisual(slide, chart, { x: 0.75, y: 1.45, w: 7.8, h: 4.7 });
+    slide.addText(dashboardBusinessText(chart.insight), { x: 8.85, y: 1.6, w: 3.7, h: 1.2, fontSize: 12, color: '334155', fit: 'shrink' });
     addPptFooter(slide, input);
   });
 
