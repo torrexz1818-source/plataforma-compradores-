@@ -36,7 +36,7 @@ services:
       - key: STORE_EXTRACTED_TEXT
         value: "false"
       - key: CORS_ORIGINS
-        value: https://buyernodus.com,https://www.buyernodus.com,http://localhost:5173,http://127.0.0.1:5173
+        value: https://buyernodus.com,https://www.buyernodus.com,https://buyernodus-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173
 
   - type: web
     name: buyernodus-backend
