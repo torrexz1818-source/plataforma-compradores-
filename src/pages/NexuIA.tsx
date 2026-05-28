@@ -2161,25 +2161,6 @@ const NexuIA = () => {
                               ) : null}
                             </div>
 
-                            <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
-                              <label className="text-sm font-medium text-foreground/80">Paso 3 - Contexto o instrucciones adicionales</label>
-                              <Textarea
-                                value={tcoGeneral.generalContext}
-                                onChange={(event) => updateTcoGeneral('generalContext', event.target.value)}
-                                placeholder="Considerar disponibilidad local, garantía, mantenimiento, repuestos, riesgo de importación y soporte técnico como factores importantes."
-                                className="min-h-[96px] rounded-2xl border-primary/15"
-                              />
-                            </div>
-
-                            <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
-                              <label className="text-sm font-medium text-foreground/80">Notas adicionales</label>
-                              <Textarea
-                                value={tcoGeneral.additionalInstructions}
-                                onChange={(event) => updateTcoGeneral('additionalInstructions', event.target.value)}
-                                placeholder="Indica si quieres que el análisis priorice menor TCO, menor riesgo, garantía, disponibilidad local, lead time, soporte técnico, importación vs compra local, o cualquier condición especial."
-                                className="min-h-[100px] rounded-2xl border-primary/15"
-                              />
-                            </div>
                           </div>
                         ) : (
                           selectedAgent.inputs.map((inputLabel) => (
