@@ -92,15 +92,82 @@ const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
 const dashboardAudiences = ['Gerencia', 'Compras', 'Finanzas', 'Operaciones', 'Proveedores', 'Auditoría', 'Otro'];
 const dashboardDataTypes = ['Gastos', 'Proveedores', 'Compras', 'Contratos', 'Inventario', 'Cotizaciones', 'Indicadores KPI', 'Datos mixtos', 'Otro'];
 const dashboardFocusOptions = ['Automático', 'Categorías', 'Proveedores', 'Ahorro', 'Cumplimiento', 'Compradores', 'Pagos', 'Ejecutivo', 'Operativo', 'Financiero', 'Gastos', 'Compras', 'Auditoría'];
-const termsProcessingStages = [
-  { label: 'Leyendo archivos...', message: 'Leyendo archivos y datos del formulario...' },
-  { label: 'Extrayendo información...', message: 'Extrayendo información relevante de los documentos de apoyo...' },
-  { label: 'Organizando requerimiento...', message: 'Organizando antecedentes, objetivo, alcance y entregables...' },
-  { label: 'Generando secciones del TDR...', message: 'Construyendo secciones profesionales del término de referencia...' },
-  { label: 'Validando coherencia técnica...', message: 'Validando coherencia técnica, faltantes y riesgos...' },
-  { label: 'Preparando descargables...', message: 'Preparando estructura para PDF, Excel y PowerPoint...' },
-  { label: 'Finalizando...', message: 'Finalizando resultado y descargables...' },
-];
+
+function getTermsRequirementProgressMessage(requirementType: string) {
+  const normalized = requirementType.toLowerCase();
+  if (normalized.includes('servicio') || normalized.includes('consultor') || normalized.includes('mantenimiento') || normalized.includes('obra')) {
+    return 'Organizando alcance del servicio...';
+  }
+  if (normalized.includes('producto') || normalized.includes('bien') || normalized.includes('suministro') || normalized.includes('equipo')) {
+    return 'Organizando especificaciones del producto...';
+  }
+  return 'Organizando objetivo, alcance y entregables...';
+}
+
+function buildTermsProcessingStages(requirementType: string, hasInstructions: boolean) {
+  return [
+    { label: 'Subiendo archivos', message: 'Subiendo archivos de soporte...' },
+    { label: 'Leyendo archivos', message: 'Leyendo documentos, fichas o bases cargadas...' },
+    { label: 'Extrayendo información técnica', message: 'Extrayendo información técnica relevante...' },
+    { label: 'Organizando requerimiento', message: getTermsRequirementProgressMessage(requirementType) },
+    ...(hasInstructions ? [{ label: 'Aplicando instrucciones del usuario', message: 'Aplicando instrucciones del usuario...' }] : []),
+    { label: 'Generando secciones del TDR', message: 'Generando secciones del término de referencia...' },
+    { label: 'Validando coherencia técnica', message: 'Validando coherencia técnica del requerimiento...' },
+    { label: 'Construyendo matrices y criterios', message: 'Construyendo matriz de cumplimiento y criterios de evaluación...' },
+    { label: 'Preparando resultado final', message: 'Preparando resultado final...' },
+    { label: 'TDR listo', message: 'Término de referencia listo.' },
+  ];
+}
+
+function getProposalInstructionProgressMessage(objective: string) {
+  const normalized = objective.toLowerCase();
+  if (normalized.includes('certificacion') || normalized.includes('certificación') || normalized.includes('certificaciones')) {
+    return 'Aplicando prioridades de evaluación...';
+  }
+  if (normalized.includes('precio') || normalized.includes('costo') || normalized.includes('económico') || normalized.includes('economico')) {
+    return 'Priorizando análisis económico...';
+  }
+  if (normalized.includes('cumplimiento') || normalized.includes('técnico') || normalized.includes('tecnico')) {
+    return 'Revisando cumplimiento técnico...';
+  }
+  if (normalized.trim()) {
+    return 'Aplicando instrucciones del usuario...';
+  }
+  return 'Detectando criterios, pesos y requisitos...';
+}
+
+function buildProposalProgressStages(objective: string) {
+  return [
+    { label: 'Subiendo propuestas', message: 'Subiendo propuestas...' },
+    { label: 'Leyendo archivos de propuestas', message: 'Leyendo archivos de propuestas...' },
+    { label: 'Extrayendo datos de proveedores', message: 'Extrayendo datos de proveedores...' },
+    { label: 'Detectando criterios, pesos y requisitos', message: getProposalInstructionProgressMessage(objective) },
+    { label: 'Comparando precios, plazos y condiciones', message: 'Comparando precios, plazos y condiciones...' },
+    { label: 'Evaluando cumplimiento técnico y comercial', message: 'Evaluando cumplimiento técnico y comercial...' },
+    { label: 'Aplicando reglas de evaluación', message: 'Aplicando reglas de evaluación...' },
+    { label: 'Calculando puntajes ponderados', message: 'Calculando puntajes ponderados...' },
+    { label: 'Generando ranking de proveedores', message: 'Generando ranking de proveedores...' },
+    { label: 'Detectando riesgos y datos faltantes', message: 'Detectando riesgos y datos faltantes...' },
+    { label: 'Generando recomendación final', message: 'Generando recomendación final...' },
+    { label: 'Preparando reporte y descargables', message: 'Preparando reporte y descargables...' },
+    { label: 'Comparativo listo', message: 'Comparativo listo.' },
+  ];
+}
+
+function getProposalComparisonErrorMessage(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : '';
+  const normalized = rawMessage.toLowerCase();
+  if (normalized.includes('timeout') || normalized.includes('tiempo') || normalized.includes('time')) {
+    return 'El análisis tomó más tiempo de lo esperado. Intenta nuevamente o reduce el tamaño de los archivos.';
+  }
+  if (normalized.includes('archivo') || normalized.includes('file') || normalized.includes('format') || normalized.includes('formato')) {
+    return 'El archivo no pudo procesarse. Verifica el formato o vuelve a cargarlo.';
+  }
+  if (normalized.includes('información suficiente') || normalized.includes('informacion suficiente') || normalized.includes('proveedores') || normalized.includes('propuestas')) {
+    return 'No encontramos información suficiente para comparar proveedores. Agrega propuestas con precios, condiciones o criterios de evaluación.';
+  }
+  return 'No se pudo generar el comparativo. Revisa que las propuestas tengan datos válidos o intenta con otros archivos.';
+}
 
 function getAgentIcon(icon: string) {
   return iconMap[icon as keyof typeof iconMap] ?? Bot;
@@ -176,6 +243,29 @@ function getDashboardErrorMessage(error: unknown) {
   return 'No se pudo generar el dashboard. Revisa que los archivos tengan datos válidos de compras o intenta con otro archivo.';
 }
 
+function getTermsErrorMessage(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : '';
+  const normalized = rawMessage.toLowerCase();
+  if (normalized.includes('timeout') || normalized.includes('time') || normalized.includes('tiempo')) {
+    return 'El análisis tomó más tiempo de lo esperado. Intenta nuevamente o reduce el tamaño de los archivos.';
+  }
+  if (normalized.includes('archivo') || normalized.includes('file') || normalized.includes('format') || normalized.includes('formato')) {
+    return 'El archivo no pudo procesarse. Verifica el formato o vuelve a cargarlo.';
+  }
+  if (
+    normalized.includes('objetivo') ||
+    normalized.includes('alcance') ||
+    normalized.includes('descripción') ||
+    normalized.includes('descripcion') ||
+    normalized.includes('datos') ||
+    normalized.includes('obligatorio') ||
+    normalized.includes('required')
+  ) {
+    return 'Faltan datos clave para generar el TDR. Completa el objetivo, alcance o descripción del requerimiento.';
+  }
+  return 'No se pudo generar el término de referencia. Revisa los datos ingresados o intenta nuevamente.';
+}
+
 const NexuIA = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -189,6 +279,7 @@ const NexuIA = () => {
   const [comparisonService, setComparisonService] = useState('');
   const [comparisonObjective, setComparisonObjective] = useState('');
   const proposalComparisonMutation = useProposalComparison();
+  const [proposalProgressStep, setProposalProgressStep] = useState(0);
   const [termsInitialDescription, setTermsInitialDescription] = useState('');
   const [termsFields, setTermsFields] = useState<Record<string, string>>({});
   const [termsSafetyRequirements, setTermsSafetyRequirements] = useState<string[]>([]);
@@ -221,6 +312,20 @@ const NexuIA = () => {
   const [isDashboardDropActive, setIsDashboardDropActive] = useState(false);
   const [dashboardProgressStep, setDashboardProgressStep] = useState(0);
   const [dashboardUploadPercent, setDashboardUploadPercent] = useState(0);
+  const termsHasAdditionalInstructions = Boolean(
+    termsFields.additional_instructions?.trim() ||
+    termsFields.important_observations?.trim() ||
+    termsFields.dynamic_important_observations?.trim() ||
+    termsFields.dynamic_additional_instructions?.trim(),
+  );
+  const proposalProgressStages = useMemo(
+    () => buildProposalProgressStages(comparisonObjective),
+    [comparisonObjective],
+  );
+  const termsProcessingStages = useMemo(
+    () => buildTermsProcessingStages(termsFields.requirement_type ?? '', termsHasAdditionalInstructions),
+    [termsFields.requirement_type, termsHasAdditionalInstructions],
+  );
   const dashboardProgressStages = useMemo(
     () => buildDashboardProgressStages(
       dashboardForm.visualizationFocus,
@@ -324,6 +429,7 @@ const NexuIA = () => {
     setComparisonObjective('');
     setAgentInputs({});
     proposalComparisonMutation.reset();
+    setProposalProgressStep(0);
     setTermsInitialDescription('');
     setTermsFields({});
     setTermsSafetyRequirements([]);
@@ -384,7 +490,7 @@ const NexuIA = () => {
     }, 1300);
 
     return () => window.clearInterval(intervalId);
-  }, [termsGenerateMutation.isPending, termsGenerateMutation.isSuccess]);
+  }, [termsGenerateMutation.isPending, termsGenerateMutation.isSuccess, termsProcessingStages.length]);
 
   useEffect(() => {
     if (dashboardCreatorMutation.isSuccess) {
@@ -414,6 +520,42 @@ const NexuIA = () => {
       body: 'Tu dashboard ya está listo para revisar y descargar.',
     });
   }, [dashboardCreatorMutation.data]);
+
+  useEffect(() => {
+    if (!termsGenerateMutation.data) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    new Notification('Buyer Nodus', {
+      body: 'Tu término de referencia ya está listo para revisar y descargar.',
+    });
+  }, [termsGenerateMutation.data]);
+
+  useEffect(() => {
+    if (proposalComparisonMutation.isSuccess) {
+      setProposalProgressStep(proposalProgressStages.length - 1);
+      return undefined;
+    }
+
+    if (!proposalComparisonMutation.isPending) {
+      if (!proposalComparisonMutation.isError) setProposalProgressStep(0);
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setProposalProgressStep((current) => Math.min(current + 1, proposalProgressStages.length - 2));
+    }, 1200);
+
+    return () => window.clearInterval(intervalId);
+  }, [proposalComparisonMutation.isError, proposalComparisonMutation.isPending, proposalComparisonMutation.isSuccess, proposalProgressStages.length]);
+
+  useEffect(() => {
+    if (!proposalComparisonMutation.data) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    new Notification('Buyer Nodus', {
+      body: 'Tu comparativo de propuestas ya está listo para revisar y descargar.',
+    });
+  }, [proposalComparisonMutation.data]);
 
   useEffect(() => {
     if (tcoAnalysisMutation.isSuccess) {
@@ -682,7 +824,7 @@ const NexuIA = () => {
     if (hasUnsupportedFile) {
       toast({
         title: 'Formato no soportado para este agente.',
-        description: 'Formatos soportados: PDF, XLSX, CSV, JPG, JPEG y PNG.',
+        description: 'El archivo no pudo procesarse. Verifica el formato o vuelve a cargarlo.',
         variant: 'destructive',
       });
       event.target.value = '';
@@ -718,6 +860,7 @@ const NexuIA = () => {
       return;
     }
 
+    setProposalProgressStep(0);
     proposalComparisonMutation.mutate(
       {
         title: selectedAgent.name,
@@ -736,10 +879,7 @@ const NexuIA = () => {
         onError: (error) => {
           toast({
             title: 'No se pudo analizar',
-            description:
-              error instanceof Error
-                ? error.message
-                : 'No se pudo conectar con el AI Engine o completar el análisis.',
+            description: getProposalComparisonErrorMessage(error),
             variant: 'destructive',
           });
         },
@@ -1065,8 +1205,8 @@ const NexuIA = () => {
         },
         onError: (error) => {
           toast({
-            title: 'No se pudo generar el término de referencia. Intenta nuevamente.',
-            description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
+            title: 'No se pudo generar el término de referencia.',
+            description: getTermsErrorMessage(error),
             variant: 'destructive',
           });
         },
@@ -1382,6 +1522,14 @@ const NexuIA = () => {
   const dashboardProgressPercent = dashboardProgressStep === 0 && dashboardUploadPercent > 0
     ? Math.max(8, Math.min(18, (dashboardUploadPercent / 100) * 18))
     : ((dashboardProgressStep + 1) / dashboardProgressStages.length) * 100;
+  const proposalProgressCompletedSteps = proposalComparisonMutation.isSuccess
+    ? proposalProgressStages.length
+    : proposalComparisonMutation.isPending
+      ? proposalProgressStep
+      : proposalComparisonMutation.isError
+        ? proposalProgressStep
+        : 0;
+  const proposalProgressPercent = Math.round((proposalProgressCompletedSteps / proposalProgressStages.length) * 100);
   const termsSections = termsFormSchema?.form_sections ?? [];
   const termsTotalSteps = termsFormSchema ? termsSections.length + 2 : 1;
   const termsProgressPercent = termsFormSchema
@@ -1613,11 +1761,14 @@ const NexuIA = () => {
             </div>
             <p className={`mt-2 text-xs leading-5 ${isError ? 'text-destructive/80' : 'text-muted-foreground'}`}>
               {isError
-                ? termsGenerateMutation.error instanceof Error
-                  ? termsGenerateMutation.error.message
-                  : 'Revisa los datos ingresados e intenta nuevamente.'
+                ? getTermsErrorMessage(termsGenerateMutation.error)
                 : termsProcessingStages[activeStep]?.message ?? 'Procesando información del requerimiento...'}
             </p>
+            {!isError ? (
+              <p className="mt-1 text-xs leading-5 text-muted-foreground/80">
+                Mantén esta pantalla abierta mientras el agente procesa la información.
+              </p>
+            ) : null}
           </div>
           {isError ? (
             <Button type="button" variant="outline" className="rounded-full bg-white" onClick={handleGenerateTerms}>
@@ -1643,7 +1794,17 @@ const NexuIA = () => {
                         : 'bg-muted/40 text-muted-foreground'
                 }`}
               >
-                <CheckCircle2 className={`h-3.5 w-3.5 ${isCompleted || isActive ? 'text-primary' : isError && index === activeStep ? 'text-destructive' : 'text-muted-foreground/50'}`} />
+                {isCompleted ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+                ) : (
+                  <span className={`h-3.5 w-3.5 shrink-0 rounded-full border ${
+                    isActive
+                      ? 'border-primary bg-primary'
+                      : isError && index === activeStep
+                        ? 'border-destructive bg-destructive'
+                        : 'border-muted-foreground/40 bg-transparent'
+                  }`} />
+                )}
                 <span>{step.label}</span>
               </div>
             );
@@ -2556,7 +2717,7 @@ const NexuIA = () => {
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
                         {proposalComparisonMutation.isPending
-                          ? 'Nodus IA está trabajando en tu solicitud…'
+                          ? 'Analizando propuestas y construyendo comparativo…'
                           : 'Analizar propuestas'}
                       </Button>
                     ) : isDashboardCreator ? (
@@ -2709,7 +2870,120 @@ const NexuIA = () => {
                     </div>
                   ) : null}
 
-                  {(proposalComparisonMutation.isPending || runMutation.isPending) ? (
+                  {isQuoteComparator && proposalComparisonMutation.isPending ? (
+                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-white p-5 text-sm shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 font-semibold text-primary">
+                            <Sparkles className="h-4 w-4 animate-pulse" />
+                            <span>Analizando propuestas y construyendo comparativo…</span>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                            {proposalProgressStages[proposalProgressStep]?.message ?? 'Comparando propuestas de proveedores...'}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                          Paso {Math.min(proposalProgressStep + 1, proposalProgressStages.length)} de {proposalProgressStages.length}
+                        </span>
+                      </div>
+
+                      <Progress value={proposalProgressPercent} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {proposalProgressStages.map((step, index) => {
+                          const isCompleted = index < proposalProgressStep;
+                          const isActive = index === proposalProgressStep;
+                          return (
+                            <div
+                              key={step.label}
+                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                                isCompleted
+                                  ? 'border-success/20 bg-success/10 text-success-foreground'
+                                  : isActive
+                                    ? 'border-primary/20 bg-primary/10 text-primary shadow-sm'
+                                    : 'border-primary/10 bg-muted/30 text-muted-foreground'
+                              }`}
+                            >
+                              {isCompleted ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                              ) : (
+                                <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse bg-primary' : 'bg-muted-foreground/30'}`} />
+                              )}
+                              <span>{step.label}{isActive ? '…' : ''}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <p className="rounded-2xl bg-primary/5 px-3 py-2 text-xs leading-5 text-primary/75">
+                        Mantén esta pantalla abierta mientras el agente compara las propuestas y prepara el reporte.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {isQuoteComparator && proposalComparisonMutation.isSuccess ? (
+                    <div className="space-y-2 rounded-2xl border border-success/20 bg-success/10 p-4 text-sm text-success-foreground">
+                      <div className="flex items-center gap-2 font-medium">
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                        <span>Comparativo listo</span>
+                      </div>
+                      <Progress value={100} className="h-2 bg-success/10" />
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Ya puedes revisar el resultado y descargar el reporte.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {isQuoteComparator && proposalComparisonMutation.isError ? (
+                    <div className="space-y-4 rounded-[24px] border border-destructive/20 bg-destructive/10 p-5 text-sm text-destructive">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 font-semibold">
+                            <TriangleAlert className="h-4 w-4" />
+                            <span>No se pudo generar el comparativo</span>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-destructive/80">
+                            {getProposalComparisonErrorMessage(proposalComparisonMutation.error)}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-destructive/10 px-3 py-1 text-xs font-medium">
+                          Revisión requerida
+                        </span>
+                      </div>
+
+                      <Progress value={Math.max(proposalProgressPercent, 8)} className="h-2 bg-destructive/10" />
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {proposalProgressStages.map((step, index) => {
+                          const isCompleted = index < proposalProgressStep;
+                          const isError = index === proposalProgressStep;
+                          return (
+                            <div
+                              key={step.label}
+                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                                isCompleted
+                                  ? 'border-success/20 bg-white text-success-foreground'
+                                  : isError
+                                    ? 'border-destructive/25 bg-white text-destructive shadow-sm'
+                                    : 'border-destructive/10 bg-white/60 text-destructive/55'
+                              }`}
+                            >
+                              {isCompleted ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                              ) : isError ? (
+                                <TriangleAlert className="h-3.5 w-3.5" />
+                              ) : (
+                                <span className="h-2.5 w-2.5 rounded-full bg-destructive/25" />
+                              )}
+                              <span>{step.label}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {runMutation.isPending ? (
                     <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
                       <div className="flex items-center gap-2 font-medium">
                         <Sparkles className="h-4 w-4 animate-pulse" />
