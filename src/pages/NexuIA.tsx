@@ -453,18 +453,17 @@ const NexuIA = () => {
   const exportFormatOptions = useMemo(
     () => [
       { value: 'pdf' as const, label: 'PDF' },
-      ...(!isDashboardCreator ? [{ value: 'docx' as const, label: 'Word' }] : []),
       { value: 'pptx' as const, label: 'PowerPoint' },
       { value: 'xlsx' as const, label: 'Excel' },
     ],
-    [isDashboardCreator],
+    [],
   );
 
   useEffect(() => {
-    if (isDashboardCreator && selectedExportFormat === 'docx') {
+    if (selectedExportFormat === 'docx') {
       setSelectedExportFormat('pdf');
     }
-  }, [isDashboardCreator, selectedExportFormat]);
+  }, [selectedExportFormat]);
   const isAdminUser = user?.role === 'admin';
   const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
   const canUseSelectedAgent = Boolean(selectedAgent) && (isAgentActive || (isAdminUser && selectedAgent?.status !== 'hidden'));

@@ -25,6 +25,12 @@ class Settings(BaseModel):
     store_extracted_text: bool = Field(
         default_factory=lambda: os.getenv("STORE_EXTRACTED_TEXT", "false").lower() == "true"
     )
+    google_cloud_project_id: str = Field(
+        default_factory=lambda: os.getenv("GOOGLE_CLOUD_PROJECT_ID", "").strip()
+    )
+    google_pubsub_topic_dashboard_ready: str = Field(
+        default_factory=lambda: os.getenv("GOOGLE_PUBSUB_TOPIC_DASHBOARD_READY", "").strip()
+    )
     cors_origins: list[str] = Field(
         default_factory=lambda: [
             origin.strip().rstrip("/")

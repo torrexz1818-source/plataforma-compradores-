@@ -15,6 +15,7 @@ from app.agents.dashboard_creator.schemas import DashboardResult
 from app.ai.llm_client import analyze_with_openai
 from app.config import get_settings
 from app.document_processing.file_detector import validate_allowed_file
+from app.utils.google_pubsub_notifier import publish_dashboard_completed_event
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
 
 
@@ -32,6 +33,25 @@ def _merge_unique(base: list[Any], additions: list[Any]) -> list[Any]:
         seen.add(marker)
         merged.append(item)
     return merged
+
+
+def _dashboard_completed_payload(result: DashboardResult, files_count: int) -> dict[str, Any]:
+    metadata = result.metadata
+    generated_at = metadata.generated_at if metadata else None
+    report_name = metadata.report_name if metadata else None
+    dashboard_id_source = f"{result.dashboard_title}-{generated_at or ''}".strip("-")
+    dashboard_id = dashboard_id_source.lower().replace(" ", "-")[:140] or result.dashboard_title.lower().replace(" ", "-")
+    return {
+        "event": "dashboard_creator.completed",
+        "agentKey": "dashboard_creator",
+        "userId": metadata.user if metadata else None,
+        "dashboardId": dashboard_id,
+        "reportName": report_name or result.dashboard_title,
+        "status": "completed",
+        "generatedAt": generated_at,
+        "filesCount": files_count,
+        "downloadFormats": ["pdf", "excel", "pptx"],
+    }
 
 
 def _merge_dashboard_items(base: list[dict[str, Any]], additions: list[dict[str, Any]], key: str | None = None, limit: int = 12) -> list[dict[str, Any]]:
@@ -542,7 +562,9 @@ async def generate_dashboard(
             latency_ms=int((time.perf_counter() - started_at) * 1000),
         )
         result = validate_dashboard_result_payload(result)
-        return DashboardResult.model_validate(result)
+        dashboard_result = DashboardResult.model_validate(result)
+        publish_dashboard_completed_event(_dashboard_completed_payload(dashboard_result, len(files)))
+        return dashboard_result
     except HTTPException:
         raise
     except Exception as exc:

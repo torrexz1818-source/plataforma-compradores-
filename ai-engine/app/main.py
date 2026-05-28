@@ -9,6 +9,7 @@ from app.agents.spend_analysis.router import router as spend_analysis_router
 from app.agents.contract_risk_analysis.router import router as contract_risk_analysis_router
 from app.agents.supplier_evaluation_ranking.router import router as supplier_evaluation_ranking_router
 from app.config import get_settings
+from app.utils.google_pubsub_notifier import get_pubsub_status
 
 settings = get_settings()
 from app.agents.terms_of_reference.router import router as terms_of_reference_router
@@ -30,7 +31,12 @@ app.add_middleware(
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "optional_integrations": {
+            "google_pubsub": get_pubsub_status(),
+        },
+    }
 
 
 app.include_router(proposal_comparison_router)
