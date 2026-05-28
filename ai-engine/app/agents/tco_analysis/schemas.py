@@ -129,6 +129,77 @@ class TcoDashboardMatrix(BaseModel):
     kpis: list[TcoDashboardKpi] = Field(default_factory=list)
 
 
+class BaseParameters(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    analysis_type: str | None = None
+    product_or_service: str | None = None
+    currency: str | None = None
+    horizon_years: float | str | None = None
+    quantity: float | str | None = None
+    unit_of_comparison: str | None = None
+    annual_usage: float | str | None = None
+    annual_km: float | str | None = None
+    useful_life_years: float | str | None = None
+    exchange_rate: float | str | None = None
+    discount_rate: float | str | None = None
+    tax_rate: float | str | None = None
+    financing_rate: float | str | None = None
+    notes: list[str] = Field(default_factory=list)
+
+
+class BenchmarkAssumption(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    field: str
+    value: str | float | int | None = None
+    range_min: str | float | int | None = None
+    range_max: str | float | int | None = None
+    unit: str | None = None
+    reason: str | None = None
+    source_type: Literal["benchmark", "estimado", "usuario", "documento"] = "estimado"
+    confidence_level: Literal["alta", "media", "baja"] = "baja"
+    applies_to: str | None = None
+    warning: str | None = None
+
+
+class TransparencyItem(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    alternative: str
+    field: str
+    value: str | float | int | None = None
+    source: str | None = None
+    type: Literal["documento", "usuario", "calculado", "estimado", "faltante", "no_aplica"] = "faltante"
+    confidence_level: Literal["alta", "media", "baja"] = "baja"
+    observation: str | None = None
+
+
+class FinancialModelItem(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    alternative: str
+    acquisition_costs: float | str | None = None
+    logistics_costs: float | str | None = None
+    implementation_costs: float | str | None = None
+    operating_costs: float | str | None = None
+    maintenance_costs: float | str | None = None
+    support_costs: float | str | None = None
+    insurance_costs: float | str | None = None
+    financing_costs: float | str | None = None
+    administrative_costs: float | str | None = None
+    risk_costs: float | str | None = None
+    exit_costs: float | str | None = None
+    residual_value: float | str | None = None
+    net_tco: float | str | None = None
+    annualized_tco: float | str | None = None
+    unit_tco: float | str | None = None
+    usage_tco: float | str | None = None
+    calculation_basis: str | None = None
+    confidence_level: Literal["alta", "media", "baja"] = "baja"
+    warnings: list[str] = Field(default_factory=list)
+
+
 class TcoTotalItem(BaseModel):
     alternative: str
     initial_price: float | None = None
@@ -203,6 +274,10 @@ class TcoAnalysisResult(BaseModel):
     data_used: list[DataUsedItem] = Field(default_factory=list)
     tco_matrix: list[TcoMatrixRow] = Field(default_factory=list)
     tco_dashboard_matrix: TcoDashboardMatrix | None = None
+    base_parameters: BaseParameters | None = None
+    benchmark_assumptions: list[BenchmarkAssumption] = Field(default_factory=list)
+    transparency_table: list[TransparencyItem] = Field(default_factory=list)
+    financial_model: list[FinancialModelItem] = Field(default_factory=list)
     tco_totals: list[TcoTotalItem] = Field(default_factory=list)
     ranking: list[RankingItem] = Field(default_factory=list)
     interpretation: Interpretation

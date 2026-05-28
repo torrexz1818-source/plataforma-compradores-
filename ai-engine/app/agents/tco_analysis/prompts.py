@@ -26,6 +26,13 @@ Principios obligatorios:
 - Extrae datos relevantes, separando datos entregados por el usuario, datos detectados
   en archivos, datos calculados, SUPUESTOS y datos faltantes.
 - Calcula indicadores TCO aplicables solo cuando exista base suficiente.
+- Define parametros base del analisis y construye un modelo financiero profesional
+  cuando existan datos suficientes.
+- Si faltan datos criticos, puedes usar benchmarks o estimados solo si los declaras
+  explicitamente como ESTIMADO, SUPUESTO o BENCHMARK; nunca los presentes como datos
+  reales ni inventes una fuente especifica.
+- Construye una tabla de transparencia para cada dato clave con alternativa, dato,
+  valor, fuente, tipo de dato, nivel de confianza y observacion.
 - Construye tablas comparativas claras usando las estructuras JSON solicitadas.
 - Genera score, ranking y recomendacion final.
 - Identifica mejor opcion economica, mejor opcion tecnica, mejor opcion de menor riesgo
@@ -120,6 +127,31 @@ TCO = precio de compra + costos logisticos + impuestos + costos de implementacio
 + costos de salida - valor residual.
 Adapta la formula al caso. No fuerces componentes que no aplican y no omitas
 componentes relevantes para la decision.
+
+Modelo financiero profesional:
+- Calcula TCO_NETO por alternativa con esta formula adaptable:
+  TCO_NETO = inversion inicial + costos logisticos + implementacion + operacion
+  + mantenimiento + soporte + seguros + financiamiento + costos administrativos
+  + costos de riesgo + costos de salida - valor residual.
+- Llena financial_model por alternativa con componentes numericos cuando existan.
+- Si un componente falta, usa "Dato faltante" o "No calculable con datos actuales";
+  no uses 0 salvo que el documento diga que el costo es cero, incluido sin costo o gratis.
+- Calcula annualized_tco, unit_tco, usage_tco, TCO por km, TCO por usuario, TCO por hora
+  o TCO por unidad producida solo cuando exista base suficiente.
+- Si no hay base suficiente para TCO completo, entrega un TCO preliminar y explica
+  exactamente que datos faltan para cerrarlo.
+- En base_parameters incluye horizonte, cantidad, unidad de comparacion, moneda,
+  vida util, uso anual, km/anio, usuarios, tipo de cambio, impuestos, tasa de descuento
+  o financiamiento solo si aparecen o si se declaran como SUPUESTO/BENCHMARK.
+
+Benchmarks y supuestos:
+- Usa benchmark_assumptions solo para datos faltantes criticos que sean necesarios
+  para construir un TCO preliminar.
+- Cada benchmark debe indicar field, value o rango, unidad, motivo, source_type,
+  confidence_level, applies_to y warning.
+- Todo valor estimado debe aparecer tambien en assumptions_and_limits y en
+  transparency_table con type="estimado".
+- Si decides no estimar un dato, registralo como "Dato faltante" en transparency_table.
 
 Tablas comparativas:
 - Si hay varias alternativas, incluye tabla de costos TCO, tabla comparativa de
@@ -262,6 +294,71 @@ EXPECTED_JSON_SHAPE = {
             "incoterm": "string",
             "lead_time": "string",
             "key_assumptions": ["SUPUESTO string"],
+        }
+    ],
+    "base_parameters": {
+        "analysis_type": "string",
+        "product_or_service": "string",
+        "currency": "string",
+        "horizon_years": "numero o Dato faltante",
+        "quantity": "numero o Dato faltante",
+        "unit_of_comparison": "string",
+        "annual_usage": "numero o Dato faltante",
+        "annual_km": "numero o Dato faltante",
+        "useful_life_years": "numero o Dato faltante",
+        "exchange_rate": "numero, SUPUESTO o Dato faltante",
+        "discount_rate": "numero, SUPUESTO o Dato faltante",
+        "tax_rate": "numero, SUPUESTO o Dato faltante",
+        "financing_rate": "numero, SUPUESTO o Dato faltante",
+        "notes": ["string"],
+    },
+    "benchmark_assumptions": [
+        {
+            "field": "string",
+            "value": "valor estimado o rango",
+            "range_min": "numero o null",
+            "range_max": "numero o null",
+            "unit": "string",
+            "reason": "string",
+            "source_type": "benchmark|estimado|usuario|documento",
+            "confidence_level": "alta|media|baja",
+            "applies_to": "alternativa o general",
+            "warning": "string",
+        }
+    ],
+    "transparency_table": [
+        {
+            "alternative": "string",
+            "field": "string",
+            "value": "valor, Dato faltante, No aplica o No calculable con datos actuales",
+            "source": "archivo, usuario, calculado, benchmark o No disponible",
+            "type": "documento|usuario|calculado|estimado|faltante|no_aplica",
+            "confidence_level": "alta|media|baja",
+            "observation": "string",
+        }
+    ],
+    "financial_model": [
+        {
+            "alternative": "string",
+            "acquisition_costs": "numero o No calculable con datos actuales",
+            "logistics_costs": "numero o Dato faltante",
+            "implementation_costs": "numero o Dato faltante",
+            "operating_costs": "numero o Dato faltante",
+            "maintenance_costs": "numero o Dato faltante",
+            "support_costs": "numero o Dato faltante",
+            "insurance_costs": "numero o Dato faltante",
+            "financing_costs": "numero o Dato faltante",
+            "administrative_costs": "numero o Dato faltante",
+            "risk_costs": "numero o Dato faltante",
+            "exit_costs": "numero o Dato faltante",
+            "residual_value": "numero o Dato faltante",
+            "net_tco": "numero o No calculable con datos actuales",
+            "annualized_tco": "numero o No calculable con datos actuales",
+            "unit_tco": "numero o No calculable con datos actuales",
+            "usage_tco": "numero o No calculable con datos actuales",
+            "calculation_basis": "formula y datos usados",
+            "confidence_level": "alta|media|baja",
+            "warnings": ["string"],
         }
     ],
     "tco_matrix": [
@@ -409,6 +506,10 @@ def build_user_prompt(
             "Devuelve analysis_type como el tipo de analisis detectado, por ejemplo: Analisis TCO de software/SaaS, Analisis TCO de servicios, Analisis TCO de importacion vs compra local, Analisis TCO de maquinaria, Analisis TCO de flota vehicular, Analisis TCO de repuestos/insumos o Analisis TCO comparativo de proveedores.",
             "Identifica alternativas/proveedores desde documentos e instrucciones.",
             "Extrae proveedor, marca/modelo, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas si aparece, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, riesgos y costos no incluidos. Si no aparece, escribe No especificado.",
+            "Llena base_parameters con los parametros del caso. Si no aparecen, usa Dato faltante y explica el impacto en notes, missing_information o assumptions_and_limits.",
+            "Construye financial_model por alternativa usando TCO_NETO = inversion inicial + costos logisticos + implementacion + operacion + mantenimiento + soporte + seguros + financiamiento + costos administrativos + costos de riesgo + costos de salida - valor residual.",
+            "Construye transparency_table para los datos clave: precios, cantidad, moneda, horizonte, impuestos, flete, seguro, instalacion, mantenimiento, operacion, soporte, riesgos, valor residual, TCO neto, TCO anualizado y unidad de uso si aplica.",
+            "Si usas un benchmark o estimado, registralo en benchmark_assumptions, assumptions_and_limits y transparency_table con type estimado. Si no estimas, registralo como faltante.",
             "Construye matriz TCO y tablas comparativas con datos reales cuando existan, datos calculados cuando haya base suficiente y 'No especificado' cuando no existan.",
             "En tco_matrix, usa una fila por componente TCO disponible o relevante adaptado al tipo de compra; no devuelvas solo una fila de TCO total si hay componentes mencionados.",
             "Ademas construye tco_dashboard_matrix como matriz visual universal: secciones por bloque de costo, filas por componente, columnas por alternativa, totales, KPIs compactos y celdas sin vacios.",

@@ -48,6 +48,38 @@ DEFAULT_SUPPLIER_QUESTIONS = [
     "El flete esta incluido?",
     "Que costos no estan incluidos?",
 ]
+FINANCIAL_MODEL_FIELDS = [
+    "acquisition_costs",
+    "logistics_costs",
+    "implementation_costs",
+    "operating_costs",
+    "maintenance_costs",
+    "support_costs",
+    "insurance_costs",
+    "financing_costs",
+    "administrative_costs",
+    "risk_costs",
+    "exit_costs",
+    "residual_value",
+    "net_tco",
+    "annualized_tco",
+    "unit_tco",
+    "usage_tco",
+]
+FINANCIAL_COMPONENT_KEYWORDS = {
+    "acquisition_costs": ("precio", "compra", "adquisicion", "inversion", "licencia", "honorario"),
+    "logistics_costs": ("flete", "logistica", "transporte", "aduana", "arancel", "nacionalizacion", "almacenamiento"),
+    "implementation_costs": ("implementacion", "instalacion", "configuracion", "integracion", "migracion", "capacitacion"),
+    "operating_costs": ("operacion", "energia", "combustible", "insumo", "renovacion", "suscripcion"),
+    "maintenance_costs": ("manten", "correctivo", "preventivo", "repuesto"),
+    "support_costs": ("soporte", "sla", "postventa", "garantia"),
+    "insurance_costs": ("seguro", "soat", "siniestralidad"),
+    "financing_costs": ("financ", "interes", "credito"),
+    "administrative_costs": ("administr", "gestion", "supervision"),
+    "risk_costs": ("riesgo", "penalidad", "parada", "incumplimiento", "obsolescencia", "merma"),
+    "exit_costs": ("salida", "reemplazo", "terminacion"),
+    "residual_value": ("residual", "recuperable", "depreciacion"),
+}
 RELEVANT_TERMS = (
     "precio", "fob", "cif", "exw", "flete", "seguro", "aduana", "impuesto", "arancel",
     "garantia", "warranty", "mantenimiento", "repuesto", "instalacion", "capacitacion",
@@ -117,6 +149,114 @@ def _normalize_level(value: Any, default: str = "medium") -> str:
     if text in {"high", "alto", "alta", "critico", "critica"}:
         return "high"
     return default
+
+
+def _normalize_spanish_confidence(value: Any, default: str = "baja") -> str:
+    text = str(value or "").strip().lower()
+    if text in {"alta", "alto", "high"}:
+        return "alta"
+    if text in {"media", "medio", "medium", "moderada", "moderado"}:
+        return "media"
+    if text in {"baja", "bajo", "low"}:
+        return "baja"
+    return default
+
+
+def _normalize_data_type(value: Any, default: str = "faltante") -> str:
+    text = str(value or "").strip().lower()
+    aliases = {
+        "document": "documento",
+        "documental": "documento",
+        "user": "usuario",
+        "calculated": "calculado",
+        "estimate": "estimado",
+        "estimated": "estimado",
+        "missing": "faltante",
+        "not_applicable": "no_aplica",
+        "no aplica": "no_aplica",
+    }
+    normalized = aliases.get(text, text)
+    return normalized if normalized in {"documento", "usuario", "calculado", "estimado", "faltante", "no_aplica"} else default
+
+
+def _normalize_source_type(value: Any, default: str = "estimado") -> str:
+    text = str(value or "").strip().lower()
+    return text if text in {"benchmark", "estimado", "usuario", "documento"} else default
+
+
+def _infer_horizon_years(value: Any) -> float | str:
+    number = _as_number(value)
+    if number is not None:
+        return number
+    text = str(value or "").lower()
+    if "por compra" in text:
+        return "Por compra"
+    if "vida" in text:
+        return "Vida util"
+    if "mensual" in text or "mes" in text:
+        return 1 / 12
+    import re
+
+    match = re.search(r"(\d+(?:[.,]\d+)?)", text)
+    if match:
+        parsed = _as_number(match.group(1))
+        if parsed is not None:
+            return parsed
+    return "Dato faltante"
+
+
+def _value_or_status(value: Any, context: str = "") -> float | str:
+    number = _as_number(value)
+    if number is not None:
+        return number
+    text = _as_text(value, "")
+    if text:
+        if text.strip().lower() in {"no especificado", "no determinado", "n/a", "na", "null", "none"}:
+            return "Dato faltante"
+        return text
+    lowered = context.lower()
+    if "tco" in lowered or "unit" in lowered or "usage" in lowered:
+        return "No calculable con datos actuales"
+    return "Dato faltante"
+
+
+def _alternative_names(result: dict[str, Any]) -> list[str]:
+    names: list[str] = []
+    for collection, key in [
+        ("tco_totals", "alternative"),
+        ("ranking", "alternative"),
+        ("data_used", "alternative"),
+        ("detected_alternatives", "supplier_name"),
+    ]:
+        for item in _as_list(result.get(collection)):
+            if isinstance(item, dict):
+                name = _as_text(item.get(key), "")
+                if name:
+                    names.append(name)
+    for row in _as_list(result.get("tco_matrix")):
+        if isinstance(row, dict) and isinstance(row.get("values"), dict):
+            names.extend(str(key) for key in row["values"].keys() if str(key).strip())
+    matrix = result.get("tco_dashboard_matrix") if isinstance(result.get("tco_dashboard_matrix"), dict) else {}
+    for item in _as_list(matrix.get("alternatives") if isinstance(matrix, dict) else []):
+        if isinstance(item, dict):
+            name = _as_text(item.get("label") or item.get("name") or item.get("provider"), "")
+            if name:
+                names.append(name)
+    return list(dict.fromkeys(names))
+
+
+def _financial_category(component: str) -> str | None:
+    text = component.lower()
+    for field, keywords in FINANCIAL_COMPONENT_KEYWORDS.items():
+        if any(keyword in text for keyword in keywords):
+            return field
+    return None
+
+
+def _safe_add(value: float | None, addend: float | None) -> float | None:
+    if addend is None:
+        return value
+    return (value or 0) + addend
 
 
 def _has_numeric_evidence_for_alternative(result: dict[str, Any], alternative: str) -> bool:
@@ -450,6 +590,10 @@ def ensure_result_defaults(
     )
     result.setdefault("data_used", [])
     result.setdefault("tco_matrix", [])
+    result.setdefault("base_parameters", None)
+    result.setdefault("benchmark_assumptions", [])
+    result.setdefault("transparency_table", [])
+    result.setdefault("financial_model", [])
     result.setdefault("tco_totals", [])
     result.setdefault("ranking", [])
     result.setdefault("hidden_costs_detected", [])
@@ -469,6 +613,250 @@ def ensure_result_defaults(
     result.setdefault("assumptions_and_limits", [])
     result.setdefault("calculation_warnings", [])
     return result
+
+
+def sanitize_base_parameters(result: dict[str, Any]) -> dict[str, Any]:
+    params = result.get("base_parameters") if isinstance(result.get("base_parameters"), dict) else {}
+    notes = [_as_text(value) for value in _as_list(params.get("notes"))]
+    if not notes:
+        notes = ["Parametros base normalizados desde el contexto, documentos o resultado estructurado del agente."]
+
+    return {
+        "analysis_type": _as_text(params.get("analysis_type") or result.get("analysis_type"), "Dato faltante"),
+        "product_or_service": _as_text(params.get("product_or_service") or result.get("item_name"), "Dato faltante"),
+        "currency": _as_text(params.get("currency") or result.get("currency"), "Dato faltante"),
+        "horizon_years": _value_or_status(params.get("horizon_years") or _infer_horizon_years(result.get("evaluation_horizon"))),
+        "quantity": _value_or_status(params.get("quantity") or next((item.get("quantity") for item in _as_list(result.get("data_used")) if isinstance(item, dict) and item.get("quantity")), None)),
+        "unit_of_comparison": _as_text(params.get("unit_of_comparison") or result.get("comparison_unit"), "Dato faltante"),
+        "annual_usage": _value_or_status(params.get("annual_usage")),
+        "annual_km": _value_or_status(params.get("annual_km"), "km"),
+        "useful_life_years": _value_or_status(params.get("useful_life_years")),
+        "exchange_rate": _value_or_status(params.get("exchange_rate")),
+        "discount_rate": _value_or_status(params.get("discount_rate")),
+        "tax_rate": _value_or_status(params.get("tax_rate")),
+        "financing_rate": _value_or_status(params.get("financing_rate")),
+        "notes": notes,
+    }
+
+
+def sanitize_benchmark_assumptions(result: dict[str, Any]) -> list[dict[str, Any]]:
+    sanitized = [
+        {
+            "field": _as_text(item.get("field")),
+            "value": _value_or_status(item.get("value")),
+            "range_min": None if item.get("range_min") is None else _value_or_status(item.get("range_min")),
+            "range_max": None if item.get("range_max") is None else _value_or_status(item.get("range_max")),
+            "unit": None if item.get("unit") is None else _as_text(item.get("unit")),
+            "reason": _as_text(item.get("reason"), "Estimacion declarada para completar un analisis preliminar."),
+            "source_type": _normalize_source_type(item.get("source_type")),
+            "confidence_level": _normalize_spanish_confidence(item.get("confidence_level")),
+            "applies_to": _as_text(item.get("applies_to"), "General"),
+            "warning": _as_text(item.get("warning"), "Validar este supuesto antes de tomar una decision final."),
+        }
+        for item in _as_list(result.get("benchmark_assumptions"))
+        if isinstance(item, dict)
+    ]
+    if sanitized:
+        return sanitized
+
+    missing = [
+        item for item in _as_list(result.get("missing_information"))
+        if _as_text(item, "") and PRELIMINARY_MISSING_INFO_NOTE not in _as_text(item, "")
+    ]
+    return [
+        {
+            "field": _as_text(item),
+            "value": "Dato faltante",
+            "range_min": None,
+            "range_max": None,
+            "unit": None,
+            "reason": "Dato critico identificado para mejorar la precision del TCO.",
+            "source_type": "estimado",
+            "confidence_level": "baja",
+            "applies_to": "General",
+            "warning": "No se aplico benchmark cuantitativo; solicitar o validar con proveedor antes de decidir.",
+        }
+        for item in missing[:12]
+    ]
+
+
+def build_financial_model(result: dict[str, Any]) -> list[dict[str, Any]]:
+    alternatives = _alternative_names(result)
+    existing = {
+        _as_text(item.get("alternative"), ""): item
+        for item in _as_list(result.get("financial_model"))
+        if isinstance(item, dict) and _as_text(item.get("alternative"), "")
+    }
+    totals = {
+        _as_text(item.get("alternative"), ""): item
+        for item in _as_list(result.get("tco_totals"))
+        if isinstance(item, dict) and _as_text(item.get("alternative"), "")
+    }
+
+    rows: list[dict[str, Any]] = []
+    for alternative in alternatives:
+        model: dict[str, Any] = {field: None for field in FINANCIAL_MODEL_FIELDS}
+        warnings: list[str] = []
+
+        for matrix_row in _as_list(result.get("tco_matrix")):
+            if not isinstance(matrix_row, dict) or not isinstance(matrix_row.get("values"), dict):
+                continue
+            category = _financial_category(_as_text(matrix_row.get("cost_component"), ""))
+            if not category or category in {"net_tco", "annualized_tco", "unit_tco", "usage_tco"}:
+                continue
+            value = _as_number(matrix_row["values"].get(alternative))
+            if value is None:
+                continue
+            if category == "residual_value":
+                model[category] = _safe_add(_as_number(model[category]), value)
+            else:
+                model[category] = _safe_add(_as_number(model[category]), value)
+
+        total = totals.get(alternative, {})
+        if total:
+            model["acquisition_costs"] = _as_number(total.get("initial_price")) or model["acquisition_costs"]
+            model["net_tco"] = _as_number(total.get("total_tco"))
+            model["annualized_tco"] = _as_number(total.get("tco_annual"))
+            model["unit_tco"] = _as_number(total.get("tco_per_unit"))
+
+        if model["net_tco"] is None:
+            positive_fields = [
+                "acquisition_costs", "logistics_costs", "implementation_costs", "operating_costs",
+                "maintenance_costs", "support_costs", "insurance_costs", "financing_costs",
+                "administrative_costs", "risk_costs", "exit_costs",
+            ]
+            available_values = [_as_number(model[field]) for field in positive_fields]
+            if any(value is not None for value in available_values):
+                subtotal = sum(value or 0 for value in available_values)
+                residual = _as_number(model["residual_value"]) or 0
+                model["net_tco"] = subtotal - residual
+                warnings.append("TCO neto calculado por Python desde componentes del resultado estructurado; no cambia la recomendacion del agente.")
+            else:
+                model["net_tco"] = "No calculable con datos actuales"
+                warnings.append("Faltan costos numericos suficientes para calcular TCO neto.")
+
+        horizon = _as_number((result.get("base_parameters") or {}).get("horizon_years") if isinstance(result.get("base_parameters"), dict) else None)
+        if model["annualized_tco"] is None and _as_number(model["net_tco"]) is not None and horizon and horizon > 0:
+            model["annualized_tco"] = (_as_number(model["net_tco"]) or 0) / horizon
+        if model["annualized_tco"] is None:
+            model["annualized_tco"] = "No calculable con datos actuales"
+
+        quantity = _as_number((result.get("base_parameters") or {}).get("quantity") if isinstance(result.get("base_parameters"), dict) else None)
+        if model["unit_tco"] is None and _as_number(model["net_tco"]) is not None and quantity and quantity > 0:
+            model["unit_tco"] = (_as_number(model["net_tco"]) or 0) / quantity
+        if model["unit_tco"] is None:
+            model["unit_tco"] = "No calculable con datos actuales"
+        if model["usage_tco"] is None:
+            model["usage_tco"] = "No calculable con datos actuales"
+
+        existing_item = existing.get(alternative, {})
+        for field in FINANCIAL_MODEL_FIELDS:
+            if isinstance(existing_item, dict) and existing_item.get(field) not in {None, ""}:
+                model[field] = _value_or_status(existing_item.get(field), field)
+            else:
+                model[field] = _value_or_status(model[field], field)
+
+        rows.append(
+            {
+                "alternative": alternative,
+                **model,
+                "calculation_basis": _as_text(
+                    existing_item.get("calculation_basis") if isinstance(existing_item, dict) else None,
+                    "TCO_NETO = inversion inicial + logistica + implementacion + operacion + mantenimiento + soporte + seguros + financiamiento + administracion + riesgo + salida - valor residual.",
+                ),
+                "confidence_level": _normalize_spanish_confidence(
+                    existing_item.get("confidence_level") if isinstance(existing_item, dict) else None,
+                    "media" if _as_number(model["net_tco"]) is not None else "baja",
+                ),
+                "warnings": [
+                    *_as_list(existing_item.get("warnings") if isinstance(existing_item, dict) else []),
+                    *warnings,
+                ],
+            }
+        )
+    return rows
+
+
+def build_transparency_table(result: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = [
+        {
+            "alternative": _as_text(item.get("alternative"), "General"),
+            "field": _as_text(item.get("field")),
+            "value": _value_or_status(item.get("value"), _as_text(item.get("field"), "")),
+            "source": _as_text(item.get("source"), "No disponible"),
+            "type": _normalize_data_type(item.get("type")),
+            "confidence_level": _normalize_spanish_confidence(item.get("confidence_level")),
+            "observation": _as_text(item.get("observation"), "Sin observacion adicional."),
+        }
+        for item in _as_list(result.get("transparency_table"))
+        if isinstance(item, dict)
+    ]
+    seen = {(row["alternative"], row["field"], str(row["value"])) for row in rows}
+
+    def add_row(row: dict[str, Any]) -> None:
+        key = (row["alternative"], row["field"], str(row["value"]))
+        if key not in seen:
+            rows.append(row)
+            seen.add(key)
+
+    for item in _as_list(result.get("detected_alternatives")):
+        if not isinstance(item, dict):
+            continue
+        alternative = _as_text(item.get("supplier_name"))
+        source = _as_text(item.get("source_file"), "Documento")
+        for field, raw_value in [
+            ("Precio detectado", item.get("detected_price")),
+            ("Garantia", item.get("warranty")),
+            ("Lead time", item.get("lead_time")),
+        ]:
+            value = _value_or_status(raw_value)
+            add_row(
+                {
+                    "alternative": alternative,
+                    "field": field,
+                    "value": value,
+                    "source": source if value != "Dato faltante" else "No disponible",
+                    "type": "documento" if value != "Dato faltante" else "faltante",
+                    "confidence_level": _normalize_spanish_confidence(item.get("confidence_level")),
+                    "observation": "Extraido o declarado por el agente desde la evidencia documental disponible.",
+                }
+            )
+
+    for matrix_row in _as_list(result.get("tco_matrix")):
+        if not isinstance(matrix_row, dict) or not isinstance(matrix_row.get("values"), dict):
+            continue
+        field = _as_text(matrix_row.get("cost_component"))
+        for alternative, raw_value in matrix_row["values"].items():
+            value = _value_or_status(raw_value, field)
+            number = _as_number(value)
+            add_row(
+                {
+                    "alternative": _as_text(alternative),
+                    "field": field,
+                    "value": value,
+                    "source": "Resultado estructurado TCO",
+                    "type": "calculado" if number is not None else "faltante",
+                    "confidence_level": "media" if number is not None else "baja",
+                    "observation": _as_text(matrix_row.get("notes"), "Componente usado para matriz TCO."),
+                }
+            )
+
+    for item in _as_list(result.get("benchmark_assumptions")):
+        if not isinstance(item, dict):
+            continue
+        add_row(
+            {
+                "alternative": _as_text(item.get("applies_to"), "General"),
+                "field": _as_text(item.get("field")),
+                "value": _value_or_status(item.get("value")),
+                "source": _normalize_source_type(item.get("source_type")),
+                "type": "estimado",
+                "confidence_level": _normalize_spanish_confidence(item.get("confidence_level")),
+                "observation": _as_text(item.get("warning"), "Benchmark o estimado declarado; validar antes de decidir."),
+            }
+        )
+
+    return rows
 
 
 def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -636,6 +1024,11 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
         result["missing_information"] = [PRELIMINARY_MISSING_INFO_NOTE, *DEFAULT_MISSING_INFORMATION]
     if not result["questions_for_user_or_suppliers"]:
         result["questions_for_user_or_suppliers"] = DEFAULT_SUPPLIER_QUESTIONS
+
+    result["base_parameters"] = sanitize_base_parameters(result)
+    result["benchmark_assumptions"] = sanitize_benchmark_assumptions(result)
+    result["financial_model"] = build_financial_model(result)
+    result["transparency_table"] = build_transparency_table(result)
 
     if usage:
         result["tokens_input"] = usage.get("tokens_input")

@@ -61,6 +61,26 @@ export type TcoAnalysisResult = {
     final_recommendation: string;
   };
   data_used: Array<Record<string, unknown>>;
+  base_parameters?: {
+    analysis_type?: string | null;
+    product_or_service?: string | null;
+    currency?: string | null;
+    horizon_years?: number | string | null;
+    quantity?: number | string | null;
+    unit_of_comparison?: string | null;
+    annual_usage?: number | string | null;
+    annual_km?: number | string | null;
+    useful_life_years?: number | string | null;
+    exchange_rate?: number | string | null;
+    discount_rate?: number | string | null;
+    tax_rate?: number | string | null;
+    financing_rate?: number | string | null;
+    notes?: string[];
+    [key: string]: unknown;
+  } | null;
+  benchmark_assumptions?: Array<Record<string, unknown>>;
+  transparency_table?: Array<Record<string, unknown>>;
+  financial_model?: Array<Record<string, unknown>>;
   tco_matrix: Array<{ cost_component: string; values: Record<string, number | string | null>; notes?: string }>;
   tco_dashboard_matrix?: Record<string, unknown> | null;
   tco_totals: Array<Record<string, unknown>>;

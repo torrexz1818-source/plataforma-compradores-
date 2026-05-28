@@ -44,6 +44,10 @@ export type TcoPresentationModel = {
   totals: TcoPresentationRow[];
   ranking: Array<Record<string, unknown>>;
   risks: Array<Record<string, unknown>>;
+  baseParameters: Record<string, unknown>;
+  benchmarkAssumptions: Array<Record<string, unknown>>;
+  transparencyTable: Array<Record<string, unknown>>;
+  financialModel: Array<Record<string, unknown>>;
   missingData: string[];
   assumptions: string[];
   hiddenCosts: string[];
@@ -303,6 +307,10 @@ export function normalizeTcoForPresentation(result: TcoAnalysisResult): TcoPrese
     totals,
     ranking: result.ranking,
     risks: result.risk_analysis,
+    baseParameters: asRecord(result.base_parameters),
+    benchmarkAssumptions: asArray<Record<string, unknown>>(result.benchmark_assumptions),
+    transparencyTable: asArray<Record<string, unknown>>(result.transparency_table),
+    financialModel: asArray<Record<string, unknown>>(result.financial_model),
     missingData: result.missing_information,
     assumptions: [...result.assumptions_and_limits, ...(result.calculation_warnings ?? [])],
     hiddenCosts: result.hidden_costs_detected ?? [],
