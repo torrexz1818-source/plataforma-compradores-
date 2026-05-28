@@ -14,7 +14,7 @@ Buyer Nodus se publica en Render mediante `render.yaml`.
 
 - Frontend: `https://buyernodus.com`
 - Backend API: `https://api.buyernodus.com`
-- AI Engine: `https://ai.buyernodus.com`
+- AI Engine: `https://plataforma-compradores-128y.onrender.com`
 - Dominio `www`: `www.buyernodus.com` apunta a `plataforma-compradores.onrender.com`
 
 El flujo normal de despliegue es:
@@ -42,7 +42,7 @@ CORS_ORIGINS=https://buyernodus.com,https://www.buyernodus.com
 
 ```env
 VITE_API_URL=https://api.buyernodus.com
-VITE_AI_ENGINE_URL=https://ai.buyernodus.com
+VITE_AI_ENGINE_URL=https://plataforma-compradores-128y.onrender.com
 ```
 
 ### Recuperacion De Contrasena
