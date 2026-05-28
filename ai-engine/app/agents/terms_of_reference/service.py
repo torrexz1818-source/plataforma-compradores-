@@ -134,17 +134,49 @@ def _fallback_document(payload: dict[str, Any], document_summaries: list[dict[st
                 "location": payload.get("location"),
                 "required_date": payload.get("required_date"),
             },
+            "background": payload.get("additional_instructions")
+            or f"Requerimiento originado a partir de la necesidad descrita por el comprador: {payload['initial_description']}",
             "objective": payload["objective"],
             "scope": payload["scope"],
             "technical_characteristics": template["fields"],
             "required_activities": split_lines(payload.get("activities")) or ["Ejecutar las actividades descritas en el alcance validando condiciones en campo."],
             "final_deliverables": split_lines(payload.get("deliverables")),
+            "suggested_schedule": [
+                f"Fecha o plazo estimado: {payload.get('required_date') or 'Dato no especificado'}",
+                "Recomendacion sugerida: validar cronograma final con el usuario interno y el proveedor adjudicado.",
+            ],
             "justification": payload["justification"],
             "safety_requirements": payload.get("safety_requirements") or template["safety"],
             "supplier_conditions": [
                 "El proveedor debera validar medidas, cantidades y condiciones antes de presentar su propuesta final.",
                 "El proveedor debera incluir cronograma, recursos asignados, garantia y exclusiones.",
                 "El proveedor debera cumplir los requisitos internos de seguridad y acceso definidos por el comprador.",
+            ],
+            "commercial_conditions": [
+                "Recomendacion sugerida: solicitar propuesta tecnica y economica separada.",
+                "Recomendacion sugerida: solicitar condiciones de pago, garantia, validez de oferta y exclusiones.",
+            ],
+            "evaluation_criteria": ["Cumplimiento tecnico", "Precio total", "Plazo", "Garantia", "Experiencia", "Condiciones comerciales"],
+            "compliance_matrix": [
+                {
+                    "requirement": "Cumplimiento del alcance tecnico",
+                    "expected_evidence": "Propuesta tecnica, cronograma y declaracion de cumplimiento.",
+                    "mandatory": "Si",
+                    "status": "Recomendacion sugerida",
+                },
+                {
+                    "requirement": "Entregables definidos",
+                    "expected_evidence": "Listado de entregables y formato de conformidad.",
+                    "mandatory": "Si",
+                    "status": "Definido por el usuario" if split_lines(payload.get("deliverables")) else "Dato no especificado",
+                },
+            ],
+            "identified_risks": [
+                {
+                    "risk": "Informacion tecnica incompleta o no validada en campo.",
+                    "impact": "Medio",
+                    "mitigation": "Recomendacion sugerida: realizar visita tecnica o ronda de consultas antes de recibir propuestas.",
+                }
             ],
             "final_report_structure": ["Resumen de actividades", "Registro fotografico", "Hallazgos", "Recomendaciones", "Conformidad del servicio"],
             "budget_chain": payload["budget_chain"],
@@ -244,6 +276,68 @@ def _enhance_result(result: TermsOfReferenceResult) -> TermsOfReferenceResult:
 
     if not result.flow_steps:
         result.flow_steps = ["Necesidad", "Alcance", "Actividades", "Entregables", "Requisitos", "Proveedor"]
+
+    if not document.background.strip() or document.background == "No especificado":
+        document.background = "Dato no especificado"
+
+    if not document.suggested_schedule:
+        document.suggested_schedule = [
+            f"Fecha o plazo estimado: {document.general_data.required_date or 'Dato no especificado'}",
+            "Recomendacion sugerida: confirmar cronograma de ejecucion, hitos y fecha de inicio antes de enviar la solicitud a proveedores.",
+        ]
+
+    if not document.commercial_conditions:
+        document.commercial_conditions = [
+            "Recomendacion sugerida: solicitar propuesta tecnica y economica separada.",
+            "Recomendacion sugerida: pedir validez de oferta, garantia, forma de pago, exclusiones e impuestos aplicables.",
+        ]
+
+    if not document.evaluation_criteria:
+        document.evaluation_criteria = result.tender_bases.evaluation_criteria or [
+            "Cumplimiento tecnico",
+            "Precio total",
+            "Plazo de ejecucion",
+            "Garantia",
+            "Experiencia del proveedor",
+            "Condiciones comerciales",
+        ]
+
+    if not document.compliance_matrix:
+        document.compliance_matrix = [
+            {
+                "requirement": "Objetivo y alcance comprendidos",
+                "expected_evidence": "Declaracion de cumplimiento y propuesta tecnica.",
+                "mandatory": "Si",
+                "status": "Definido por el usuario" if document.objective and document.scope else "Dato no especificado",
+            },
+            {
+                "requirement": "Especificaciones tecnicas cubiertas",
+                "expected_evidence": "Ficha tecnica, memoria descriptiva, catalogo o detalle de solucion.",
+                "mandatory": "Si",
+                "status": "Definido por el usuario" if document.technical_characteristics else "Dato no especificado",
+            },
+            {
+                "requirement": "Entregables comprometidos",
+                "expected_evidence": "Listado de entregables, formato de conformidad y plazo.",
+                "mandatory": "Si",
+                "status": "Definido por el usuario" if document.final_deliverables else "Dato no especificado",
+            },
+            {
+                "requirement": "Requisitos de seguridad y acceso",
+                "expected_evidence": "Documentacion SST/SSMA, permisos o constancias aplicables.",
+                "mandatory": "Recomendado",
+                "status": "Recomendacion sugerida",
+            },
+        ]
+
+    if not document.identified_risks:
+        document.identified_risks = [
+            {
+                "risk": "Datos tecnicos, cantidades o condiciones de ejecucion pendientes de validacion.",
+                "impact": "Medio",
+                "mitigation": "Recomendacion sugerida: validar informacion con el area usuaria y solicitar visita tecnica si aplica.",
+            }
+        ]
 
     if not result.dashboard_metrics:
         result.dashboard_metrics = [

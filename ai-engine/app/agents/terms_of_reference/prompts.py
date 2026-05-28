@@ -22,9 +22,9 @@ GENERATE_SYSTEM_PROMPT = """
 Actua como especialista senior en compras, abastecimiento y elaboracion de terminos de referencia para procesos de contratacion B2B.
 Genera un documento profesional en espanol a partir de la descripcion inicial, categoria, formulario completado, documentos de apoyo, instrucciones adicionales y plantilla seleccionada.
 El documento debe estar orientado a uso corporativo.
-Incluye como minimo datos generales, objetivo, alcance, caracteristicas tecnicas, actividades requeridas, entregables, justificacion, requisitos SST/SSMA, condiciones para proveedores, estructura de informe final si aplica, cadena presupuestal si aplica, anexos sugeridos, informacion faltante y recomendaciones para el comprador.
+Incluye como minimo: resumen ejecutivo, antecedentes, objetivo de la contratacion, alcance del servicio o producto, especificaciones tecnicas, entregables esperados, plazo y cronograma sugerido, perfil o requisitos del proveedor, condiciones comerciales sugeridas, criterios de evaluacion, matriz de cumplimiento, riesgos identificados, recomendaciones para el comprador y anexos sugeridos.
 Ademas genera apoyo operativo para compras: bases sugeridas para licitacion o solicitud de propuestas, correo sugerido para invitar proveedores y proceso sugerido de licitacion.
-Reglas: no inventes datos especificos; usa "No especificado" cuando un dato no este disponible; si falta informacion, agregala en informacion faltante o puntos por validar; mejora la redaccion tecnica; usa tono corporativo claro y profesional; adapta el documento al tipo de servicio o compra; sugiere requisitos de seguridad razonables indicando que deben ser validados por el comprador.
+Reglas: no inventes datos criticos, importes, fechas comprometidas, marcas, cantidades exactas, certificaciones o condiciones legales si no aparecen en el input o documentos. Usa "Dato no especificado" cuando un dato no este disponible. Cuando propongas una buena practica, marcala como "Recomendacion sugerida: ...". Si falta informacion, agregala en informacion faltante o puntos por validar; mejora la redaccion tecnica; usa tono corporativo claro y profesional; adapta el documento al tipo de servicio o compra; sugiere requisitos de seguridad razonables indicando que deben ser validados por el comprador.
 Las bases de licitacion y el correo son una guia inicial operativa, no documentos legales definitivos, y deben incluir advertencia de revision interna/legal cuando aplique.
 Si hay documentos de apoyo, usalos como contexto. Si hay planos o fichas tecnicas, extrae medidas, cantidades, equipos o condiciones relevantes cuando sea posible. Si hay fotos o anexos, usalos para reforzar la justificacion, alcance o anexos sugeridos.
 Devuelve exclusivamente JSON valido. No devuelvas markdown fuera del JSON.
@@ -82,14 +82,33 @@ def build_generate_prompt(payload: dict[str, Any]) -> str:
                         "location": "string|null",
                         "required_date": "string|null",
                     },
+                    "background": "string",
                     "objective": "string",
                     "scope": "string",
                     "technical_characteristics": ["string"],
                     "required_activities": ["string"],
                     "final_deliverables": ["string"],
+                    "suggested_schedule": ["string"],
                     "justification": "string",
                     "safety_requirements": ["string"],
                     "supplier_conditions": ["string"],
+                    "commercial_conditions": ["string"],
+                    "evaluation_criteria": ["string"],
+                    "compliance_matrix": [
+                        {
+                            "requirement": "string",
+                            "expected_evidence": "string",
+                            "mandatory": "Si|No|Recomendado",
+                            "status": "Dato no especificado|Recomendacion sugerida|Definido por el usuario",
+                        }
+                    ],
+                    "identified_risks": [
+                        {
+                            "risk": "string",
+                            "impact": "Bajo|Medio|Alto",
+                            "mitigation": "string",
+                        }
+                    ],
                     "final_report_structure": ["string"],
                     "budget_chain": {
                         "project": "string|null",

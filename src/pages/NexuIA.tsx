@@ -92,16 +92,14 @@ const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
 const dashboardAudiences = ['Gerencia', 'Compras', 'Finanzas', 'Operaciones', 'Proveedores', 'Auditoría', 'Otro'];
 const dashboardDataTypes = ['Gastos', 'Proveedores', 'Compras', 'Contratos', 'Inventario', 'Cotizaciones', 'Indicadores KPI', 'Datos mixtos', 'Otro'];
 const dashboardFocusOptions = ['Automático', 'Categorías', 'Proveedores', 'Ahorro', 'Cumplimiento', 'Compradores', 'Pagos', 'Ejecutivo', 'Operativo', 'Financiero', 'Gastos', 'Compras', 'Auditoría'];
-const termsGenerationSteps = [
-  'Leyendo informacion',
-  'Analizando requerimiento',
-  'Revisando documentos de apoyo',
-  'Organizando alcance',
-  'Generando termino de referencia',
-  'Generando bases de licitacion',
-  'Preparando correo para proveedores',
-  'Validando calidad del documento',
-  'Preparando resultado',
+const termsProcessingStages = [
+  { label: 'Leyendo archivos...', message: 'Leyendo archivos y datos del formulario...' },
+  { label: 'Extrayendo información...', message: 'Extrayendo información relevante de los documentos de apoyo...' },
+  { label: 'Organizando requerimiento...', message: 'Organizando antecedentes, objetivo, alcance y entregables...' },
+  { label: 'Generando secciones del TDR...', message: 'Construyendo secciones profesionales del término de referencia...' },
+  { label: 'Validando coherencia técnica...', message: 'Validando coherencia técnica, faltantes y riesgos...' },
+  { label: 'Preparando descargables...', message: 'Preparando estructura para PDF, Excel y PowerPoint...' },
+  { label: 'Finalizando...', message: 'Finalizando resultado y descargables...' },
 ];
 
 function getAgentIcon(icon: string) {
@@ -192,6 +190,8 @@ const NexuIA = () => {
   const [termsSafetyRequirements, setTermsSafetyRequirements] = useState<string[]>([]);
   const [termsFiles, setTermsFiles] = useState<File[]>([]);
   const [termsCurrentStep, setTermsCurrentStep] = useState(0);
+  const [termsProcessingStep, setTermsProcessingStep] = useState(0);
+  const [isTermsDropActive, setIsTermsDropActive] = useState(false);
   const [loggedRunIds, setLoggedRunIds] = useState<Record<string, string>>({});
   const [feedbackStars, setFeedbackStars] = useState(5);
   const [feedbackType, setFeedbackType] = useState('me_sirvio');
@@ -324,6 +324,8 @@ const NexuIA = () => {
     setTermsSafetyRequirements([]);
     setTermsFiles([]);
     setTermsCurrentStep(0);
+    setTermsProcessingStep(0);
+    setIsTermsDropActive(false);
     termsFormSchemaMutation.reset();
     termsGenerateMutation.reset();
     dashboardCreatorMutation.reset();
@@ -359,6 +361,24 @@ const NexuIA = () => {
     setFeedbackStars(5);
     setFeedbackType('me_sirvio');
   }, [routeAgentId]);
+
+  useEffect(() => {
+    if (termsGenerateMutation.isSuccess) {
+      setTermsProcessingStep(termsProcessingStages.length - 1);
+      return undefined;
+    }
+
+    if (!termsGenerateMutation.isPending) {
+      setTermsProcessingStep(0);
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setTermsProcessingStep((current) => Math.min(current + 1, termsProcessingStages.length - 2));
+    }, 1300);
+
+    return () => window.clearInterval(intervalId);
+  }, [termsGenerateMutation.isPending, termsGenerateMutation.isSuccess]);
 
   useEffect(() => {
     if (dashboardCreatorMutation.isSuccess) {
@@ -552,12 +572,6 @@ const NexuIA = () => {
     ],
     [],
   );
-
-  useEffect(() => {
-    if (selectedExportFormat === 'docx') {
-      setSelectedExportFormat('pdf');
-    }
-  }, [selectedExportFormat]);
   const selectedExportFormatLabel = exportFormatOptions.find((option) => option.value === selectedExportFormat)?.label ?? 'PDF';
   const isAdminUser = user?.role === 'admin';
   const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
@@ -806,19 +820,42 @@ const NexuIA = () => {
     </div>
   );
 
-  const handleTermsFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? []);
-    const validationMessage = validateTermsFiles(files);
+  const addTermsFiles = (selectedFiles: File[]) => {
+    if (!selectedFiles.length) return;
+    const mergedFiles = [...termsFiles, ...selectedFiles].filter(
+      (file, index, allFiles) =>
+        index === allFiles.findIndex((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified),
+    );
+    const validationMessage = validateTermsFiles(mergedFiles);
     if (validationMessage) {
       toast({
         title: validationMessage,
-        description: 'Formatos soportados: PDF, DOCX, XLSX, CSV, JPG, JPEG y PNG.',
+        description: 'Formatos soportados: PDF, hojas de cálculo, CSV, imágenes y documentos compatibles.',
         variant: 'destructive',
       });
-      event.target.value = '';
       return;
     }
-    setTermsFiles(files);
+    setTermsFiles(mergedFiles);
+  };
+
+  const handleTermsFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    addTermsFiles(Array.from(event.target.files ?? []));
+    event.target.value = '';
+  };
+
+  const handleTermsDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setIsTermsDropActive(false);
+    addTermsFiles(Array.from(event.dataTransfer.files ?? []));
+  };
+
+  const removeTermsFile = (targetFile: File) => {
+    setTermsFiles((current) =>
+      current.filter(
+        (file) =>
+          !(file.name === targetFile.name && file.size === targetFile.size && file.lastModified === targetFile.lastModified),
+      ),
+    );
   };
 
   const handleToggleSafetyRequirement = (value: string) => {
@@ -944,8 +981,31 @@ const NexuIA = () => {
   };
 
   const handleGenerateTerms = async () => {
-    const requiredFields = ['title', 'requirement_type', 'objective', 'scope', 'deliverables'];
-    const hasMissingRequired = requiredFields.some((field) => !termsFields[field]?.trim());
+    const dynamicFormData = Object.fromEntries(
+      Object.entries(termsFields).filter(([key]) => key.startsWith('dynamic_')),
+    );
+    const contextValue = [
+      termsInitialDescription,
+      termsFields.location,
+      termsFields.important_observations,
+      termsFields.dynamic_important_observations,
+      termsFields.additional_instructions,
+      termsFields.requesting_area,
+      termsFields.request_owner,
+      ...Object.entries(dynamicFormData)
+        .filter(([key]) => /area|context|observ|solicit|owner|responsable/i.test(key))
+        .map(([, value]) => value),
+    ].join(' ');
+    const requiredChecks = [
+      { label: 'nombre del requerimiento', value: termsFields.title },
+      { label: 'tipo de compra', value: termsFields.requirement_type },
+      { label: 'objetivo', value: termsFields.objective },
+      { label: 'alcance o descripción', value: termsFields.scope },
+      { label: 'entregables esperados', value: termsFields.deliverables },
+      { label: 'área solicitante o contexto', value: contextValue },
+      { label: 'plazo o fecha estimada', value: termsFields.required_date },
+    ];
+    const missingLabels = requiredChecks.filter((item) => !item.value?.trim()).map((item) => item.label);
 
     if (!termsInitialDescription.trim()) {
       toast({
@@ -956,10 +1016,10 @@ const NexuIA = () => {
       return;
     }
 
-    if (hasMissingRequired) {
+    if (missingLabels.length) {
       toast({
-        title: 'Completa los campos obligatorios antes de generar el término de referencia.',
-        description: 'Revisa nombre, tipo, objetivo, alcance y entregables.',
+        title: 'Completa los campos mínimos del TDR.',
+        description: `Falta completar: ${missingLabels.join(', ')}.`,
         variant: 'destructive',
       });
       return;
@@ -969,10 +1029,7 @@ const NexuIA = () => {
       return;
     }
 
-    const dynamicFormData = Object.fromEntries(
-      Object.entries(termsFields).filter(([key]) => key.startsWith('dynamic_')),
-    );
-
+    setTermsProcessingStep(termsFiles.length ? 0 : 2);
     termsGenerateMutation.mutate(
       {
         initialDescription: termsInitialDescription.trim(),
@@ -1118,13 +1175,14 @@ const NexuIA = () => {
     'Disclaimer': result.disclaimer,
   });
 
-  const handleDownloadTermsPdf = async () => {
+  const handleDownloadTermsResult = async () => {
     if (!termsGenerateMutation.data) return;
     await handleExportResult({
       title: 'Término de referencia',
       result: termsGenerateMutation.data as unknown as Record<string, unknown>,
       fileName: 'termino-referencia-nodus-ia',
       operationName: 'Descarga término de referencia',
+      captureElementId: 'terms-of-reference-export-view',
     });
   };
 
@@ -1381,13 +1439,34 @@ const NexuIA = () => {
             Puedes subir planos con medidas, fichas técnicas, fotos, croquis, documentos previos,
             Excel con cantidades, manuales técnicos o imágenes del estado actual.
           </p>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-primary/5 px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
-            <Upload className="h-5 w-5 text-muted-foreground" />
+          <label
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setIsTermsDropActive(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setIsTermsDropActive(false);
+            }}
+            onDrop={handleTermsDrop}
+            className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed px-4 py-6 text-center transition ${
+              isTermsDropActive
+                ? 'border-primary bg-primary/10 shadow-sm ring-2 ring-primary/15'
+                : 'border-primary/25 bg-primary/5 hover:border-primary/35 hover:bg-primary/10'
+            }`}
+          >
+            <Upload className={`h-5 w-5 ${isTermsDropActive ? 'text-primary' : 'text-muted-foreground'}`} />
             <div>
-              <p className="text-sm font-medium text-foreground">Subir documentos de apoyo</p>
-              <p className="mt-1 text-xs text-muted-foreground/70">
-                PDF, DOCX, XLSX, CSV, JPG, JPEG o PNG. Máximo 8 archivos.
+              <p className="text-sm font-medium text-foreground">
+                {isTermsDropActive ? 'Suelta los documentos aquí' : 'Arrastra documentos o selecciónalos'}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground/70">
+                PDF, hojas de cálculo, CSV, imágenes y documentos compatibles. Máximo 8 archivos.
+              </p>
+              <span className="mt-3 inline-flex rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white">
+                Seleccionar archivos
+              </span>
             </div>
             <input
               type="file"
@@ -1411,6 +1490,13 @@ const NexuIA = () => {
                     <span className="shrink-0 text-xs text-muted-foreground/70">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </span>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-full border border-primary/15 px-3 py-1 text-xs font-medium text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+                      onClick={() => removeTermsFile(file)}
+                    >
+                      Quitar
+                    </button>
                   </div>
                 );
               })}
@@ -1482,6 +1568,69 @@ const NexuIA = () => {
           className={field.type === 'textarea' ? 'min-h-[96px] min-w-0 rounded-2xl border-primary/15' : 'min-w-0 rounded-xl border-primary/15'}
           required={field.required}
         />
+      </div>
+    );
+  };
+
+  const renderTermsProcessingPanel = () => {
+    const isError = termsGenerateMutation.isError;
+    const activeStep = isError ? Math.min(termsProcessingStep, termsProcessingStages.length - 1) : termsProcessingStep;
+    const progressValue = isError
+      ? Math.max(((activeStep + 1) / termsProcessingStages.length) * 100, 16)
+      : ((activeStep + 1) / termsProcessingStages.length) * 100;
+
+    return (
+      <div className={`space-y-4 rounded-[8px] border p-5 text-sm shadow-sm ${
+        isError ? 'border-destructive/20 bg-destructive/10 text-destructive' : 'border-primary/15 bg-white text-foreground'
+      }`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 font-semibold">
+              {isError ? <TriangleAlert className="h-4 w-4" /> : <Sparkles className="h-4 w-4 animate-pulse text-primary" />}
+              <span>
+                {isError
+                  ? 'No se pudo construir el término de referencia'
+                  : 'Analizando información y construyendo término de referencia…'}
+              </span>
+            </div>
+            <p className={`mt-2 text-xs leading-5 ${isError ? 'text-destructive/80' : 'text-muted-foreground'}`}>
+              {isError
+                ? termsGenerateMutation.error instanceof Error
+                  ? termsGenerateMutation.error.message
+                  : 'Revisa los datos ingresados e intenta nuevamente.'
+                : termsProcessingStages[activeStep]?.message ?? 'Procesando información del requerimiento...'}
+            </p>
+          </div>
+          {isError ? (
+            <Button type="button" variant="outline" className="rounded-full bg-white" onClick={handleGenerateTerms}>
+              Reintentar
+            </Button>
+          ) : null}
+        </div>
+        <Progress value={progressValue} className={`h-2 ${isError ? 'bg-destructive/10' : 'bg-primary/10 [&>div]:animate-pulse'}`} />
+        <div className="grid gap-2 sm:grid-cols-2">
+          {termsProcessingStages.map((step, index) => {
+            const isCompleted = !isError && index < activeStep;
+            const isActive = !isError && index === activeStep;
+            return (
+              <div
+                key={step.label}
+                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs transition ${
+                  isCompleted
+                    ? 'bg-primary/5 text-primary'
+                    : isActive
+                      ? 'border border-primary/20 bg-primary/10 text-primary'
+                      : isError && index === activeStep
+                        ? 'border border-destructive/20 bg-white text-destructive'
+                        : 'bg-muted/40 text-muted-foreground'
+                }`}
+              >
+                <CheckCircle2 className={`h-3.5 w-3.5 ${isCompleted || isActive ? 'text-primary' : isError && index === activeStep ? 'text-destructive' : 'text-muted-foreground/50'}`} />
+                <span>{step.label}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   };
@@ -1655,20 +1804,7 @@ const NexuIA = () => {
           </div>
         ) : null}
 
-        {termsGenerateMutation.isPending ? (
-          <div className="rounded-2xl border border-primary/15 bg-white p-4">
-            <p className="text-sm font-medium text-foreground">Nodus IA está preparando el resultado</p>
-            <Progress value={72} className="mt-3 h-2 bg-primary/10 [&>div]:animate-pulse" />
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {termsGenerationSteps.map((step, index) => (
-                <div key={step} className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <CheckCircle2 className={`h-3.5 w-3.5 ${index < 5 ? 'text-primary' : 'text-muted-foreground/50'}`} />
-                  {step}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
+        {termsGenerateMutation.isPending || termsGenerateMutation.isError ? renderTermsProcessingPanel() : null}
 
         <div className="flex flex-wrap justify-between gap-2">
           <Button type="button" variant="outline" className="rounded-full" onClick={goToPreviousTermsStep} disabled={termsCurrentStep === 0 || termsGenerateMutation.isPending}>
@@ -2491,7 +2627,7 @@ const NexuIA = () => {
                     </div>
                   ) : null}
 
-                  {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || dashboardCreatorMutation.isPending || runMutation.isPending) ? (
+                  {(proposalComparisonMutation.isPending || dashboardCreatorMutation.isPending || runMutation.isPending) ? (
                     <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
                       <div className="flex items-center gap-2 font-medium">
                         <Sparkles className="h-4 w-4 animate-pulse" />
@@ -2585,7 +2721,7 @@ const NexuIA = () => {
                   {runMutation.data?.execution.agentId === selectedAgent.id ? renderAgentFeedbackPanel() : null}
 
                   {isTermsReference && termsResult ? (
-                    <div id="terms-reference-export-view" className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                    <div id="terms-of-reference-export-view" className="space-y-5 rounded-[8px] border border-primary/15 bg-white p-4 shadow-sm">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>
@@ -2593,7 +2729,7 @@ const NexuIA = () => {
                             {termsResult.executive_summary}
                           </p>
                         </div>
-                        <div data-export-hidden="true">{renderExportControls(handleDownloadTermsPdf)}</div>
+                        <div data-export-hidden="true">{renderExportControls(handleDownloadTermsResult)}</div>
                       </div>
 
                       <div className="grid gap-3 lg:grid-cols-4">
@@ -2665,6 +2801,7 @@ const NexuIA = () => {
                       <Tabs defaultValue="documento" className="rounded-2xl border border-primary/15 bg-white p-4">
                         <TabsList className="flex h-auto flex-wrap justify-start rounded-xl bg-primary/5 p-1">
                           <TabsTrigger value="documento">Documento</TabsTrigger>
+                          <TabsTrigger value="matriz">Matriz y riesgos</TabsTrigger>
                           <TabsTrigger value="calidad">Calidad</TabsTrigger>
                           <TabsTrigger value="licitacion">Bases de licitación</TabsTrigger>
                           <TabsTrigger value="correo">Correo a proveedores</TabsTrigger>
@@ -2681,14 +2818,18 @@ const NexuIA = () => {
                                 `Ubicacion: ${termsResult.generated_document.general_data.location ?? 'No especificado'}`,
                                 `Fecha requerida: ${termsResult.generated_document.general_data.required_date ?? 'No especificado'}`,
                               ]],
+                              ['antecedentes', 'Antecedentes', [termsResult.generated_document.background ?? 'Dato no especificado']],
                               ['objetivo', 'Objetivo', [termsResult.generated_document.objective]],
                               ['alcance', 'Alcance', [termsResult.generated_document.scope]],
                               ['tecnicas', 'Caracteristicas tecnicas', termsResult.generated_document.technical_characteristics],
                               ['actividades', 'Actividades requeridas', termsResult.generated_document.required_activities],
                               ['entregables', 'Entregables', termsResult.generated_document.final_deliverables],
+                              ['cronograma', 'Plazo y cronograma sugerido', termsResult.generated_document.suggested_schedule ?? []],
                               ['justificacion', 'Justificacion', [termsResult.generated_document.justification]],
                               ['seguridad', 'Requisitos de seguridad', termsResult.generated_document.safety_requirements],
                               ['proveedores', 'Condiciones para proveedores', termsResult.generated_document.supplier_conditions],
+                              ['comerciales', 'Condiciones comerciales sugeridas', termsResult.generated_document.commercial_conditions ?? []],
+                              ['criterios', 'Criterios de evaluación', termsResult.generated_document.evaluation_criteria ?? termsResult.tender_bases?.evaluation_criteria ?? []],
                               ['informe', 'Estructura de informe final', termsResult.generated_document.final_report_structure],
                               ['anexos', 'Anexos sugeridos', termsResult.generated_document.suggested_annexes],
                             ].map(([value, title, items]) => (
@@ -2698,6 +2839,50 @@ const NexuIA = () => {
                               </AccordionItem>
                             ))}
                           </Accordion>
+                        </TabsContent>
+
+                        <TabsContent value="matriz" className="mt-4 space-y-4">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Matriz de cumplimiento</p>
+                            <div className="mt-3 overflow-x-auto rounded-xl border border-primary/15">
+                              <table className="w-full min-w-[720px] text-left text-sm">
+                                <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                  <tr>
+                                    <th className="px-4 py-3 font-medium">Requisito</th>
+                                    <th className="px-4 py-3 font-medium">Evidencia esperada</th>
+                                    <th className="px-4 py-3 font-medium">Obligatorio</th>
+                                    <th className="px-4 py-3 font-medium">Estado</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(termsResult.generated_document.compliance_matrix?.length ? termsResult.generated_document.compliance_matrix : [
+                                    { requirement: 'Objetivo y alcance comprendidos', expected_evidence: 'Propuesta técnica y declaración de cumplimiento.', mandatory: 'Si', status: 'Recomendación sugerida' },
+                                  ]).map((item, index) => (
+                                    <tr key={`${item.requirement ?? 'req'}-${index}`} className="border-t border-primary/10">
+                                      <td className="px-4 py-3 font-medium text-foreground">{item.requirement ?? 'Dato no especificado'}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{item.expected_evidence ?? 'Dato no especificado'}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{item.mandatory ?? 'Dato no especificado'}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{item.status ?? 'Dato no especificado'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Riesgos identificados</p>
+                            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                              {(termsResult.generated_document.identified_risks?.length ? termsResult.generated_document.identified_risks : [
+                                { risk: 'Datos técnicos pendientes de validación.', impact: 'Medio', mitigation: 'Recomendación sugerida: validar con el área usuaria antes de enviar.' },
+                              ]).map((item, index) => (
+                                <div key={`${item.risk ?? 'risk'}-${index}`} className="rounded-xl border border-primary/15 bg-primary/5 p-3">
+                                  <p className="text-sm font-medium text-foreground">{item.risk ?? 'Dato no especificado'}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">Impacto: {item.impact ?? 'Dato no especificado'}</p>
+                                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.mitigation ?? 'Dato no especificado'}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </TabsContent>
 
                         <TabsContent value="calidad" className="mt-4 grid gap-4 lg:grid-cols-2">

@@ -31,14 +31,29 @@ export type TermsGeneratedDocument = {
     location: string | null;
     required_date: string | null;
   };
+  background?: string;
   objective: string;
   scope: string;
   technical_characteristics: string[];
   required_activities: string[];
   final_deliverables: string[];
+  suggested_schedule?: string[];
   justification: string;
   safety_requirements: string[];
   supplier_conditions: string[];
+  commercial_conditions?: string[];
+  evaluation_criteria?: string[];
+  compliance_matrix?: Array<{
+    requirement?: string;
+    expected_evidence?: string;
+    mandatory?: string;
+    status?: string;
+  }>;
+  identified_risks?: Array<{
+    risk?: string;
+    impact?: string;
+    mitigation?: string;
+  }>;
   final_report_structure: string[];
   budget_chain: {
     project: string | null;

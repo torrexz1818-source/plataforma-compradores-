@@ -58,14 +58,20 @@ class BudgetChain(BaseModel):
 
 class GeneratedDocument(BaseModel):
     general_data: GeneralData
+    background: str = "Dato no especificado"
     objective: str
     scope: str
     technical_characteristics: list[str] = Field(default_factory=list)
     required_activities: list[str] = Field(default_factory=list)
     final_deliverables: list[str] = Field(default_factory=list)
+    suggested_schedule: list[str] = Field(default_factory=list)
     justification: str
     safety_requirements: list[str] = Field(default_factory=list)
     supplier_conditions: list[str] = Field(default_factory=list)
+    commercial_conditions: list[str] = Field(default_factory=list)
+    evaluation_criteria: list[str] = Field(default_factory=list)
+    compliance_matrix: list[dict[str, Any]] = Field(default_factory=list)
+    identified_risks: list[dict[str, Any]] = Field(default_factory=list)
     final_report_structure: list[str] = Field(default_factory=list)
     budget_chain: BudgetChain = Field(default_factory=BudgetChain)
     suggested_annexes: list[str] = Field(default_factory=list)

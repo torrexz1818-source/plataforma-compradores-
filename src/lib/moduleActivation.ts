@@ -61,7 +61,9 @@ export const moduleActivationCatalog: Record<ModuleActivationRole, Array<{ key: 
     { key: 'notifications', label: 'Notificaciones', defaultEnabled: false },
     { key: 'reports', label: 'Reportes', defaultEnabled: false },
   ],
-  expert: [],
+  expert: [
+    { key: 'nodus_ia', label: 'Nodus IA', defaultEnabled: true },
+  ],
 };
 
 export const buyerModuleNavItems: ModuleNavItem[] = [

@@ -171,8 +171,16 @@ const MODULE_DEFAULTS: Record<ModuleRole, Array<{ moduleKey: string; enabled: bo
     { moduleKey: 'notifications', enabled: false },
     { moduleKey: 'reports', enabled: false },
   ],
-  expert: [],
+  expert: [
+    { moduleKey: 'nodus_ia', enabled: true },
+  ],
 };
+
+const NODUS_IA_ALLOWED_ROLES = new Set<string>([
+  UserRole.BUYER,
+  UserRole.EXPERT,
+  UserRole.ADMIN,
+]);
 
 @Injectable()
 export class AgentsService {
@@ -624,8 +632,8 @@ export class AgentsService {
     const [agent, user] = await Promise.all([this.findAgent(input.agentId), this.usersService.requireActiveUser(input.userId)]);
 
     if (!agent) throw new NotFoundException('Agente no encontrado');
-    if (user.role !== UserRole.BUYER && user.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Nodus IA esta disponible para compradores');
+    if (!NODUS_IA_ALLOWED_ROLES.has(user.role)) {
+      throw new ForbiddenException('Nodus IA esta disponible para compradores, expertos y administradores');
     }
     if (agent.status !== 'active' && user.role !== UserRole.ADMIN) {
       throw new ForbiddenException(agent.status === 'coming_soon' ? 'Este agente estara disponible proximamente' : 'Este agente no esta disponible');

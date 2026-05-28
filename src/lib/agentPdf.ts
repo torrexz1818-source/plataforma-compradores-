@@ -1595,6 +1595,7 @@ function addTermsOfReferencePdf(input: PdfInput) {
       ['Categoria', general.category ?? result.category],
       ['Ubicacion', general.location],
       ['Fecha requerida', general.required_date],
+      ['Antecedentes', document.background],
       ['Objetivo', document.objective],
       ['Alcance', document.scope],
       ['Justificacion', document.justification],
@@ -1604,10 +1605,35 @@ function addTermsOfReferencePdf(input: PdfInput) {
   addBulletList(ctx, 'Caracteristicas tecnicas', asArray(document.technical_characteristics), 30);
   addBulletList(ctx, 'Actividades requeridas', asArray(document.required_activities), 30);
   addBulletList(ctx, 'Entregables finales', asArray(document.final_deliverables), 30);
+  addBulletList(ctx, 'Plazo y cronograma sugerido', asArray(document.suggested_schedule), 30);
   addBulletList(ctx, 'Requisitos de seguridad', asArray(document.safety_requirements), 30);
   addBulletList(ctx, 'Condiciones para proveedores', asArray(document.supplier_conditions), 30);
+  addBulletList(ctx, 'Condiciones comerciales sugeridas', asArray(document.commercial_conditions), 30);
+  addBulletList(ctx, 'Criterios de evaluacion', asArray(document.evaluation_criteria), 30);
   addBulletList(ctx, 'Estructura de informe final', asArray(document.final_report_structure), 30);
   addBulletList(ctx, 'Anexos sugeridos', asArray(document.suggested_annexes), 30);
+
+  const complianceRows = asArray(document.compliance_matrix).map(asRecord);
+  if (complianceRows.length) {
+    addSection(ctx, 'Matriz de cumplimiento');
+    addTable(
+      ctx,
+      ['Requisito', 'Evidencia esperada', 'Obligatorio', 'Estado'],
+      complianceRows.map((item) => [item.requirement, item.expected_evidence, item.mandatory, item.status]),
+      [45, 65, 28, ctx.maxWidth - 138],
+    );
+  }
+
+  const riskRows = asArray(document.identified_risks).map(asRecord);
+  if (riskRows.length) {
+    addSection(ctx, 'Riesgos identificados');
+    addTable(
+      ctx,
+      ['Riesgo', 'Impacto', 'Mitigacion'],
+      riskRows.map((item) => [item.risk, item.impact, item.mitigation]),
+      [60, 28, ctx.maxWidth - 88],
+    );
+  }
 
   const checklist = asArray(result.checklist).map(asRecord);
   if (checklist.length) {
@@ -2330,61 +2356,58 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
   }
   if (isTermsOfReferenceResult(result)) {
     const workbook = XLSX.utils.book_new();
-    addMetadataSheet(XLSX, workbook, input, result);
-    const used = new Set<string>(['Resumen']);
+    const used = new Set<string>();
     const document = getTermsDocument(result);
     const general = getTermsGeneralData(result);
     const bases = getTermsTenderBases(result);
-    const email = getTermsEmail(result);
 
-    appendJsonSheet(XLSX, workbook, used, 'Metricas', asArray(result.dashboard_metrics).map(asRecord));
-    appendJsonSheet(XLSX, workbook, used, 'Flujo requerimiento', termsListRows(asArray(result.flow_steps), 'Paso'));
-    appendJsonSheet(XLSX, workbook, used, 'Checklist', asArray(result.checklist).map(asRecord).map((item) => ({
+    appendJsonSheet(XLSX, workbook, used, 'Resumen', [
+      { Campo: 'Nombre del requerimiento', Valor: general.requirement_name ?? result.title },
+      { Campo: 'Tipo de compra', Valor: general.requirement_type ?? result.requirement_type },
+      { Campo: 'Categoria', Valor: general.category ?? result.category },
+      { Campo: 'Fecha o plazo estimado', Valor: general.required_date },
+      { Campo: 'Resumen ejecutivo', Valor: result.executive_summary },
+      { Campo: 'Antecedentes', Valor: document.background },
+      { Campo: 'Objetivo', Valor: document.objective },
+      { Campo: 'Alcance', Valor: document.scope },
+      { Campo: 'Completitud', Valor: `${asText(result.completion_level)} (${asText(result.completion_score)}%)` },
+      { Campo: 'Nivel de riesgo', Valor: result.risk_level },
+    ]);
+    appendJsonSheet(XLSX, workbook, used, 'Matriz de requisitos', [
+      ...termsListRows(asArray(document.technical_characteristics), 'Especificacion tecnica'),
+      ...termsListRows(asArray(document.supplier_conditions), 'Requisito proveedor'),
+      ...asArray(document.compliance_matrix).map(asRecord).map((item) => ({
+        Requisito: item.requirement,
+        Evidencia: item.expected_evidence,
+        Obligatorio: item.mandatory,
+        Estado: item.status,
+      })),
+    ]);
+    appendJsonSheet(XLSX, workbook, used, 'Criterios de evaluacion', [
+      ...termsListRows(asArray(document.evaluation_criteria).length ? asArray(document.evaluation_criteria) : asArray(bases.evaluation_criteria), 'Criterio'),
+      ...termsListRows(asArray(bases.award_criteria), 'Criterio de adjudicacion'),
+    ]);
+    appendJsonSheet(XLSX, workbook, used, 'Cronograma', [
+      ...termsListRows(asArray(document.suggested_schedule), 'Hito sugerido'),
+      ...termsListRows(asArray(result.tender_process), 'Paso de proceso'),
+    ]);
+    appendJsonSheet(XLSX, workbook, used, 'Checklist de cumplimiento', asArray(result.checklist).map(asRecord).map((item) => ({
       Punto: item.label,
       Estado: item.status,
       Detalle: item.detail,
     })));
-    appendJsonSheet(XLSX, workbook, used, 'Datos generales', Object.entries(general).map(([key, value]) => ({ Campo: formatLabel(key), Valor: asText(value) })));
-    appendJsonSheet(XLSX, workbook, used, 'Documento TdR', [
-      { Seccion: 'Objetivo', Contenido: document.objective },
-      { Seccion: 'Alcance', Contenido: document.scope },
-      { Seccion: 'Justificacion', Contenido: document.justification },
-      { Seccion: 'Caracteristicas tecnicas', Contenido: asArray(document.technical_characteristics).map(asText).join('\n') },
-      { Seccion: 'Actividades requeridas', Contenido: asArray(document.required_activities).map(asText).join('\n') },
-      { Seccion: 'Entregables', Contenido: asArray(document.final_deliverables).map(asText).join('\n') },
-      { Seccion: 'Requisitos de seguridad', Contenido: asArray(document.safety_requirements).map(asText).join('\n') },
-      { Seccion: 'Condiciones para proveedores', Contenido: asArray(document.supplier_conditions).map(asText).join('\n') },
-      { Seccion: 'Estructura informe final', Contenido: asArray(document.final_report_structure).map(asText).join('\n') },
-      { Seccion: 'Anexos sugeridos', Contenido: asArray(document.suggested_annexes).map(asText).join('\n') },
+    appendJsonSheet(XLSX, workbook, used, 'Riesgos y recomendaciones', [
+      ...asArray(document.identified_risks).map(asRecord).map((item) => ({
+        Tipo: 'Riesgo',
+        Descripcion: item.risk,
+        Impacto: item.impact,
+        Accion: item.mitigation,
+      })),
+      ...termsListRows(asArray(result.buyer_recommendations), 'Accion').map((item) => ({ Tipo: 'Recomendacion', ...item })),
+      ...termsListRows(asArray(result.missing_information), 'Dato pendiente').map((item) => ({ Tipo: 'Dato pendiente', ...item })),
     ]);
-    appendJsonSheet(XLSX, workbook, used, 'Bases licitacion', [
-      { Seccion: 'Objeto', Contenido: bases.object },
-      { Seccion: 'Alcance', Contenido: bases.scope },
-      { Seccion: 'Requisitos proveedor', Contenido: asArray(bases.minimum_supplier_requirements).map(asText).join('\n') },
-      { Seccion: 'Documentacion solicitada', Contenido: asArray(bases.requested_documentation).map(asText).join('\n') },
-      { Seccion: 'Criterios evaluacion', Contenido: asArray(bases.evaluation_criteria).map(asText).join('\n') },
-      { Seccion: 'Condiciones presentacion', Contenido: asArray(bases.proposal_submission_conditions).map(asText).join('\n') },
-      { Seccion: 'Plazo consultas', Contenido: bases.question_deadline },
-      { Seccion: 'Fecha limite propuestas', Contenido: bases.proposal_deadline },
-      { Seccion: 'Forma de envio', Contenido: bases.submission_method },
-      { Seccion: 'Criterios adjudicacion', Contenido: asArray(bases.award_criteria).map(asText).join('\n') },
-      { Seccion: 'Descalificacion', Contenido: asArray(bases.disqualification_conditions).map(asText).join('\n') },
-      { Seccion: 'Observaciones comprador', Contenido: asArray(bases.buyer_observations).map(asText).join('\n') },
-      { Seccion: 'Advertencia', Contenido: bases.disclaimer },
-    ]);
-    appendJsonSheet(XLSX, workbook, used, 'Correo proveedores', [
-      { Campo: 'Asunto', Valor: email.subject },
-      { Campo: 'Saludo', Valor: email.greeting },
-      { Campo: 'Cuerpo', Valor: email.body },
-      { Campo: 'Adjuntos', Valor: asArray(email.attached_documents).map(asText).join('\n') },
-      { Campo: 'Plazo respuesta', Valor: email.response_deadline },
-      { Campo: 'Contacto', Valor: email.contact_details },
-      { Campo: 'Cierre', Valor: email.closing },
-    ]);
-    appendJsonSheet(XLSX, workbook, used, 'Proceso licitacion', termsListRows(asArray(result.tender_process), 'Paso'));
-    appendJsonSheet(XLSX, workbook, used, 'Info faltante', termsListRows(asArray(result.missing_information), 'Informacion faltante'));
-    appendJsonSheet(XLSX, workbook, used, 'Recomendaciones', termsListRows(asArray(result.buyer_recommendations), 'Recomendacion'));
-    appendJsonSheet(XLSX, workbook, used, 'Documentos apoyo', asArray(result.supporting_documents_summary).map(asRecord));
+    appendJsonSheet(XLSX, workbook, used, 'Anexos sugeridos', termsListRows(asArray(document.suggested_annexes), 'Anexo'));
+    appendJsonSheet(XLSX, workbook, used, 'Documentos de apoyo', asArray(result.supporting_documents_summary).map(asRecord));
     XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
     return;
   }
@@ -2522,98 +2545,6 @@ function pushDocxList(docx: DocxModule, children: DocxChild[], title: string, it
   values.forEach((item) => children.push(docxParagraph(docx, `- ${asText(item)}`)));
 }
 
-async function downloadTermsOfReferenceDocx(input: AgentExportInput, result: Record<string, unknown>) {
-  const docx = await import('docx');
-  const document = getTermsDocument(result);
-  const general = getTermsGeneralData(result);
-  const bases = getTermsTenderBases(result);
-  const email = getTermsEmail(result);
-  const children: DocxChild[] = [
-    docxParagraph(docx, asText(result.title, input.title), { heading: true }),
-    docxParagraph(docx, `Informe ejecutivo editable | Fecha: ${formatDate()}`),
-    docxParagraph(docx, `Agente: ${input.agentName || input.title}`),
-    docxParagraph(docx, 'Resumen ejecutivo', { heading: true }),
-    docxParagraph(docx, asText(result.executive_summary)),
-  ];
-
-  const summaryTable = docxTableFromRows(docx, [
-    { Campo: 'Tipo', Valor: result.requirement_type },
-    { Campo: 'Categoria', Valor: result.category },
-    { Campo: 'Completitud', Valor: `${asText(result.completion_level)} (${asText(result.completion_score)}%)` },
-    { Campo: 'Riesgo', Valor: result.risk_level },
-    { Campo: 'Ubicacion', Valor: general.location },
-    { Campo: 'Fecha requerida', Valor: general.required_date },
-  ]);
-  if (summaryTable) children.push(summaryTable);
-
-  children.push(docxParagraph(docx, 'Metricas del requerimiento', { heading: true }));
-  const metricsTable = docxTableFromRows(docx, asArray(result.dashboard_metrics).map(asRecord).map((item) => ({
-    Metrica: item.label ?? item.metric,
-    Valor: item.value,
-    Estado: item.status,
-  })));
-  if (metricsTable) children.push(metricsTable);
-  pushDocxList(docx, children, 'Flujo del requerimiento', asArray(result.flow_steps));
-
-  children.push(docxParagraph(docx, 'Termino de referencia', { heading: true }));
-  children.push(docxParagraph(docx, `Objetivo: ${asText(document.objective)}`));
-  children.push(docxParagraph(docx, `Alcance: ${asText(document.scope)}`));
-  children.push(docxParagraph(docx, `Justificacion: ${asText(document.justification)}`));
-  pushDocxList(docx, children, 'Caracteristicas tecnicas', asArray(document.technical_characteristics));
-  pushDocxList(docx, children, 'Actividades requeridas', asArray(document.required_activities));
-  pushDocxList(docx, children, 'Entregables', asArray(document.final_deliverables));
-  pushDocxList(docx, children, 'Requisitos de seguridad', asArray(document.safety_requirements));
-  pushDocxList(docx, children, 'Condiciones para proveedores', asArray(document.supplier_conditions));
-  pushDocxList(docx, children, 'Anexos sugeridos', asArray(document.suggested_annexes));
-
-  children.push(docxParagraph(docx, 'Checklist de calidad', { heading: true }));
-  const checklistTable = docxTableFromRows(docx, asArray(result.checklist).map(asRecord).map((item) => ({
-    Punto: item.label,
-    Estado: item.status,
-    Detalle: item.detail,
-  })));
-  if (checklistTable) children.push(checklistTable);
-
-  children.push(docxParagraph(docx, 'Bases sugeridas para licitacion', { heading: true }));
-  children.push(docxParagraph(docx, `Objeto: ${asText(bases.object)}`));
-  children.push(docxParagraph(docx, `Alcance: ${asText(bases.scope)}`));
-  pushDocxList(docx, children, 'Requisitos minimos del proveedor', asArray(bases.minimum_supplier_requirements));
-  pushDocxList(docx, children, 'Documentacion solicitada', asArray(bases.requested_documentation));
-  pushDocxList(docx, children, 'Criterios de evaluacion', asArray(bases.evaluation_criteria));
-  pushDocxList(docx, children, 'Condiciones de presentacion de propuestas', asArray(bases.proposal_submission_conditions));
-  pushDocxList(docx, children, 'Criterios de adjudicacion', asArray(bases.award_criteria));
-  pushDocxList(docx, children, 'Condiciones de descalificacion', asArray(bases.disqualification_conditions));
-  pushDocxList(docx, children, 'Observaciones para compradores', asArray(bases.buyer_observations));
-  children.push(docxParagraph(docx, asText(bases.disclaimer)));
-
-  children.push(docxParagraph(docx, 'Correo sugerido para invitar proveedores', { heading: true }));
-  children.push(docxParagraph(docx, `Asunto: ${asText(email.subject)}`));
-  children.push(docxParagraph(docx, asText(email.greeting)));
-  children.push(docxParagraph(docx, asText(email.body)));
-  children.push(docxParagraph(docx, `Adjuntos: ${asArray(email.attached_documents).map(asText).join(', ') || 'No especificado'}`));
-  children.push(docxParagraph(docx, `Plazo de respuesta: ${asText(email.response_deadline)}`));
-  children.push(docxParagraph(docx, `Contacto: ${asText(email.contact_details)}`));
-  children.push(docxParagraph(docx, asText(email.closing)));
-
-  pushDocxList(docx, children, 'Proceso sugerido de licitacion', asArray(result.tender_process));
-  pushDocxList(docx, children, 'Informacion faltante', asArray(result.missing_information));
-  pushDocxList(docx, children, 'Recomendaciones accionables', asArray(result.buyer_recommendations));
-  children.push(docxParagraph(docx, 'Documentos de apoyo leidos', { heading: true }));
-  const supportDocsTable = docxTableFromRows(docx, asArray(result.supporting_documents_summary).map(asRecord).map((item) => ({
-    Archivo: item.file_name ?? item.name,
-    Tipo: item.detected_type ?? item.type,
-    Hallazgos: asArray(item.relevant_findings).map(asText).join('\n'),
-    Limitaciones: asArray(item.limitations).map(asText).join('\n'),
-  })));
-  if (supportDocsTable) children.push(supportDocsTable);
-  children.push(docxParagraph(docx, 'Disclaimer', { heading: true }));
-  children.push(docxParagraph(docx, asText(result.disclaimer)));
-
-  const doc = new docx.Document({ sections: [{ children }] });
-  const blob = await docx.Packer.toBlob(doc);
-  downloadBlob(blob, getDefaultFileName(input, 'docx'));
-}
-
 async function downloadTcoResultDocx(input: AgentExportInput, result: Record<string, unknown>) {
   const docx = await import('docx');
   const model = tcoPresentationModel(result);
@@ -2690,8 +2621,7 @@ async function downloadAgentResultDocx(input: AgentExportInput) {
   const result = asRecord(input.result);
   const mode = input.pdfMode ?? 'standard_branded';
   if (isTermsOfReferenceResult(result)) {
-    await downloadTermsOfReferenceDocx(input, result);
-    return;
+    throw new Error('Este agente solo permite descargar PDF, Excel o PowerPoint.');
   }
   if (isTcoAnalysisResult(result)) {
     await downloadTcoResultDocx(input, result);
@@ -2961,8 +2891,22 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
-  addPptTitle(slide, 'Termino de referencia', 'Objetivo, alcance, justificacion y datos clave.');
-  slide.addText(`Objetivo: ${asText(document.objective)}\n\nAlcance: ${asText(document.scope)}\n\nJustificacion: ${asText(document.justification)}`, {
+  addPptTitle(slide, 'Objetivo', 'Objetivo de la contratacion y antecedentes relevantes.');
+  slide.addText(`Objetivo: ${asText(document.objective)}\n\nAntecedentes: ${asText(document.background)}\n\nJustificacion: ${asText(document.justification)}`, {
+    x: 0.65,
+    y: 1.35,
+    w: 11.8,
+    h: 5.2,
+    fontSize: 12,
+    color: '334155',
+    fit: 'shrink',
+    breakLine: false,
+  });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Alcance', 'Alcance del servicio o producto y cronograma sugerido.');
+  slide.addText(`Alcance: ${asText(document.scope)}\n\nCronograma:\n${asArray(document.suggested_schedule).map((item) => `- ${asText(item)}`).join('\n')}`, {
     x: 0.65,
     y: 1.35,
     w: 11.8,
@@ -2988,6 +2932,24 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   });
 
   slide = pptx.addSlide();
+  addPptTitle(slide, 'Requisitos clave', 'Matriz de cumplimiento resumida para proveedores.');
+  addPptRows(slide, asArray(document.compliance_matrix).map(asRecord).map((item) => ({
+    Requisito: item.requirement,
+    Evidencia: item.expected_evidence,
+    Obligatorio: item.mandatory,
+    Estado: item.status,
+  })), { maxRows: 8 });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Criterios de evaluacion');
+  addPptRows(slide, [
+    ...termsListRows(asArray(document.evaluation_criteria).length ? asArray(document.evaluation_criteria) : asArray(bases.evaluation_criteria), 'Criterio'),
+    ...termsListRows(asArray(bases.award_criteria), 'Criterio de adjudicacion'),
+  ], { maxRows: 10 });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
   addPptTitle(slide, 'Bases sugeridas para licitacion');
   slide.addText(`Objeto: ${asText(bases.object)}\n\nAlcance: ${asText(bases.scope)}\n\nCriterios: ${asArray(bases.evaluation_criteria).map(asText).join(', ')}\n\nAdvertencia: ${asText(bases.disclaimer)}`, {
     x: 0.65,
@@ -2999,6 +2961,15 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
     fit: 'shrink',
     breakLine: false,
   });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Riesgos');
+  addPptRows(slide, asArray(document.identified_risks).map(asRecord).map((item) => ({
+    Riesgo: item.risk,
+    Impacto: item.impact,
+    Mitigacion: item.mitigation,
+  })), { maxRows: 8 });
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
@@ -3038,6 +3009,16 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
     ...termsListRows(asArray(result.missing_information), 'Informacion faltante'),
     ...termsListRows(asArray(result.buyer_recommendations), 'Recomendacion'),
   ], { maxRows: 12 });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Recomendacion final');
+  slide.addText([
+    asArray(result.buyer_recommendations).map((item) => `- ${asText(item)}`).join('\n'),
+    '',
+    'Datos por validar:',
+    asArray(result.missing_information).map((item) => `- ${asText(item)}`).join('\n'),
+  ].join('\n'), { x: 0.65, y: 1.25, w: 11.8, h: 5.4, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
   addPptFooter(slide, input);
 
   const supportDocs = asArray(result.supporting_documents_summary).map(asRecord);
@@ -3426,6 +3407,8 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
 
 export async function downloadAgentResultPdf(input: PdfInput) {
   if (isTermsOfReferenceResult(input.result)) {
+    const captured = await addCapturedDashboardPdf(input);
+    if (captured) return;
     addTermsOfReferencePdf(input);
     return;
   }
