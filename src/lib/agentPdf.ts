@@ -176,6 +176,11 @@ const technicalKeys = new Set([
   'tco_dashboard_matrix',
   'dashboard_matrix',
   'presentationModel',
+  'base_parameters',
+  'benchmark_assumptions',
+  'financial_model',
+  'scorecard',
+  'transparency_table',
 ]);
 
 function formatLabel(value: string) {
@@ -811,6 +816,79 @@ function tcoTotalsRows(result: Record<string, unknown>) {
   }));
 }
 
+function tcoFinancialRows(model: TcoPresentationModel) {
+  return model.financialModel.map((item) => ({
+    Alternativa: item.alternative,
+    Adquisicion: item.acquisition_costs,
+    Logistica: item.logistics_costs,
+    Implementacion: item.implementation_costs,
+    Operacion: item.operating_costs,
+    Mantenimiento: item.maintenance_costs,
+    Soporte: item.support_costs,
+    Seguros: item.insurance_costs,
+    Riesgo: item.risk_costs,
+    Residual: item.residual_value,
+    'TCO neto': item.net_tco,
+    'TCO anual': item.annualized_tco,
+    'TCO unitario': item.unit_tco,
+    Confianza: item.confidence_level,
+  }));
+}
+
+function tcoScorecardRows(model: TcoPresentationModel) {
+  return model.scorecard.criteria.flatMap((criterion) => {
+    const item = asRecord(criterion);
+    return asArray(item.alternatives).map(asRecord).map((score) => ({
+      Criterio: item.criterion_name,
+      Peso: item.weight,
+      Alternativa: score.alternative,
+      Puntaje: score.normalized_score,
+      Ponderado: score.weighted_score,
+      Evidencia: score.evidence,
+      Fuente: score.source,
+      Confianza: score.confidence_level,
+    }));
+  });
+}
+
+function tcoScorecardTotalRows(model: TcoPresentationModel) {
+  return model.scorecard.totals.map((item) => ({
+    Posicion: item.rank,
+    Alternativa: item.alternative,
+    Score: item.total_score,
+    Nivel: item.level,
+    Fortaleza: item.main_strength,
+    Debilidad: item.main_weakness,
+    Confianza: item.confidence_level,
+  }));
+}
+
+function tcoTransparencyRows(model: TcoPresentationModel) {
+  return model.transparencyTable.map((item) => ({
+    Alternativa: item.alternative,
+    Dato: item.field,
+    Valor: item.value,
+    Fuente: item.source,
+    Tipo: item.type,
+    Confianza: item.confidence_level,
+    Observacion: item.observation,
+  }));
+}
+
+function tcoBenchmarkRows(model: TcoPresentationModel) {
+  return model.benchmarkAssumptions.map((item) => ({
+    Campo: item.field,
+    Valor: item.value,
+    Min: item.range_min,
+    Max: item.range_max,
+    Unidad: item.unit,
+    Tipo: item.source_type,
+    Confianza: item.confidence_level,
+    Aplica: item.applies_to,
+    Advertencia: item.warning,
+  }));
+}
+
 function tcoRiskRows(result: Record<string, unknown>) {
   return asArray(result.risk_analysis).map(asRecord).map((item) => ({
     Riesgo: item.risk,
@@ -931,6 +1009,27 @@ function renderTcoMatrixForPptRows(model: TcoPresentationModel, sectionTitle?: s
       Nota: [row.source, row.unit, row.note].filter(Boolean).join(' - '),
     })),
   );
+}
+
+function renderTcoScorecardForPdf(ctx: PdfContext, model: TcoPresentationModel) {
+  const totals = tcoScorecardTotalRows(model);
+  if (totals.length) {
+    addTable(
+      ctx,
+      ['Pos', 'Alternativa', 'Score', 'Nivel', 'Fortaleza', 'Debilidad'],
+      totals.map((item) => [item.Posicion, item.Alternativa, item.Score, item.Nivel, item.Fortaleza, item.Debilidad]),
+      [13, 34, 18, 30, 48, ctx.maxWidth - 143],
+    );
+  }
+  const rows = tcoScorecardRows(model).slice(0, 18);
+  if (rows.length) {
+    addTable(
+      ctx,
+      ['Criterio', 'Peso', 'Alternativa', 'Puntaje', 'Evidencia', 'Confianza'],
+      rows.map((item) => [item.Criterio, item.Peso, item.Alternativa, item.Puntaje, item.Evidencia, item.Confianza]),
+      [38, 15, 32, 19, ctx.maxWidth - 126, 22],
+    );
+  }
 }
 
 function getRecommendedRanking(result: Record<string, unknown>) {
@@ -1184,19 +1283,19 @@ function addTcoAnalysisPdf(input: PdfInput) {
   const ctx = createContext(input);
   const model = tcoPresentationModel(result);
   const summary = asRecord(result.executive_summary);
+  const scoreWinner = tcoScorecardTotalRows(model)[0];
   const subtitle = `${model.header.analysisType} | Horizonte: ${model.header.horizon} | Moneda: ${model.header.currency}`;
 
   addHeader(ctx, input, subtitle);
-  addCard(ctx, 'Resumen ejecutivo', [
-    `Mejor alternativa: ${asText(summary.best_alternative)}`,
-    `Score ganador: ${asText(summary.best_alternative_score)} / 100 - ${asText(summary.best_alternative_score_label)}`,
-    `Motivo: ${asText(summary.why_it_wins).slice(0, 260)}`,
-    `Ahorro o sobrecosto: ${asText(summary.estimated_saving_or_overcost)}`,
-    `Riesgo principal: ${asText(summary.main_risk)}`,
-    `Recomendacion final: ${model.recommendation.finalRecommendedOption}`,
+  addCard(ctx, 'Portada ejecutiva TCO', [
+    `Producto/servicio: ${model.header.itemName}`,
+    `Alternativa recomendada: ${model.recommendation.finalRecommendedOption || asText(summary.best_alternative)}`,
+    `Score ganador: ${asText(scoreWinner?.Score ?? summary.best_alternative_score)} / 100 - ${asText(scoreWinner?.Nivel ?? summary.best_alternative_score_label)}`,
+    `Confianza: ${model.scorecard.confidenceLevel || asText(asRecord(result.extracted_data_quality).confidence_level)}`,
+    `Recomendacion breve: ${asText(model.recommendation.rationale || summary.final_recommendation).slice(0, 260)}`,
   ], 'green');
 
-  addSection(ctx, 'KPIs principales');
+  addSection(ctx, 'KPIs y resumen ejecutivo');
   addTable(
     ctx,
     ['KPI', 'Valor', 'Nota'],
@@ -1207,31 +1306,23 @@ function addTcoAnalysisPdf(input: PdfInput) {
   addSection(ctx, 'Matriz TCO comparativa');
   renderTcoMatrixForPdf(ctx, model);
 
-  const totals = tcoTotalsRows(result);
-  if (totals.length) {
-    addSection(ctx, 'Totales TCO');
+  const financialRows = tcoFinancialRows(model);
+  if (financialRows.length) {
+    addSection(ctx, 'Modelo financiero TCO');
     addTable(
       ctx,
-      ['Alternativa', 'Precio inicial', 'TCO total', 'TCO unitario', 'Riesgo', 'Costos ocultos'],
-      totals.map((item) => [item.Alternativa, item['Precio inicial'], item['TCO total'], item['TCO unitario'], item.Riesgo, item['Costos ocultos']]),
-      [34, 25, 25, 25, 22, ctx.maxWidth - 131],
+      ['Alternativa', 'TCO neto', 'TCO anual', 'TCO unitario', 'Adquisicion', 'Operacion', 'Mantenimiento', 'Confianza'],
+      financialRows.map((item) => [item.Alternativa, item['TCO neto'], item['TCO anual'], item['TCO unitario'], item.Adquisicion, item.Operacion, item.Mantenimiento, item.Confianza]),
+      [30, 24, 24, 24, 24, 24, 28, ctx.maxWidth - 178],
     );
   }
 
-  const ranking = tcoRankingRows(result);
-  if (ranking.length) {
-    addSection(ctx, 'Ranking comparativo');
-    addTable(
-      ctx,
-      ['Posicion', 'Alternativa', 'Calificacion', 'Nivel', 'TCO', 'Motivo'],
-      ranking.map((item) => [item.Posicion, item.Alternativa, item.Calificacion, item.Nivel, item.TCO, item.Motivo]),
-      [16, 34, 24, 24, 22, ctx.maxWidth - 120],
-    );
-  }
+  addSection(ctx, 'Scorecard y ranking');
+  renderTcoScorecardForPdf(ctx, model);
 
   const risks = tcoRiskRows(result);
   if (risks.length) {
-    addSection(ctx, 'Analisis de riesgos');
+    addSection(ctx, 'Riesgos principales');
     addTable(
       ctx,
       ['Riesgo', 'Alternativa', 'Probabilidad', 'Impacto', 'Nivel', 'Mitigacion'],
@@ -1240,9 +1331,28 @@ function addTcoAnalysisPdf(input: PdfInput) {
     );
   }
 
-  addSection(ctx, 'Datos faltantes y supuestos');
-  addBulletList(ctx, 'Datos faltantes', model.missingData, 8);
-  addBulletList(ctx, 'Supuestos y limites', model.assumptions, 8);
+  const transparency = tcoTransparencyRows(model).slice(0, 18);
+  if (transparency.length) {
+    addSection(ctx, 'Transparencia de datos');
+    addTable(
+      ctx,
+      ['Alternativa', 'Dato', 'Valor', 'Tipo', 'Confianza', 'Observacion'],
+      transparency.map((item) => [item.Alternativa, item.Dato, item.Valor, item.Tipo, item.Confianza, item.Observacion]),
+      [30, 34, 28, 22, 24, ctx.maxWidth - 138],
+    );
+  }
+
+  const benchmarks = tcoBenchmarkRows(model).slice(0, 10);
+  if (benchmarks.length) {
+    addSection(ctx, 'Benchmarks y datos faltantes');
+    addTable(
+      ctx,
+      ['Campo', 'Valor', 'Tipo', 'Confianza', 'Advertencia'],
+      benchmarks.map((item) => [item.Campo, item.Valor, item.Tipo, item.Confianza, item.Advertencia]),
+      [40, 32, 24, 24, ctx.maxWidth - 120],
+    );
+  }
+  addBulletList(ctx, 'Datos faltantes criticos', model.missingData, 6);
 
   addSection(ctx, 'Recomendacion final');
   addTable(
@@ -1877,6 +1987,125 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
   downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), getDefaultFileName(input, 'xlsx'));
 }
 
+async function downloadTcoResultXlsx(input: AgentExportInput, result: Record<string, unknown>) {
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Buyer Nodus';
+  workbook.created = new Date();
+  workbook.modified = new Date();
+  const model = tcoPresentationModel(result);
+  const primary = '0D1B2A';
+  const blue = '1565C0';
+  const accent = '00ACC1';
+  const green = '2E7D32';
+  const gold = 'F9A825';
+  const light = 'ECEFF1';
+  const border = 'CFD8DC';
+
+  const styleHeader = (row: import('exceljs').Row, fill = primary) => {
+    row.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+      cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+      cell.alignment = { vertical: 'middle', wrapText: true };
+      cell.border = { bottom: { style: 'thin', color: { argb: border } } };
+    });
+  };
+  const styleSheet = (sheet: import('exceljs').Worksheet, headerRow = 1) => {
+    styleHeader(sheet.getRow(headerRow));
+    sheet.views = [{ state: 'frozen', ySplit: headerRow }];
+    sheet.columns.forEach((column) => {
+      let width = 14;
+      column.eachCell?.({ includeEmpty: false }, (cell) => {
+        width = Math.max(width, Math.min(String(cell.value ?? '').length + 4, 52));
+        cell.alignment = { vertical: 'top', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: border } },
+          bottom: { style: 'thin', color: { argb: border } },
+          left: { style: 'thin', color: { argb: border } },
+          right: { style: 'thin', color: { argb: border } },
+        };
+      });
+      column.width = width;
+    });
+  };
+  const addRowsSheet = (name: string, rows: Array<Record<string, unknown>>) => {
+    if (!rows.length) return undefined;
+    const sheet = workbook.addWorksheet(name.slice(0, 31));
+    const keys = Object.keys(rows[0] ?? {});
+    sheet.addRow(keys);
+    rows.forEach((row) => sheet.addRow(keys.map((key) => row[key] ?? 'Dato faltante')));
+    styleSheet(sheet);
+    sheet.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + Math.min(keys.length, 26))}1` };
+    return sheet;
+  };
+
+  const dashboard = workbook.addWorksheet('Dashboard TCO', { views: [{ showGridLines: false }] });
+  dashboard.columns = [{ width: 28 }, { width: 32 }, { width: 32 }, { width: 32 }, { width: 44 }];
+  dashboard.mergeCells('A1:E1');
+  dashboard.getCell('A1').value = 'BUYER NODUS | Dashboard financiero TCO';
+  dashboard.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FFFFFF' } };
+  dashboard.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primary } };
+  dashboard.addRow(['Titulo', model.header.title, 'Tipo', model.header.analysisType, formatDate()]);
+  dashboard.addRow(['Producto/servicio', model.header.itemName, 'Horizonte', model.header.horizon, `Moneda: ${model.header.currency}`]);
+  dashboard.addRow([]);
+  styleHeader(dashboard.addRow(['KPI', 'Valor', 'Nota']), blue);
+  model.kpis.forEach((item) => dashboard.addRow([item.label, item.value, item.note ?? '']));
+  dashboard.addRow([]);
+  styleHeader(dashboard.addRow(['Recomendacion', 'Detalle']), green);
+  dashboard.addRow(['Opcion recomendada', model.recommendation.finalRecommendedOption]);
+  dashboard.addRow(['Justificacion', model.recommendation.rationale]);
+  dashboard.addRow(['Proximos pasos', model.recommendation.nextSteps.slice(0, 5).join(' | ')]);
+  dashboard.eachRow((row) => row.eachCell((cell) => {
+    cell.alignment = { vertical: 'top', wrapText: true };
+    cell.border = { bottom: { style: 'thin', color: { argb: border } } };
+  }));
+
+  const matrixRows = model.matrix.flatMap((section) => [
+    { Seccion: section.title, Componente: section.description || section.title, Tipo: 'Seccion', ...Object.fromEntries(model.alternatives.map((alt) => [alt.label, ''])), Fuente: '', Nota: '' },
+    ...[...section.rows, ...(section.totalRow ? [section.totalRow] : [])].map((row) => ({
+      Seccion: section.title,
+      Componente: row.component,
+      Tipo: row.isTotal ? 'Total' : 'Detalle',
+      ...row.values,
+      Fuente: row.source ?? '',
+      Unidad: row.unit ?? '',
+      Nota: row.note ?? '',
+    })),
+  ]);
+  const matrixSheet = addRowsSheet('Matriz TCO', matrixRows);
+  matrixSheet?.eachRow((row, rowNumber) => {
+    const type = String(row.getCell(3).value ?? '');
+    if (rowNumber > 1 && type === 'Seccion') {
+      row.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: light } };
+        cell.font = { bold: true, color: { argb: primary } };
+      });
+    }
+    if (rowNumber > 1 && type === 'Total') {
+      row.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E8F5E9' } };
+        cell.font = { bold: true, color: { argb: green } };
+      });
+    }
+  });
+
+  addRowsSheet('Scorecard', tcoScorecardRows(model));
+  addRowsSheet('Ranking', tcoScorecardTotalRows(model).length ? tcoScorecardTotalRows(model) : tcoRankingRows(result));
+  addRowsSheet('Modelo financiero', tcoFinancialRows(model));
+  addRowsSheet('Riesgos', tcoRiskRows(result));
+  addRowsSheet('Transparencia', tcoTransparencyRows(model));
+  addRowsSheet('Supuestos benchmarks', tcoBenchmarkRows(model));
+  addRowsSheet('Datos faltantes', dashboardListRows(model.missingData, 'Dato faltante'));
+  addRowsSheet('Recomendacion', tcoRecommendationRows(result));
+
+  workbook.eachSheet((sheet) => {
+    sheet.getRow(1).height = 24;
+    sheet.properties.defaultRowHeight = 18;
+  });
+  const buffer = await workbook.xlsx.writeBuffer();
+  downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), getDefaultFileName(input, 'xlsx'));
+}
+
 async function downloadAgentResultXlsx(input: AgentExportInput) {
   const XLSX = await import('xlsx');
   const result = asRecord(input.result);
@@ -1885,36 +2114,7 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
     return;
   }
   if (isTcoAnalysisResult(result)) {
-    const model = tcoPresentationModel(result);
-    const workbook = XLSX.utils.book_new();
-    addMetadataSheet(XLSX, workbook, input, result);
-    const used = new Set<string>(['Resumen']);
-    appendJsonSheet(XLSX, workbook, used, 'Dashboard TCO', [
-      ...tcoKpiRows(model),
-      { KPI: 'Recomendacion', Valor: model.recommendation.finalRecommendation, Nota: model.recommendation.rationale },
-    ]);
-    appendJsonSheet(XLSX, workbook, used, 'Datos base', tcoBaseRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Alternativas', tcoDetectedAlternativeRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Datos extraidos', tcoDetectedAlternativeRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Datos usados', tcoDataUsedRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Datos procesados', tcoTotalsRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Matriz TCO', tcoMatrixRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Totales TCO', tcoTotalsRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Indicadores', tcoTotalsRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Ranking', tcoRankingRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Recomendacion', tcoRecommendationRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Costos ocultos', dashboardListRows(asArray(result.hidden_costs_detected), 'Costo oculto'));
-    appendJsonSheet(XLSX, workbook, used, 'Riesgos', tcoRiskRows(result));
-    appendJsonSheet(XLSX, workbook, used, 'Escenarios', rowsFromValue(result.sensitivity_analysis));
-    appendJsonSheet(XLSX, workbook, used, 'Info faltante', dashboardListRows(asArray(result.missing_information), 'Informacion faltante'));
-    appendJsonSheet(XLSX, workbook, used, 'Preguntas', dashboardListRows(asArray(result.questions_for_user_or_suppliers), 'Pregunta'));
-    appendJsonSheet(XLSX, workbook, used, 'Supuestos limites', dashboardListRows(asArray(result.assumptions_and_limits), 'Supuesto o limite'));
-    appendJsonSheet(XLSX, workbook, used, 'Conclusiones', [
-      { Campo: 'Recomendacion final', Valor: asText(asRecord(result.executive_summary).final_recommendation) },
-      { Campo: 'Justificacion', Valor: asText(asRecord(result.strategic_recommendation).recommendation_rationale || asRecord(result.executive_summary).why_it_wins) },
-      { Campo: 'Disclaimer', Valor: asText(result.disclaimer) },
-    ]);
-    XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+    await downloadTcoResultXlsx(input, result);
     return;
   }
   if (isTermsOfReferenceResult(result)) {
@@ -2237,12 +2437,13 @@ async function downloadTcoResultDocx(input: AgentExportInput, result: Record<str
   }
 
   [
-    ['Alternativas detectadas', tcoDetectedAlternativeRows(result)],
-    ['Datos usados', tcoDataUsedRows(result)],
     ['Matriz TCO', renderTcoMatrixForWordRows(model)],
-    ['Totales TCO', tcoTotalsRows(result)],
-    ['Ranking', tcoRankingRows(result)],
-    ['Riesgos', tcoRiskRows(result)],
+    ['Modelo financiero', tcoFinancialRows(model)],
+    ['Scorecard', tcoScorecardRows(model).slice(0, 30)],
+    ['Ranking gerencial', tcoScorecardTotalRows(model).length ? tcoScorecardTotalRows(model) : tcoRankingRows(result)],
+    ['Riesgos principales', tcoRiskRows(result)],
+    ['Transparencia', tcoTransparencyRows(model).slice(0, 25)],
+    ['Benchmarks y supuestos', tcoBenchmarkRows(model).slice(0, 20)],
   ].forEach(([title, rows]) => {
     children.push(docxParagraph(docx, String(title), { heading: true }));
     const table = docxTableFromRows(docx, rows as Array<Record<string, unknown>>);
@@ -2250,10 +2451,6 @@ async function downloadTcoResultDocx(input: AgentExportInput, result: Record<str
   });
 
   pushDocxList(docx, children, 'Costos ocultos detectados', asArray(result.hidden_costs_detected));
-  children.push(docxParagraph(docx, 'Hallazgos clave', { heading: true }));
-  formatValue(result.interpretation).slice(0, 30).forEach((line) => children.push(docxParagraph(docx, line)));
-  children.push(docxParagraph(docx, 'Analisis de sensibilidad', { heading: true }));
-  formatValue(result.sensitivity_analysis).slice(0, 40).forEach((line) => children.push(docxParagraph(docx, line)));
   children.push(docxParagraph(docx, 'Recomendacion estrategica', { heading: true }));
   children.push(docxParagraph(docx, `Accion recomendada: ${asText(recommendation.recommended_action)}`));
   children.push(docxParagraph(docx, `Mejor opcion economica: ${asText(recommendation.economic_option)}`));
@@ -2764,15 +2961,15 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
-  addPptTitle(slide, 'Tipo de analisis e indicadores');
-  addPptRows(slide, tcoBaseRows(result), { maxRows: tcoBaseRows(result).length });
+  addPptTitle(slide, 'KPIs ejecutivos');
+  addPptRows(slide, tcoKpiRows(model), { maxRows: 8 });
   addPptFooter(slide, input);
 
   [
-    ['Alternativas detectadas', tcoDetectedAlternativeRows(result)],
-    ['Matriz TCO', renderTcoMatrixForPptRows(model)],
-    ['Ranking', tcoRankingRows(result)],
-    ['Riesgos', tcoRiskRows(result)],
+    ['Matriz TCO resumida', renderTcoMatrixForPptRows(model).slice(0, 12)],
+    ['Scorecard', tcoScorecardRows(model).slice(0, 12)],
+    ['Ranking gerencial', (tcoScorecardTotalRows(model).length ? tcoScorecardTotalRows(model) : tcoRankingRows(result)).slice(0, 5)],
+    ['Riesgos principales', tcoRiskRows(result).slice(0, 8)],
   ].forEach(([title, rows]) => {
     slide = pptx.addSlide();
     addPptTitle(slide, String(title));
@@ -2781,13 +2978,13 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   });
 
   slide = pptx.addSlide();
-  addPptTitle(slide, 'Costos ocultos y sensibilidad');
+  addPptTitle(slide, 'Datos faltantes y supuestos criticos');
   slide.addText([
-    'Costos ocultos detectados:',
-    ...asArray(result.hidden_costs_detected).map((item) => `- ${asText(item)}`),
+    'Datos faltantes:',
+    ...model.missingData.slice(0, 6).map((item) => `- ${asText(item)}`),
     '',
-    'Sensibilidad:',
-    ...formatValue(result.sensitivity_analysis).slice(0, 10),
+    'Benchmarks / supuestos:',
+    ...tcoBenchmarkRows(model).slice(0, 5).map((item) => `- ${asText(item.Campo)}: ${asText(item.Valor)} (${asText(item.Confianza)})`),
   ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
   addPptFooter(slide, input);
 
@@ -2803,24 +3000,11 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
     `Justificacion: ${asText(recommendation.recommendation_rationale)}`,
     '',
     'Puntos de negociacion:',
-    ...asArray(recommendation.negotiation_points).map((item) => `- ${asText(item)}`),
+    ...asArray(recommendation.negotiation_points).slice(0, 4).map((item) => `- ${asText(item)}`),
     '',
     'Siguientes pasos:',
-    ...asArray(recommendation.next_steps).map((item) => `- ${asText(item)}`),
+    ...asArray(recommendation.next_steps).slice(0, 5).map((item) => `- ${asText(item)}`),
   ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
-  addPptFooter(slide, input);
-
-  slide = pptx.addSlide();
-  addPptTitle(slide, 'Informacion faltante y preguntas');
-  slide.addText([
-    ...asArray(result.missing_information).map((item) => `- ${asText(item)}`),
-    '',
-    'Supuestos y limites:',
-    ...asArray(result.assumptions_and_limits).map((item) => `- ${asText(item)}`),
-    '',
-    'Preguntas para proveedores:',
-    ...asArray(result.questions_for_user_or_suppliers).map((item) => `- ${asText(item)}`),
-  ].join('\n'), { x: 0.65, y: 1.3, w: 11.8, h: 5.4, fontSize: 11, color: '334155', fit: 'shrink', breakLine: false });
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();

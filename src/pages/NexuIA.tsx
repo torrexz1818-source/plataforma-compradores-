@@ -1198,6 +1198,10 @@ const NexuIA = () => {
   const tcoPresentation = tcoResult ? normalizeTcoForPresentation(tcoResult) : undefined;
   const tcoRecommendation = tcoResult?.strategic_recommendation;
   const tcoExecutiveCards = tcoPresentation?.kpis ?? [];
+  const tcoScoreTotals = tcoPresentation?.scorecard.totals ?? [];
+  const tcoScoreWinner = tcoScoreTotals[0];
+  const tcoWinningFinancial = tcoPresentation?.financialModel.find((item) => textValue(item.alternative, '') === textValue(tcoScoreWinner?.alternative ?? tcoRecommendation?.final_recommended_option ?? tcoResult?.executive_summary.best_alternative, ''));
+  const tcoConfidence = tcoPresentation?.scorecard.confidenceLevel || tcoResult?.extracted_data_quality?.confidence_level || 'No especificado';
   const dashboardResult = dashboardCreatorMutation.data;
   const termsSections = termsFormSchema?.form_sections ?? [];
   const termsTotalSteps = termsFormSchema ? termsSections.length + 2 : 1;
@@ -2624,24 +2628,46 @@ const NexuIA = () => {
                   {isDashboardCreator && dashboardResult ? renderAgentFeedbackPanel() : null}
 
                   {isTcoAnalysis && tcoResult ? (
-                    <div id="tco-analysis-export-view" className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                    <div id="tco-analysis-export-view" className="space-y-5 rounded-[24px] border border-[#0D1B2A]/10 bg-[#ECEFF1]/40 p-4">
+                      <div className="rounded-2xl bg-[#0D1B2A] p-5 text-white shadow-sm">
+                        <div className="flex flex-wrap items-start justify-between gap-4">
+                          <div className="max-w-4xl">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#00ACC1]">Dashboard financiero TCO</p>
+                            <h3 className="mt-2 text-xl font-semibold">{tcoPresentation?.header.title || tcoResult.analysis_title}</h3>
+                            <div className="mt-3 grid gap-2 text-xs text-white/75 sm:grid-cols-2 lg:grid-cols-5">
+                              <span>Tipo: {tcoPresentation?.header.analysisType}</span>
+                              <span>Producto: {tcoPresentation?.header.itemName}</span>
+                              <span>Horizonte: {tcoPresentation?.header.horizon}</span>
+                              <span>Moneda: {tcoPresentation?.header.currency}</span>
+                              <span>Confianza: {tcoConfidence}</span>
+                            </div>
+                          </div>
+                          <div data-export-hidden="true">{renderExportControls(handleDownloadTcoPdf)}</div>
+                        </div>
+                      </div>
+
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">A. Resumen ejecutivo</p>
                           <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
-                            Tipo de análisis: {tcoResult.analysis_type}. Horizonte: {tcoResult.evaluation_horizon}. Moneda: {tcoResult.currency}.
+                            Unidad de comparación: {tcoPresentation?.header.unitOfComparison}. Recomendación: {tcoPresentation?.recommendation.finalRecommendedOption}.
                           </p>
-                          <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                            {tcoResult.executive_summary.final_recommendation}
+                          <p className="mt-2 max-w-5xl text-sm leading-6 text-muted-foreground">
+                            {textValue(tcoPresentation?.recommendation.rationale || tcoResult.executive_summary.final_recommendation)}
                           </p>
                         </div>
-                        <div data-export-hidden="true">{renderExportControls(handleDownloadTcoPdf)}</div>
                       </div>
 
-                      {tcoExecutiveCards.length ? (
-                        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                          {tcoExecutiveCards.map((card) => (
-                            <div key={card.label} className="rounded-2xl border border-primary/15 bg-white p-4">
+                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        {[
+                          { label: 'Alternativa recomendada', value: tcoPresentation?.recommendation.finalRecommendedOption || tcoResult.executive_summary.best_alternative, note: tcoPresentation?.recommendation.recommendedAction },
+                          { label: 'TCO neto ganador', value: tcoWinningFinancial?.net_tco || tcoExecutiveCards.find((card) => /tco/i.test(card.label))?.value, note: 'Desde financial_model / matriz TCO' },
+                          { label: 'Score ganador', value: tcoScoreWinner ? `${textValue(tcoScoreWinner.total_score)} / 100` : `${tcoResult.executive_summary.best_alternative_score ?? 'No especificado'} / 100`, note: textValue(tcoScoreWinner?.level ?? tcoResult.executive_summary.best_alternative_score_label, '') },
+                          { label: 'Riesgo principal', value: tcoResult.executive_summary.main_risk, note: `Confianza: ${tcoConfidence}` },
+                          { label: 'Datos faltantes críticos', value: tcoPresentation?.missingData.length ?? 0, note: tcoPresentation?.missingData.slice(0, 2).join(' | ') },
+                          ...tcoExecutiveCards.slice(0, 3),
+                        ].map((card, index) => (
+                            <div key={`${card.label}-${index}`} className="rounded-2xl border border-[#CFD8DC] bg-white p-4 shadow-sm">
                               <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">{card.label}</p>
                               <p className="mt-2 text-lg font-semibold text-foreground">
                                 {textValue(card.value)}
@@ -2651,8 +2677,7 @@ const NexuIA = () => {
                               ) : null}
                             </div>
                           ))}
-                        </div>
-                      ) : null}
+                      </div>
 
                       <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
@@ -2789,6 +2814,38 @@ const NexuIA = () => {
                         </div>
                       </div>
 
+                      {tcoPresentation?.financialModel.length ? (
+                        <div className="rounded-2xl border border-[#CFD8DC] bg-white p-4 shadow-sm">
+                          <p className="text-sm font-medium text-foreground">Modelo financiero TCO</p>
+                          <div className="mt-3 overflow-x-auto rounded-xl border border-primary/10">
+                            <table className="w-full min-w-[1040px] text-left text-sm">
+                              <thead className="bg-[#1565C0] text-xs uppercase tracking-[0.14em] text-white">
+                                <tr>
+                                  {['Alternativa', 'TCO neto', 'TCO anual', 'TCO unitario', 'Adquisición', 'Operación', 'Mantenimiento', 'Residual', 'Confianza'].map((heading) => (
+                                    <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {tcoPresentation.financialModel.map((item, index) => (
+                                  <tr key={`${textValue(item.alternative)}-${index}`} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 font-semibold text-foreground">{textValue(item.alternative)}</td>
+                                    <td className="px-4 py-3 font-semibold text-[#2E7D32]">{textValue(item.net_tco)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.annualized_tco)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.unit_tco)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.acquisition_costs)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.operating_costs)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.maintenance_costs)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.residual_value)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.confidence_level)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null}
+
                       {tcoPresentation?.scorecard.criteria.length || tcoPresentation?.scorecard.totals.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2827,7 +2884,21 @@ const NexuIA = () => {
                                           const score = alternatives.find((item) => textValue(item.alternative, '') === alternative.label);
                                           return (
                                             <td key={`${String(criterion.criterion_id ?? index)}-${alternative.label}`} className="px-4 py-3 text-right text-muted-foreground">
-                                              {score ? `${textValue(score.normalized_score)} / 100` : 'Dato faltante'}
+                                              {score ? (
+                                                <div className="ml-auto w-32">
+                                                  <div className="flex items-center justify-end gap-2">
+                                                    <span className="font-medium text-foreground">{textValue(score.normalized_score)}</span>
+                                                    <span className="text-xs text-muted-foreground">/100</span>
+                                                  </div>
+                                                  <div className="mt-1 h-1.5 rounded-full bg-[#ECEFF1]">
+                                                    <div
+                                                      className="h-1.5 rounded-full bg-[#00ACC1]"
+                                                      style={{ width: `${Math.min(Number(score.normalized_score) || 0, 100)}%` }}
+                                                    />
+                                                  </div>
+                                                  <p className="mt-1 text-[11px] text-muted-foreground">Pond.: {textValue(score.weighted_score)}</p>
+                                                </div>
+                                              ) : 'Dato faltante'}
                                             </td>
                                           );
                                         })}
@@ -2936,12 +3007,62 @@ const NexuIA = () => {
                       {tcoResult.risk_analysis.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Análisis de riesgos</p>
-                          <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                          <div className="mt-3 overflow-x-auto rounded-xl border border-primary/10">
+                            <table className="w-full min-w-[900px] text-left text-sm">
+                              <thead className="bg-primary/5 text-xs uppercase tracking-[0.14em] text-muted-foreground/70">
+                                <tr>
+                                  {['Riesgo', 'Alternativa', 'Probabilidad', 'Impacto', 'Nivel', 'Mitigación'].map((heading) => (
+                                    <th key={heading} className="px-4 py-3 font-medium">{heading}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
                             {tcoResult.risk_analysis.map((item, index) => (
-                              <div key={index} className="rounded-xl bg-primary/5 p-3">
-                                {renderRecordBlock(item)}
-                              </div>
+                                  <tr key={index} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 font-medium text-foreground">{textValue(item.risk)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.alternative)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.probability)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.economic_impact)}</td>
+                                    <td className="px-4 py-3">
+                                      <span className="rounded-full bg-orange-50 px-2 py-1 text-xs font-medium text-[#E65100]">{textValue(item.level)}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.mitigation)}</td>
+                                  </tr>
                             ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {tcoPresentation?.transparencyTable.length ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <p className="text-sm font-medium text-foreground">Transparencia de datos</p>
+                          <div className="mt-3 overflow-x-auto rounded-xl border border-primary/10">
+                            <table className="w-full min-w-[1040px] text-left text-sm">
+                              <thead className="bg-[#ECEFF1] text-xs uppercase tracking-[0.14em] text-muted-foreground/80">
+                                <tr>
+                                  {['Alternativa', 'Dato', 'Valor', 'Fuente', 'Tipo', 'Confianza', 'Observación'].map((heading) => (
+                                    <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {tcoPresentation.transparencyTable.slice(0, 30).map((item, index) => (
+                                  <tr key={`${textValue(item.alternative)}-${textValue(item.field)}-${index}`} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 font-medium text-foreground">{textValue(item.alternative)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.field)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.value)}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.source)}</td>
+                                    <td className="px-4 py-3">
+                                      <span className="rounded-full bg-[#E0F7FA] px-2 py-1 text-xs font-medium text-[#00838F]">{textValue(item.type)}</span>
+                                    </td>
+                                    <td className="px-4 py-3 text-muted-foreground">{textValue(item.confidence_level)}</td>
+                                    <td className="px-4 py-3 text-xs leading-5 text-muted-foreground">{textValue(item.observation)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
                         </div>
                       ) : null}
