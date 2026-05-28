@@ -61,7 +61,7 @@ export const nodusIaAgents: NodusIaAgentCatalogItem[] = [
     functionalities: ['Consolida propuestas y anexos', 'Ordena diferencias por precio, plazo y condiciones', 'Genera comparativo ejecutivo listo para compartir'],
     benefits: ['Acelera decisiones de compra', 'Reduce sesgos al evaluar propuestas', 'Mejora trazabilidad para auditoria interna'],
     inputs: ['Archivos de propuestas', 'Servicio o categoria', 'Objetivo del analisis'],
-    outputs: ['Tabla comparativa', 'Ranking recomendado', 'Resumen ejecutivo', 'Recomendacion final', 'PDF descargable'],
+    outputs: ['Tabla comparativa', 'Ranking recomendado', 'Resumen ejecutivo', 'Recomendacion final', 'PDF, Excel y PowerPoint descargables'],
     status: 'active',
     visibleToBuyer: true,
     sortOrder: 2,
