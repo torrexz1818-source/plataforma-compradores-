@@ -1570,6 +1570,8 @@ function addTermsOfReferencePdf(input: PdfInput) {
   addHeader(ctx, input, subtitle);
   addCard(ctx, 'Resumen ejecutivo', [
     asText(result.executive_summary),
+    `Documentos generados: ${asArray(result.generated_documents).map(asText).join(', ') || 'Paquete completo'}`,
+    `Codigo de proceso: ${asText(result.process_code)}`,
     `Completitud: ${asText(result.completion_level)} (${asText(result.completion_score)}%)`,
     `Ubicacion: ${asText(general.location)} | Fecha requerida: ${asText(general.required_date)}`,
   ]);
@@ -1591,6 +1593,7 @@ function addTermsOfReferencePdf(input: PdfInput) {
     ['Campo', 'Contenido'],
     [
       ['Nombre', general.requirement_name ?? result.title],
+      ['Tipo de TDR identificado', document.tdr_type],
       ['Tipo', general.requirement_type ?? result.requirement_type],
       ['Categoria', general.category ?? result.category],
       ['Ubicacion', general.location],
@@ -1605,7 +1608,10 @@ function addTermsOfReferencePdf(input: PdfInput) {
   addBulletList(ctx, 'Caracteristicas tecnicas', asArray(document.technical_characteristics), 30);
   addBulletList(ctx, 'Actividades requeridas', asArray(document.required_activities), 30);
   addBulletList(ctx, 'Entregables finales', asArray(document.final_deliverables), 30);
+  addBulletList(ctx, 'Documentacion requerida al proveedor', asArray(document.required_documents), 30);
+  addBulletList(ctx, 'Normas tecnicas, estandares o marco aplicable', asArray(document.applicable_standards), 30);
   addBulletList(ctx, 'Plazo y cronograma sugerido', asArray(document.suggested_schedule), 30);
+  addBulletList(ctx, 'Condiciones de ejecucion o metodologia', asArray(document.execution_conditions), 30);
   addBulletList(ctx, 'Requisitos de seguridad', asArray(document.safety_requirements), 30);
   addBulletList(ctx, 'Condiciones para proveedores', asArray(document.supplier_conditions), 30);
   addBulletList(ctx, 'Condiciones comerciales sugeridas', asArray(document.commercial_conditions), 30);
@@ -1613,14 +1619,36 @@ function addTermsOfReferencePdf(input: PdfInput) {
   addBulletList(ctx, 'Estructura de informe final', asArray(document.final_report_structure), 30);
   addBulletList(ctx, 'Anexos sugeridos', asArray(document.suggested_annexes), 30);
 
+  const evaluationRows = asArray(document.evaluation_matrix).map(asRecord);
+  if (evaluationRows.length) {
+    addSection(ctx, 'Criterios de evaluacion ponderados');
+    addTable(
+      ctx,
+      ['Criterio', 'Subcriterio', 'Puntaje', 'Evidencia'],
+      evaluationRows.map((item) => [item.criterion, item.subcriterion, item.score, item.required_evidence]),
+      [42, 58, 22, ctx.maxWidth - 122],
+    );
+  }
+
   const complianceRows = asArray(document.compliance_matrix).map(asRecord);
   if (complianceRows.length) {
     addSection(ctx, 'Matriz de cumplimiento');
     addTable(
       ctx,
-      ['Requisito', 'Evidencia esperada', 'Obligatorio', 'Estado'],
-      complianceRows.map((item) => [item.requirement, item.expected_evidence, item.mandatory, item.status]),
-      [45, 65, 28, ctx.maxWidth - 138],
+      ['Requisito', 'Tipo', 'Evidencia esperada', 'Obligatorio', 'Estado'],
+      complianceRows.map((item) => [item.requirement, item.type, item.expected_evidence, item.mandatory, item.status]),
+      [40, 28, 56, 28, ctx.maxWidth - 152],
+    );
+  }
+
+  const guaranteeRows = asArray(document.guarantees_penalties).map(asRecord);
+  if (guaranteeRows.length) {
+    addSection(ctx, 'Garantias, penalidades y condiciones comerciales');
+    addTable(
+      ctx,
+      ['Tipo', 'Condicion', 'Estado'],
+      guaranteeRows.map((item) => [item.type ?? item.item, item.condition, item.status]),
+      [36, ctx.maxWidth - 66, 30],
     );
   }
 
@@ -1687,8 +1715,33 @@ function addTermsOfReferencePdf(input: PdfInput) {
   addSection(ctx, 'Proceso y acciones');
   addBulletList(ctx, 'Flujo del requerimiento', asArray(result.flow_steps), 30);
   addBulletList(ctx, 'Proceso sugerido de licitacion', asArray(result.tender_process), 30);
+
+  const scheduleRows = asArray(result.process_schedule).map(asRecord);
+  if (scheduleRows.length) {
+    addSection(ctx, 'Cronograma del proceso');
+    addTable(
+      ctx,
+      ['N', 'Fase', 'Actividad', 'Inicio', 'Fin', 'Entregable'],
+      scheduleRows.map((item) => [item.number, item.phase, item.activity, item.start, item.end, item.deliverable]),
+      [12, 38, 55, 28, 28, ctx.maxWidth - 161],
+    );
+  }
+
+  const bidderRows = asArray(result.invited_bidders).map(asRecord);
+  if (bidderRows.length) {
+    addSection(ctx, 'Postores invitados');
+    addTable(
+      ctx,
+      ['Contacto', 'Empresa', 'Cargo', 'Correo'],
+      bidderRows.map((item) => [item.contact_name, item.business_name, item.role, item.email]),
+      [42, 50, 40, ctx.maxWidth - 132],
+    );
+  }
+
   addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 30);
   addBulletList(ctx, 'Recomendaciones accionables', asArray(result.buyer_recommendations), 30);
+  addBulletList(ctx, 'Preguntas recomendadas para completar el TDR', asArray(result.recommended_questions), 30);
+  addBulletList(ctx, 'Validacion de consistencia', asArray(result.consistency_validation), 30);
 
   const supportDocs = asArray(result.supporting_documents_summary).map(asRecord);
   if (supportDocs.length) {
@@ -1713,13 +1766,21 @@ function addTermsOfReferencePdf(input: PdfInput) {
     'completion_level',
     'completion_score',
     'risk_level',
+    'document_request',
+    'generated_documents',
+    'process_code',
+    'contracting_entity',
+    'invited_bidders',
     'executive_summary',
     'dashboard_metrics',
     'generated_document',
     'checklist',
+    'recommended_questions',
+    'consistency_validation',
     'tender_bases',
     'supplier_invitation_email',
     'flow_steps',
+    'process_schedule',
     'tender_process',
     'missing_information',
     'buyer_recommendations',
@@ -2363,6 +2424,9 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
 
     appendJsonSheet(XLSX, workbook, used, 'Resumen', [
       { Campo: 'Nombre del requerimiento', Valor: general.requirement_name ?? result.title },
+      { Campo: 'Documentos generados', Valor: asArray(result.generated_documents).map(asText).join(', ') },
+      { Campo: 'Codigo de proceso', Valor: result.process_code },
+      { Campo: 'Tipo de TDR identificado', Valor: document.tdr_type },
       { Campo: 'Tipo de compra', Valor: general.requirement_type ?? result.requirement_type },
       { Campo: 'Categoria', Valor: general.category ?? result.category },
       { Campo: 'Fecha o plazo estimado', Valor: general.required_date },
@@ -2378,16 +2442,35 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
       ...termsListRows(asArray(document.supplier_conditions), 'Requisito proveedor'),
       ...asArray(document.compliance_matrix).map(asRecord).map((item) => ({
         Requisito: item.requirement,
+        Tipo: item.type,
         Evidencia: item.expected_evidence,
         Obligatorio: item.mandatory,
         Estado: item.status,
       })),
     ]);
+    appendJsonSheet(XLSX, workbook, used, 'Documentos requeridos', termsListRows(asArray(document.required_documents).length ? asArray(document.required_documents) : asArray(bases.requested_documentation), 'Documento'));
     appendJsonSheet(XLSX, workbook, used, 'Criterios de evaluacion', [
+      ...asArray(document.evaluation_matrix).map(asRecord).map((item) => ({
+        Criterio: item.criterion,
+        Subcriterio: item.subcriterion,
+        Puntaje: item.score,
+        Evidencia: item.required_evidence,
+      })),
       ...termsListRows(asArray(document.evaluation_criteria).length ? asArray(document.evaluation_criteria) : asArray(bases.evaluation_criteria), 'Criterio'),
       ...termsListRows(asArray(bases.award_criteria), 'Criterio de adjudicacion'),
     ]);
     appendJsonSheet(XLSX, workbook, used, 'Cronograma', [
+      ...asArray(result.process_schedule).map(asRecord).map((item) => ({
+        N: item.number,
+        Fase: item.phase,
+        Actividad: item.activity,
+        Responsable: item.responsible,
+        Inicio: item.start,
+        Fin: item.end,
+        Duracion: item.duration,
+        Entregable: item.deliverable,
+        Observaciones: item.observations,
+      })),
       ...termsListRows(asArray(document.suggested_schedule), 'Hito sugerido'),
       ...termsListRows(asArray(result.tender_process), 'Paso de proceso'),
     ]);
@@ -2405,7 +2488,19 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
       })),
       ...termsListRows(asArray(result.buyer_recommendations), 'Accion').map((item) => ({ Tipo: 'Recomendacion', ...item })),
       ...termsListRows(asArray(result.missing_information), 'Dato pendiente').map((item) => ({ Tipo: 'Dato pendiente', ...item })),
+      ...termsListRows(asArray(result.recommended_questions), 'Pregunta').map((item) => ({ Tipo: 'Pregunta recomendada', ...item })),
     ]);
+    appendJsonSheet(XLSX, workbook, used, 'Garantias y penalidades', asArray(document.guarantees_penalties).map(asRecord).map((item) => ({
+      Tipo: item.type ?? item.item,
+      Condicion: item.condition,
+      Estado: item.status,
+    })));
+    appendJsonSheet(XLSX, workbook, used, 'Postores invitados', asArray(result.invited_bidders).map(asRecord).map((item) => ({
+      Contacto: item.contact_name,
+      Empresa: item.business_name,
+      Cargo: item.role,
+      Correo: item.email,
+    })));
     appendJsonSheet(XLSX, workbook, used, 'Anexos sugeridos', termsListRows(asArray(document.suggested_annexes), 'Anexo'));
     appendJsonSheet(XLSX, workbook, used, 'Documentos de apoyo', asArray(result.supporting_documents_summary).map(asRecord));
     XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
@@ -2918,8 +3013,24 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   });
   addPptFooter(slide, input);
 
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Tipo de TDR identificado');
+  slide.addText(`${asText(document.tdr_type, result.requirement_type)}\n\nDocumentos generados: ${asArray(result.generated_documents).map(asText).join(', ')}\nCodigo de proceso: ${asText(result.process_code)}\n\n${asText(result.executive_summary)}`, {
+    x: 0.65,
+    y: 1.4,
+    w: 11.8,
+    h: 4.8,
+    fontSize: 16,
+    color: '334155',
+    fit: 'shrink',
+    breakLine: false,
+  });
+  addPptFooter(slide, input);
+
   [
     ['Caracteristicas tecnicas', asArray(document.technical_characteristics)],
+    ['Documentacion requerida', asArray(document.required_documents)],
+    ['Normas y condiciones de ejecucion', [...asArray(document.applicable_standards).map((item) => `Marco: ${asText(item)}`), ...asArray(document.execution_conditions).map((item) => `Ejecucion: ${asText(item)}`)]],
     ['Actividades y entregables', [...asArray(document.required_activities).map((item) => `Actividad: ${asText(item)}`), ...asArray(document.final_deliverables).map((item) => `Entregable: ${asText(item)}`)]],
     ['Seguridad y condiciones para proveedores', [...asArray(document.safety_requirements).map((item) => `Seguridad: ${asText(item)}`), ...asArray(document.supplier_conditions).map((item) => `Condicion: ${asText(item)}`)]],
     ['Estructura de informe y anexos', [...asArray(document.final_report_structure).map((item) => `Informe: ${asText(item)}`), ...asArray(document.suggested_annexes).map((item) => `Anexo: ${asText(item)}`)]],
@@ -2943,10 +3054,11 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Criterios de evaluacion');
-  addPptRows(slide, [
-    ...termsListRows(asArray(document.evaluation_criteria).length ? asArray(document.evaluation_criteria) : asArray(bases.evaluation_criteria), 'Criterio'),
-    ...termsListRows(asArray(bases.award_criteria), 'Criterio de adjudicacion'),
-  ], { maxRows: 10 });
+  addPptRows(slide, asArray(document.evaluation_matrix).map(asRecord).map((item) => ({
+    Criterio: item.criterion,
+    Puntaje: item.score,
+    Evidencia: item.required_evidence,
+  })).concat(termsListRows(asArray(bases.award_criteria), 'Criterio de adjudicacion')), { maxRows: 10 });
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
@@ -3008,7 +3120,18 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   addPptRows(slide, [
     ...termsListRows(asArray(result.missing_information), 'Informacion faltante'),
     ...termsListRows(asArray(result.buyer_recommendations), 'Recomendacion'),
+    ...termsListRows(asArray(result.recommended_questions), 'Pregunta recomendada'),
   ], { maxRows: 12 });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Cronograma principal');
+  addPptRows(slide, asArray(result.process_schedule).map(asRecord).map((item) => ({
+    Fase: item.phase,
+    Actividad: item.activity,
+    Inicio: item.start,
+    Fin: item.end,
+  })), { maxRows: 8 });
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();

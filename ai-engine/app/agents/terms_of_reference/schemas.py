@@ -58,20 +58,26 @@ class BudgetChain(BaseModel):
 
 class GeneratedDocument(BaseModel):
     general_data: GeneralData
+    tdr_type: str = "Servicio simple"
     background: str = "Dato no especificado"
     objective: str
     scope: str
     technical_characteristics: list[str] = Field(default_factory=list)
     required_activities: list[str] = Field(default_factory=list)
     final_deliverables: list[str] = Field(default_factory=list)
+    required_documents: list[str] = Field(default_factory=list)
+    applicable_standards: list[str] = Field(default_factory=list)
     suggested_schedule: list[str] = Field(default_factory=list)
+    execution_conditions: list[str] = Field(default_factory=list)
     justification: str
     safety_requirements: list[str] = Field(default_factory=list)
     supplier_conditions: list[str] = Field(default_factory=list)
     commercial_conditions: list[str] = Field(default_factory=list)
     evaluation_criteria: list[str] = Field(default_factory=list)
+    evaluation_matrix: list[dict[str, Any]] = Field(default_factory=list)
     compliance_matrix: list[dict[str, Any]] = Field(default_factory=list)
     identified_risks: list[dict[str, Any]] = Field(default_factory=list)
+    guarantees_penalties: list[dict[str, Any]] = Field(default_factory=list)
     final_report_structure: list[str] = Field(default_factory=list)
     budget_chain: BudgetChain = Field(default_factory=BudgetChain)
     suggested_annexes: list[str] = Field(default_factory=list)
@@ -130,17 +136,36 @@ class SupplierInvitationEmail(BaseModel):
     closing: str = "Saludos cordiales,"
 
 
+class ProcessScheduleItem(BaseModel):
+    number: str
+    phase: str
+    activity: str
+    responsible: str = "[COMPLETAR: responsable]"
+    start: str = "[SUGERIDO] Dia 1"
+    end: str = "[SUGERIDO] Dia 1"
+    duration: str = "[SUGERIDO] 1 dia"
+    deliverable: str = "Hito registrado"
+    observations: str = ""
+
+
 class TermsOfReferenceResult(BaseModel):
     title: str
     requirement_type: str
     category: str
     template_used: str
+    document_request: str = "Paquete completo"
+    generated_documents: list[str] = Field(default_factory=lambda: ["TDR", "Bases del Concurso", "Invitacion a postores", "Cronograma"])
+    process_code: str = "[COMPLETAR: codigo del proceso]"
+    contracting_entity: dict[str, Any] = Field(default_factory=dict)
+    invited_bidders: list[dict[str, Any]] = Field(default_factory=list)
     executive_summary: str
     generated_document: GeneratedDocument
     supporting_documents_summary: list[SupportingDocumentSummary] = Field(default_factory=list)
     missing_information: list[str] = Field(default_factory=list)
     buyer_recommendations: list[str] = Field(default_factory=list)
     quality_check: QualityCheck
+    recommended_questions: list[str] = Field(default_factory=list)
+    consistency_validation: list[str] = Field(default_factory=list)
     completion_score: int = Field(default=0, ge=0, le=100)
     completion_level: Literal["Alta", "Media", "Baja"] = "Media"
     risk_level: Literal["Bajo", "Medio", "Alto"] = "Medio"
@@ -149,6 +174,7 @@ class TermsOfReferenceResult(BaseModel):
     dashboard_metrics: list[DashboardMetric] = Field(default_factory=list)
     tender_bases: TenderBases = Field(default_factory=TenderBases)
     supplier_invitation_email: SupplierInvitationEmail = Field(default_factory=SupplierInvitationEmail)
+    process_schedule: list[ProcessScheduleItem] = Field(default_factory=list)
     tender_process: list[str] = Field(default_factory=list)
     disclaimer: str = "Este documento fue generado con asistencia de IA y debe ser revisado por el comprador antes de enviarse a proveedores."
 

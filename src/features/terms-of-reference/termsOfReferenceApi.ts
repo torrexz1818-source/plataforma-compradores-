@@ -31,20 +31,31 @@ export type TermsGeneratedDocument = {
     location: string | null;
     required_date: string | null;
   };
+  tdr_type?: string;
   background?: string;
   objective: string;
   scope: string;
   technical_characteristics: string[];
   required_activities: string[];
   final_deliverables: string[];
+  required_documents?: string[];
+  applicable_standards?: string[];
   suggested_schedule?: string[];
+  execution_conditions?: string[];
   justification: string;
   safety_requirements: string[];
   supplier_conditions: string[];
   commercial_conditions?: string[];
   evaluation_criteria?: string[];
+  evaluation_matrix?: Array<{
+    criterion?: string;
+    subcriterion?: string;
+    score?: number;
+    required_evidence?: string;
+  }>;
   compliance_matrix?: Array<{
     requirement?: string;
+    type?: string;
     expected_evidence?: string;
     mandatory?: string;
     status?: string;
@@ -53,6 +64,12 @@ export type TermsGeneratedDocument = {
     risk?: string;
     impact?: string;
     mitigation?: string;
+  }>;
+  guarantees_penalties?: Array<{
+    item?: string;
+    type?: string;
+    condition?: string;
+    status?: string;
   }>;
   final_report_structure: string[];
   budget_chain: {
@@ -71,6 +88,11 @@ export type TermsResult = {
   requirement_type: string;
   category: string;
   template_used: string;
+  document_request?: string;
+  generated_documents?: string[];
+  process_code?: string;
+  contracting_entity?: Record<string, unknown>;
+  invited_bidders?: Array<Record<string, unknown>>;
   executive_summary: string;
   generated_document: TermsGeneratedDocument;
   supporting_documents_summary: Array<{
@@ -81,6 +103,8 @@ export type TermsResult = {
   }>;
   missing_information: string[];
   buyer_recommendations: string[];
+  recommended_questions?: string[];
+  consistency_validation?: string[];
   quality_check: {
     is_complete: boolean;
     warnings: string[];
@@ -125,6 +149,17 @@ export type TermsResult = {
     contact_details: string;
     closing: string;
   };
+  process_schedule?: Array<{
+    number?: string;
+    phase?: string;
+    activity?: string;
+    responsible?: string;
+    start?: string;
+    end?: string;
+    duration?: string;
+    deliverable?: string;
+    observations?: string;
+  }>;
   tender_process?: string[];
   disclaimer: string;
 };

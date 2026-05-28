@@ -4,8 +4,12 @@ REQUIRED_DOCUMENT_LISTS = {
     "technical_characteristics": "Caracteristicas tecnicas",
     "required_activities": "Actividades requeridas",
     "final_deliverables": "Producto final / entregables",
+    "required_documents": "Documentacion requerida al proveedor",
+    "evaluation_matrix": "Criterios de evaluacion ponderados",
+    "compliance_matrix": "Matriz de cumplimiento",
     "safety_requirements": "Requisitos de seguridad",
     "supplier_conditions": "Condiciones para proveedores",
+    "guarantees_penalties": "Garantias, penalidades y condiciones comerciales",
 }
 
 
@@ -32,6 +36,10 @@ def validate_quality(result: TermsOfReferenceResult) -> TermsOfReferenceResult:
 
     if not result.buyer_recommendations:
         result.buyer_recommendations.append("Revisar el documento con el usuario interno y el area de SST/SSMA antes de enviarlo a proveedores.")
+
+    score_total = sum(int(item.get("score") or 0) for item in document.evaluation_matrix)
+    if document.evaluation_matrix and score_total != 100:
+        warnings.append("La matriz de evaluacion fue ajustada para sumar 100 puntos.")
 
     if missing_sections:
         warnings.append("El documento requiere validar o completar secciones minimas antes de su uso final.")

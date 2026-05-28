@@ -108,14 +108,19 @@ function buildTermsProcessingStages(requirementType: string, hasInstructions: bo
   return [
     { label: 'Subiendo archivos', message: 'Subiendo archivos de soporte...' },
     { label: 'Leyendo archivos', message: 'Leyendo documentos, fichas o bases cargadas...' },
+    { label: 'Clasificando tipo de contratación', message: 'Clasificando tipo de contratación y documentos requeridos...' },
     { label: 'Extrayendo información técnica', message: 'Extrayendo información técnica relevante...' },
+    { label: 'Identificando brechas de información', message: 'Identificando datos por completar y recomendaciones sugeridas...' },
     { label: 'Organizando requerimiento', message: getTermsRequirementProgressMessage(requirementType) },
     ...(hasInstructions ? [{ label: 'Aplicando instrucciones del usuario', message: 'Aplicando instrucciones del usuario...' }] : []),
-    { label: 'Generando secciones del TDR', message: 'Generando secciones del término de referencia...' },
-    { label: 'Validando coherencia técnica', message: 'Validando coherencia técnica del requerimiento...' },
+    { label: 'Generando TDR', message: 'Generando términos de referencia cuando corresponde...' },
+    { label: 'Generando Bases del Concurso', message: 'Preparando reglas, requisitos y criterios del concurso...' },
+    { label: 'Preparando invitación a postores', message: 'Redactando invitación formal para empresas postoras...' },
+    { label: 'Construyendo cronograma', message: 'Construyendo fases, hitos y plazos del proceso...' },
+    { label: 'Validando coherencia documental', message: 'Validando coherencia entre documentos, criterios y cronograma...' },
     { label: 'Construyendo matrices y criterios', message: 'Construyendo matriz de cumplimiento y criterios de evaluación...' },
     { label: 'Preparando resultado final', message: 'Preparando resultado final...' },
-    { label: 'TDR listo', message: 'Término de referencia listo.' },
+    { label: 'Documentos listos', message: 'Documentos de contratación listos.' },
   ];
 }
 
@@ -261,9 +266,9 @@ function getTermsErrorMessage(error: unknown) {
     normalized.includes('obligatorio') ||
     normalized.includes('required')
   ) {
-    return 'Faltan datos clave para generar el TDR. Completa el objetivo, alcance o descripción del requerimiento.';
+    return 'Faltan datos clave para generar los documentos. Completa el objeto, objetivo o alcance del proceso.';
   }
-  return 'No se pudo generar el término de referencia. Revisa los datos ingresados o intenta nuevamente.';
+  return 'No se pudieron generar los documentos. Revisa los datos ingresados o intenta nuevamente.';
 }
 
 const NexuIA = () => {
@@ -1156,7 +1161,6 @@ const NexuIA = () => {
       { label: 'tipo de compra', value: termsFields.requirement_type },
       { label: 'objetivo', value: termsFields.objective },
       { label: 'alcance o descripción', value: termsFields.scope },
-      { label: 'entregables esperados', value: termsFields.deliverables },
       { label: 'área solicitante o contexto', value: contextValue },
       { label: 'plazo o fecha estimada', value: termsFields.required_date },
     ];
@@ -1510,6 +1514,15 @@ const NexuIA = () => {
   const proposalComparisonResult = proposalComparisonMutation.data;
   const termsFormSchema = termsFormSchemaMutation.data;
   const termsResult = termsGenerateMutation.data;
+  const termsGeneratedDocuments = termsResult?.generated_documents?.length
+    ? termsResult.generated_documents
+    : ['TDR', 'Bases del Concurso', 'Invitacion a postores', 'Cronograma'];
+  const hasTermsDocument = (name: string) => termsGeneratedDocuments.some((item) => item.toLowerCase().includes(name.toLowerCase()));
+  const showTermsTdr = hasTermsDocument('tdr');
+  const showTermsBases = hasTermsDocument('bases');
+  const showTermsInvitation = hasTermsDocument('invitacion') || hasTermsDocument('invitación');
+  const showTermsSchedule = hasTermsDocument('cronograma');
+  const termsDefaultTab = showTermsTdr ? 'documento' : showTermsBases ? 'licitacion' : showTermsInvitation ? 'correo' : showTermsSchedule ? 'cronograma' : 'matriz';
   const tcoResult = tcoAnalysisMutation.data;
   const tcoPresentation = tcoResult ? normalizeTcoForPresentation(tcoResult) : undefined;
   const tcoRecommendation = tcoResult?.strategic_recommendation;
@@ -3054,7 +3067,10 @@ const NexuIA = () => {
                       <div className="grid gap-3 lg:grid-cols-4">
                         {[
                           ['Nombre', termsResult.title],
+                          ['Documentos generados', termsGeneratedDocuments.join(', ')],
+                          ['Código de proceso', termsResult.process_code ?? '[COMPLETAR: código del proceso]'],
                           ['Tipo', termsResult.requirement_type],
+                          ['Tipo de TDR identificado', termsResult.generated_document.tdr_type ?? termsResult.requirement_type],
                           ['Categoria', termsResult.category],
                           ['Completitud', `${termsResult.completion_level ?? 'Media'}${termsResult.completion_score ? ` (${termsResult.completion_score}%)` : ''}`],
                         ].map(([label, value]) => (
@@ -3117,17 +3133,18 @@ const NexuIA = () => {
                         </div>
                       </div>
 
-                      <Tabs defaultValue="documento" className="rounded-2xl border border-primary/15 bg-white p-4">
+                      <Tabs defaultValue={termsDefaultTab} className="rounded-2xl border border-primary/15 bg-white p-4">
                         <TabsList className="flex h-auto flex-wrap justify-start rounded-xl bg-primary/5 p-1">
-                          <TabsTrigger value="documento">Documento</TabsTrigger>
+                          {showTermsTdr ? <TabsTrigger value="documento">TDR</TabsTrigger> : null}
                           <TabsTrigger value="matriz">Matriz y riesgos</TabsTrigger>
                           <TabsTrigger value="calidad">Calidad</TabsTrigger>
-                          <TabsTrigger value="licitacion">Bases de licitación</TabsTrigger>
-                          <TabsTrigger value="correo">Correo a proveedores</TabsTrigger>
-                          <TabsTrigger value="proceso">Proceso de licitación</TabsTrigger>
+                          {showTermsBases ? <TabsTrigger value="licitacion">Bases</TabsTrigger> : null}
+                          {showTermsInvitation ? <TabsTrigger value="correo">Invitación</TabsTrigger> : null}
+                          {showTermsSchedule ? <TabsTrigger value="cronograma">Cronograma</TabsTrigger> : null}
+                          <TabsTrigger value="proceso">Siguientes pasos</TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="documento" className="mt-4">
+                        {showTermsTdr ? <TabsContent value="documento" className="mt-4">
                           <Accordion type="multiple" defaultValue={['datos', 'objetivo']} className="space-y-2">
                             {[
                               ['datos', 'Datos generales', [
@@ -3143,12 +3160,16 @@ const NexuIA = () => {
                               ['tecnicas', 'Caracteristicas tecnicas', termsResult.generated_document.technical_characteristics],
                               ['actividades', 'Actividades requeridas', termsResult.generated_document.required_activities],
                               ['entregables', 'Entregables', termsResult.generated_document.final_deliverables],
+                              ['documentos', 'Documentación requerida al proveedor', termsResult.generated_document.required_documents ?? termsResult.tender_bases?.requested_documentation ?? []],
+                              ['normas', 'Normas técnicas, estándares o marco aplicable', termsResult.generated_document.applicable_standards ?? []],
                               ['cronograma', 'Plazo y cronograma sugerido', termsResult.generated_document.suggested_schedule ?? []],
+                              ['ejecucion', 'Condiciones de ejecución o metodología', termsResult.generated_document.execution_conditions ?? []],
                               ['justificacion', 'Justificacion', [termsResult.generated_document.justification]],
                               ['seguridad', 'Requisitos de seguridad', termsResult.generated_document.safety_requirements],
                               ['proveedores', 'Condiciones para proveedores', termsResult.generated_document.supplier_conditions],
                               ['comerciales', 'Condiciones comerciales sugeridas', termsResult.generated_document.commercial_conditions ?? []],
                               ['criterios', 'Criterios de evaluación', termsResult.generated_document.evaluation_criteria ?? termsResult.tender_bases?.evaluation_criteria ?? []],
+                              ['garantias', 'Garantías, penalidades y condiciones comerciales', (termsResult.generated_document.guarantees_penalties ?? []).map((item) => `${item.type ?? 'Condición'}: ${item.condition ?? item.item ?? 'Dato no especificado'} ${item.status ?? ''}`)],
                               ['informe', 'Estructura de informe final', termsResult.generated_document.final_report_structure],
                               ['anexos', 'Anexos sugeridos', termsResult.generated_document.suggested_annexes],
                             ].map(([value, title, items]) => (
@@ -3158,9 +3179,34 @@ const NexuIA = () => {
                               </AccordionItem>
                             ))}
                           </Accordion>
-                        </TabsContent>
+                        </TabsContent> : null}
 
                         <TabsContent value="matriz" className="mt-4 space-y-4">
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Criterios de evaluación ponderados</p>
+                            <div className="mt-3 overflow-x-auto rounded-xl border border-primary/15">
+                              <table className="w-full min-w-[760px] text-left text-sm">
+                                <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                  <tr>
+                                    <th className="px-4 py-3 font-medium">Criterio</th>
+                                    <th className="px-4 py-3 font-medium">Subcriterio</th>
+                                    <th className="px-4 py-3 font-medium">Puntaje</th>
+                                    <th className="px-4 py-3 font-medium">Evidencia requerida</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(termsResult.generated_document.evaluation_matrix?.length ? termsResult.generated_document.evaluation_matrix : []).map((item, index) => (
+                                    <tr key={`${item.criterion ?? 'criterion'}-${index}`} className="border-t border-primary/10">
+                                      <td className="px-4 py-3 font-medium text-foreground">{item.criterion ?? 'Dato no especificado'}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{item.subcriterion ?? 'Dato no especificado'}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{item.score ?? 'Dato no especificado'}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{item.required_evidence ?? 'Dato no especificado'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
                           <div>
                             <p className="text-sm font-medium text-foreground">Matriz de cumplimiento</p>
                             <div className="mt-3 overflow-x-auto rounded-xl border border-primary/15">
@@ -3168,6 +3214,7 @@ const NexuIA = () => {
                                 <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
                                   <tr>
                                     <th className="px-4 py-3 font-medium">Requisito</th>
+                                    <th className="px-4 py-3 font-medium">Tipo</th>
                                     <th className="px-4 py-3 font-medium">Evidencia esperada</th>
                                     <th className="px-4 py-3 font-medium">Obligatorio</th>
                                     <th className="px-4 py-3 font-medium">Estado</th>
@@ -3179,6 +3226,7 @@ const NexuIA = () => {
                                   ]).map((item, index) => (
                                     <tr key={`${item.requirement ?? 'req'}-${index}`} className="border-t border-primary/10">
                                       <td className="px-4 py-3 font-medium text-foreground">{item.requirement ?? 'Dato no especificado'}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{item.type ?? 'Dato no especificado'}</td>
                                       <td className="px-4 py-3 text-muted-foreground">{item.expected_evidence ?? 'Dato no especificado'}</td>
                                       <td className="px-4 py-3 text-muted-foreground">{item.mandatory ?? 'Dato no especificado'}</td>
                                       <td className="px-4 py-3 text-muted-foreground">{item.status ?? 'Dato no especificado'}</td>
@@ -3228,10 +3276,18 @@ const NexuIA = () => {
                               <p className="text-sm font-medium text-foreground">Recomendaciones accionables</p>
                               {renderTermsList(termsResult.buyer_recommendations)}
                             </div>
+                            <div className="rounded-xl border border-primary/15 p-4">
+                              <p className="text-sm font-medium text-foreground">Preguntas recomendadas para completar el TDR</p>
+                              {renderTermsList(termsResult.recommended_questions)}
+                            </div>
+                            <div className="rounded-xl border border-primary/15 p-4">
+                              <p className="text-sm font-medium text-foreground">Validación de consistencia</p>
+                              {renderTermsList(termsResult.consistency_validation)}
+                            </div>
                           </div>
                         </TabsContent>
 
-                        <TabsContent value="licitacion" className="mt-4 space-y-3">
+                        {showTermsBases ? <TabsContent value="licitacion" className="mt-4 space-y-3">
                           <div className="rounded-xl border border-primary/15 p-4">
                             <p className="text-sm font-medium text-foreground">Bases sugeridas para la licitación</p>
                             <p className="mt-2 text-sm text-muted-foreground"><span className="font-medium text-foreground">Objeto:</span> {termsResult.tender_bases?.object ?? 'No especificado'}</p>
@@ -3256,9 +3312,9 @@ const NexuIA = () => {
                           <p className="rounded-xl border border-primary/15 bg-primary/5 p-3 text-xs leading-5 text-muted-foreground">
                             {termsResult.tender_bases?.disclaimer ?? 'Estas bases son una guía inicial y deben ser revisadas por el área de compras, legal o responsable interno antes de enviarse.'}
                           </p>
-                        </TabsContent>
+                        </TabsContent> : null}
 
-                        <TabsContent value="correo" className="mt-4">
+                        {showTermsInvitation ? <TabsContent value="correo" className="mt-4">
                           <div className="rounded-xl border border-primary/15 p-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
                               <p className="text-sm font-medium text-foreground">Correo sugerido para invitar proveedores</p>
@@ -3280,8 +3336,65 @@ const NexuIA = () => {
                               <p><span className="font-medium text-foreground">Contacto:</span> {termsResult.supplier_invitation_email?.contact_details ?? 'No especificado'}</p>
                               <p>{termsResult.supplier_invitation_email?.closing}</p>
                             </div>
+                            <div className="mt-4 overflow-x-auto rounded-xl border border-primary/15">
+                              <table className="w-full min-w-[640px] text-left text-sm">
+                                <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                  <tr>
+                                    <th className="px-4 py-3 font-medium">Contacto</th>
+                                    <th className="px-4 py-3 font-medium">Empresa</th>
+                                    <th className="px-4 py-3 font-medium">Cargo</th>
+                                    <th className="px-4 py-3 font-medium">Correo</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(termsResult.invited_bidders?.length ? termsResult.invited_bidders : [{ contact_name: '[COMPLETAR: ingresar empresas invitadas]' }]).map((item, index) => (
+                                    <tr key={`bidder-${index}`} className="border-t border-primary/10">
+                                      <td className="px-4 py-3 text-muted-foreground">{String(item.contact_name ?? '{nombre_contacto}')}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{String(item.business_name ?? '{razon_social}')}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{String(item.role ?? '{cargo}')}</td>
+                                      <td className="px-4 py-3 text-muted-foreground">{String(item.email ?? '{correo}')}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                        </TabsContent>
+                        </TabsContent> : null}
+
+                        {showTermsSchedule ? <TabsContent value="cronograma" className="mt-4">
+                          <div className="overflow-x-auto rounded-xl border border-primary/15">
+                            <table className="w-full min-w-[960px] text-left text-sm">
+                              <thead className="bg-primary/5 text-xs uppercase tracking-[0.16em] text-muted-foreground/70">
+                                <tr>
+                                  <th className="px-4 py-3 font-medium">N°</th>
+                                  <th className="px-4 py-3 font-medium">Fase</th>
+                                  <th className="px-4 py-3 font-medium">Actividad/Hito</th>
+                                  <th className="px-4 py-3 font-medium">Responsable</th>
+                                  <th className="px-4 py-3 font-medium">Inicio</th>
+                                  <th className="px-4 py-3 font-medium">Fin</th>
+                                  <th className="px-4 py-3 font-medium">Duración</th>
+                                  <th className="px-4 py-3 font-medium">Entregable</th>
+                                  <th className="px-4 py-3 font-medium">Observaciones</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(termsResult.process_schedule?.length ? termsResult.process_schedule : []).map((item, index) => (
+                                  <tr key={`${item.number ?? index}-${item.activity ?? 'actividad'}`} className="border-t border-primary/10">
+                                    <td className="px-4 py-3 text-muted-foreground">{item.number ?? index + 1}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.phase ?? 'No especificado'}</td>
+                                    <td className="px-4 py-3 font-medium text-foreground">{item.activity ?? 'No especificado'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.responsible ?? '[COMPLETAR]'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.start ?? '[SUGERIDO]'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.end ?? '[SUGERIDO]'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.duration ?? '[SUGERIDO]'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.deliverable ?? 'No especificado'}</td>
+                                    <td className="px-4 py-3 text-muted-foreground">{item.observations ?? ''}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </TabsContent> : null}
 
                         <TabsContent value="proceso" className="mt-4">
                           <div className="grid gap-2 lg:grid-cols-2">
