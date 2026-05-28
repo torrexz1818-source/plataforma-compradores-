@@ -48,6 +48,14 @@ export type TcoPresentationModel = {
   benchmarkAssumptions: Array<Record<string, unknown>>;
   transparencyTable: Array<Record<string, unknown>>;
   financialModel: Array<Record<string, unknown>>;
+  scorecard: {
+    scoringMethod: string;
+    totalPossibleScore: string;
+    confidenceLevel: string;
+    criteria: Array<Record<string, unknown>>;
+    totals: Array<Record<string, unknown>>;
+    decisionSummary: Record<string, unknown>;
+  };
   missingData: string[];
   assumptions: string[];
   hiddenCosts: string[];
@@ -283,6 +291,18 @@ function buildKpis(result: TcoAnalysisResult, totals: TcoPresentationRow[], matr
   ];
 }
 
+function normalizeScorecard(result: TcoAnalysisResult) {
+  const scorecard = asRecord(result.scorecard);
+  return {
+    scoringMethod: asText(scorecard.scoring_method, 'Scorecard no disponible'),
+    totalPossibleScore: displayValue(scorecard.total_possible_score ?? 100),
+    confidenceLevel: displayValue(scorecard.confidence_level),
+    criteria: asArray<Record<string, unknown>>(scorecard.criteria),
+    totals: asArray<Record<string, unknown>>(scorecard.totals),
+    decisionSummary: asRecord(scorecard.decision_summary),
+  };
+}
+
 export function normalizeTcoForPresentation(result: TcoAnalysisResult): TcoPresentationModel {
   const dashboardMatrix = asRecord(result.tco_dashboard_matrix) as DashboardMatrix;
   const hasDashboardMatrix = Boolean(asArray(dashboardMatrix.sections).length);
@@ -311,6 +331,7 @@ export function normalizeTcoForPresentation(result: TcoAnalysisResult): TcoPrese
     benchmarkAssumptions: asArray<Record<string, unknown>>(result.benchmark_assumptions),
     transparencyTable: asArray<Record<string, unknown>>(result.transparency_table),
     financialModel: asArray<Record<string, unknown>>(result.financial_model),
+    scorecard: normalizeScorecard(result),
     missingData: result.missing_information,
     assumptions: [...result.assumptions_and_limits, ...(result.calculation_warnings ?? [])],
     hiddenCosts: result.hidden_costs_detected ?? [],

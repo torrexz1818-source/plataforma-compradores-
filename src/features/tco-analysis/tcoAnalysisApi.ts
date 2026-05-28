@@ -81,6 +81,40 @@ export type TcoAnalysisResult = {
   benchmark_assumptions?: Array<Record<string, unknown>>;
   transparency_table?: Array<Record<string, unknown>>;
   financial_model?: Array<Record<string, unknown>>;
+  scorecard?: {
+    scoring_method?: string;
+    total_possible_score?: number;
+    confidence_level?: 'alta' | 'media' | 'baja' | string;
+    criteria?: Array<{
+      criterion_id?: string;
+      criterion_name?: string;
+      description?: string | null;
+      weight?: number;
+      applies_to_analysis_type?: string | null;
+      scoring_logic?: string | null;
+      alternatives?: Array<{
+        alternative?: string;
+        raw_value?: number | string | null;
+        normalized_score?: number | null;
+        weighted_score?: number | null;
+        evidence?: string | null;
+        source?: string | null;
+        confidence_level?: string | null;
+        comment?: string | null;
+      }>;
+    }>;
+    totals?: Array<{
+      alternative?: string;
+      total_score?: number;
+      level?: string;
+      rank?: number;
+      main_strength?: string;
+      main_weakness?: string;
+      confidence_level?: string;
+    }>;
+    decision_summary?: Record<string, unknown>;
+    [key: string]: unknown;
+  } | null;
   tco_matrix: Array<{ cost_component: string; values: Record<string, number | string | null>; notes?: string }>;
   tco_dashboard_matrix?: Record<string, unknown> | null;
   tco_totals: Array<Record<string, unknown>>;

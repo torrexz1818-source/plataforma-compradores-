@@ -80,6 +80,62 @@ FINANCIAL_COMPONENT_KEYWORDS = {
     "exit_costs": ("salida", "reemplazo", "terminacion"),
     "residual_value": ("residual", "recuperable", "depreciacion"),
 }
+SCORECARD_PROFILES = {
+    "flota": [
+        ("initial_investment", "Inversion inicial", 20, "acquisition_costs", "cost", ("precio", "inversion", "adquisicion")),
+        ("net_tco", "TCO neto total", 25, "net_tco", "cost", ("tco", "total")),
+        ("operation_consumption", "Consumo / operacion", 15, "operating_costs", "cost", ("consumo", "operacion", "combustible")),
+        ("warranty", "Garantia", 10, None, "benefit", ("garantia", "warranty")),
+        ("support_network", "Red de talleres / soporte", 10, "support_costs", "benefit", ("taller", "soporte", "postventa")),
+        ("residual_value", "Valor residual / depreciacion", 10, "residual_value", "benefit", ("residual", "depreciacion")),
+        ("operational_risk", "Riesgo operativo y mantenimiento", 10, "risk_costs", "risk", ("riesgo", "mantenimiento")),
+    ],
+    "software": [
+        ("net_tco", "TCO neto total", 25, "net_tco", "cost", ("tco", "total")),
+        ("implementation", "Implementacion", 15, "implementation_costs", "cost", ("implementacion", "configuracion")),
+        ("support", "Soporte", 15, "support_costs", "benefit", ("soporte", "sla")),
+        ("integration_scalability", "Integracion / escalabilidad", 15, None, "benefit", ("integracion", "erp", "escalabilidad")),
+        ("contract_risk", "Riesgo contractual", 10, "risk_costs", "risk", ("riesgo", "contrato", "salida")),
+        ("cost_per_user", "Costo por usuario", 10, "unit_tco", "cost", ("usuario", "unitario")),
+        ("adoption_time", "Tiempo de adopcion", 10, None, "benefit", ("adopcion", "capacitacion", "implementacion")),
+    ],
+    "servicios": [
+        ("contract_tco", "TCO total del contrato", 25, "net_tco", "cost", ("tco", "contrato", "honorario")),
+        ("scope", "Alcance", 20, None, "benefit", ("alcance", "servicio")),
+        ("sla", "SLA", 15, None, "benefit", ("sla", "tiempo", "respuesta")),
+        ("provider_capacity", "Experiencia / capacidad del proveedor", 15, None, "benefit", ("experiencia", "equipo", "capacidad")),
+        ("noncompliance_risk", "Riesgo de incumplimiento", 10, "risk_costs", "risk", ("riesgo", "incumplimiento")),
+        ("continuity_support", "Soporte / continuidad", 10, "support_costs", "benefit", ("soporte", "continuidad")),
+        ("penalties_guarantees", "Penalidades / garantias", 5, None, "benefit", ("penalidad", "garantia")),
+    ],
+    "importacion": [
+        ("landed_tco", "TCO puesto en destino", 30, "net_tco", "cost", ("tco", "destino", "nacionalizacion")),
+        ("lead_time", "Lead time", 15, None, "cost", ("lead time", "plazo", "entrega")),
+        ("logistics_risk", "Riesgo logistico", 15, "risk_costs", "risk", ("riesgo logistico", "flete", "aduana")),
+        ("local_support", "Soporte local / garantia", 15, "support_costs", "benefit", ("soporte", "garantia")),
+        ("fx_risk", "Riesgo cambiario", 10, None, "risk", ("tipo de cambio", "cambiario")),
+        ("supply_flexibility", "Flexibilidad de abastecimiento", 10, None, "benefit", ("flexibilidad", "stock", "abastecimiento")),
+        ("tax_customs_risk", "Riesgo tributario / aduanero", 5, None, "risk", ("arancel", "impuesto", "aduana")),
+    ],
+    "maquinaria": [
+        ("net_tco", "TCO neto total", 25, "net_tco", "cost", ("tco", "total")),
+        ("productivity", "Productividad", 20, None, "benefit", ("productividad", "produccion")),
+        ("maintenance", "Mantenimiento", 15, "maintenance_costs", "cost", ("mantenimiento", "correctivo", "preventivo")),
+        ("useful_life", "Vida util", 15, None, "benefit", ("vida util", "vida")),
+        ("spares_support", "Repuestos / soporte", 10, "support_costs", "benefit", ("repuesto", "soporte")),
+        ("energy_operation", "Energia / operacion", 10, "operating_costs", "cost", ("energia", "operacion")),
+        ("residual_value", "Valor residual", 5, "residual_value", "benefit", ("residual",)),
+    ],
+    "repuestos": [
+        ("supply_total_cost", "Costo total de abastecimiento", 25, "net_tco", "cost", ("costo", "abastecimiento", "tco")),
+        ("quality_spec", "Calidad / especificacion", 20, None, "benefit", ("calidad", "especificacion")),
+        ("lead_time", "Lead time", 15, None, "cost", ("lead time", "plazo", "entrega")),
+        ("supply_risk", "Riesgo de abastecimiento", 15, "risk_costs", "risk", ("riesgo", "abastecimiento")),
+        ("logistics_storage", "Costo logistico / almacenamiento", 10, "logistics_costs", "cost", ("logistica", "almacenamiento", "flete")),
+        ("waste_obsolescence", "Merma / obsolescencia", 10, "risk_costs", "risk", ("merma", "obsolescencia")),
+        ("supplier_flexibility", "Flexibilidad del proveedor", 5, None, "benefit", ("flexibilidad", "proveedor")),
+    ],
+}
 RELEVANT_TERMS = (
     "precio", "fob", "cif", "exw", "flete", "seguro", "aduana", "impuesto", "arancel",
     "garantia", "warranty", "mantenimiento", "repuesto", "instalacion", "capacitacion",
@@ -257,6 +313,133 @@ def _safe_add(value: float | None, addend: float | None) -> float | None:
     if addend is None:
         return value
     return (value or 0) + addend
+
+
+def _score_level(score: float | None) -> str:
+    value = score or 0
+    if value >= 90:
+        return "Excelente"
+    if value >= 80:
+        return "Muy buena"
+    if value >= 70:
+        return "Buena"
+    if value >= 60:
+        return "Aceptable con reservas"
+    return "Riesgosa / requiere revision"
+
+
+def _scorecard_profile_key(analysis_type: Any) -> str:
+    text = _as_text(analysis_type, "").lower()
+    if any(term in text for term in ["flota", "vehiculo", "vehicular", "camioneta"]):
+        return "flota"
+    if any(term in text for term in ["software", "saas", "licencia"]):
+        return "software"
+    if any(term in text for term in ["servicio", "mantenimiento industrial"]):
+        return "servicios"
+    if any(term in text for term in ["importacion", "importación", "china", "local"]):
+        return "importacion"
+    if any(term in text for term in ["maquinaria", "equipo", "activo"]):
+        return "maquinaria"
+    if any(term in text for term in ["repuesto", "insumo"]):
+        return "repuestos"
+    return "maquinaria"
+
+
+def _confidence_rank(value: str) -> int:
+    return {"baja": 0, "media": 1, "alta": 2}.get(value, 0)
+
+
+def _combined_confidence(values: list[str]) -> str:
+    if not values:
+        return "baja"
+    average = sum(_confidence_rank(value) for value in values) / len(values)
+    if average >= 1.65:
+        return "alta"
+    if average >= 0.75:
+        return "media"
+    return "baja"
+
+
+def _find_transparency_evidence(result: dict[str, Any], alternative: str, keywords: tuple[str, ...]) -> dict[str, Any] | None:
+    best: dict[str, Any] | None = None
+    best_rank = -1
+    for item in _as_list(result.get("transparency_table")):
+        if not isinstance(item, dict):
+            continue
+        item_alt = _as_text(item.get("alternative"), "")
+        if item_alt not in {alternative, "General"}:
+            continue
+        field_text = f"{_as_text(item.get('field'), '')} {_as_text(item.get('observation'), '')}".lower()
+        if not any(keyword in field_text for keyword in keywords):
+            continue
+        rank = _confidence_rank(_normalize_spanish_confidence(item.get("confidence_level")))
+        if rank > best_rank:
+            best = item
+            best_rank = rank
+    return best
+
+
+def _risk_penalty(result: dict[str, Any], alternative: str, keywords: tuple[str, ...]) -> tuple[float, str]:
+    relevant = []
+    for item in _as_list(result.get("risk_analysis")):
+        if not isinstance(item, dict):
+            continue
+        item_alt = _as_text(item.get("alternative"), "General")
+        if item_alt not in {alternative, "General"}:
+            continue
+        text = f"{_as_text(item.get('risk'), '')} {_as_text(item.get('mitigation'), '')}".lower()
+        if keywords and not any(keyword in text for keyword in keywords):
+            continue
+        relevant.append(_normalize_level(item.get("level")))
+    if not relevant:
+        return 70, "Sin riesgo especifico documentado; puntaje preliminar."
+    if "high" in relevant:
+        return 45, "Riesgo alto documentado o identificado."
+    if "medium" in relevant:
+        return 65, "Riesgo medio identificado."
+    return 85, "Riesgo bajo identificado."
+
+
+def _cost_scores(values: dict[str, float | None], lower_is_better: bool = True) -> dict[str, float]:
+    numeric = {key: value for key, value in values.items() if value is not None}
+    if not numeric:
+        return {key: 55 for key in values}
+    min_value = min(numeric.values())
+    max_value = max(numeric.values())
+    if min_value == max_value:
+        return {key: 85 if values[key] is not None else 55 for key in values}
+    scores: dict[str, float] = {}
+    for key, value in values.items():
+        if value is None:
+            scores[key] = 55
+            continue
+        if lower_is_better:
+            scores[key] = 65 + ((max_value - value) / (max_value - min_value)) * 30
+        else:
+            scores[key] = 65 + ((value - min_value) / (max_value - min_value)) * 30
+    return scores
+
+
+def _scorecard_source_from_type(value: Any) -> str:
+    if str(value or "").strip().lower() == "benchmark":
+        return "benchmark"
+    data_type = _normalize_data_type(value)
+    if data_type == "estimado":
+        return "estimado"
+    if data_type == "faltante":
+        return "faltante"
+    return data_type if data_type in {"documento", "usuario", "calculado"} else "faltante"
+
+
+def _qualitative_benefit_score(value: Any, confidence: str) -> float:
+    text = _as_text(value, "").lower()
+    if not text or text in {"dato faltante", "no especificado", "no determinado"}:
+        return 55
+    if any(term in text for term in ["24/7", "premium", "incluid", "mejor", "extendida", "local", "penalidad", "24h"]):
+        return 95 if confidence in {"alta", "media"} else 82
+    if any(term in text for term in ["48h", "limitad", "parcial", "basico", "básico"]):
+        return 58
+    return 78 if confidence == "alta" else 72 if confidence == "media" else 62
 
 
 def _has_numeric_evidence_for_alternative(result: dict[str, Any], alternative: str) -> bool:
@@ -594,6 +777,7 @@ def ensure_result_defaults(
     result.setdefault("benchmark_assumptions", [])
     result.setdefault("transparency_table", [])
     result.setdefault("financial_model", [])
+    result.setdefault("scorecard", None)
     result.setdefault("tco_totals", [])
     result.setdefault("ranking", [])
     result.setdefault("hidden_costs_detected", [])
@@ -829,14 +1013,20 @@ def build_transparency_table(result: dict[str, Any]) -> list[dict[str, Any]]:
         for alternative, raw_value in matrix_row["values"].items():
             value = _value_or_status(raw_value, field)
             number = _as_number(value)
+            is_missing_value = str(value).strip().lower() in {
+                "dato faltante",
+                "no calculable con datos actuales",
+                "no especificado",
+                "no determinado",
+            }
             add_row(
                 {
                     "alternative": _as_text(alternative),
                     "field": field,
                     "value": value,
                     "source": "Resultado estructurado TCO",
-                    "type": "calculado" if number is not None else "faltante",
-                    "confidence_level": "media" if number is not None else "baja",
+                    "type": "calculado" if not is_missing_value else "faltante",
+                    "confidence_level": "media" if (number is not None or not is_missing_value) else "baja",
                     "observation": _as_text(matrix_row.get("notes"), "Componente usado para matriz TCO."),
                 }
             )
@@ -857,6 +1047,261 @@ def build_transparency_table(result: dict[str, Any]) -> list[dict[str, Any]]:
         )
 
     return rows
+
+
+def build_scorecard(result: dict[str, Any]) -> dict[str, Any]:
+    alternatives = _alternative_names(result)
+    existing = result.get("scorecard") if isinstance(result.get("scorecard"), dict) else {}
+    if len(alternatives) < 2 and existing.get("criteria"):
+        alternatives = [
+            _as_text(item.get("alternative"), "")
+            for item in _as_list(existing.get("totals"))
+            if isinstance(item, dict) and _as_text(item.get("alternative"), "")
+        ] or alternatives
+    profile_key = _scorecard_profile_key(result.get("analysis_type"))
+    profile = SCORECARD_PROFILES[profile_key]
+    financial_by_alt = {
+        _as_text(item.get("alternative"), ""): item
+        for item in _as_list(result.get("financial_model"))
+        if isinstance(item, dict) and _as_text(item.get("alternative"), "")
+    }
+
+    criteria: list[dict[str, Any]] = []
+    totals_accumulator = {alternative: 0.0 for alternative in alternatives}
+    confidence_by_alt: dict[str, list[str]] = {alternative: [] for alternative in alternatives}
+    strength_candidates: dict[str, list[tuple[float, str]]] = {alternative: [] for alternative in alternatives}
+    weakness_candidates: dict[str, list[tuple[float, str]]] = {alternative: [] for alternative in alternatives}
+
+    for criterion_id, name, weight, financial_field, mode, keywords in profile:
+        raw_values: dict[str, float | None] = {}
+        for alternative in alternatives:
+            financial = financial_by_alt.get(alternative, {})
+            raw_values[alternative] = _as_number(financial.get(financial_field)) if financial_field else None
+
+        if mode == "cost":
+            normalized_scores = _cost_scores(raw_values, lower_is_better=True)
+        elif mode == "risk":
+            normalized_scores = {
+                alternative: (_cost_scores(raw_values, lower_is_better=True).get(alternative) if any(value is not None for value in raw_values.values()) else _risk_penalty(result, alternative, keywords)[0])
+                for alternative in alternatives
+            }
+        else:
+            normalized_scores = _cost_scores(raw_values, lower_is_better=False) if any(value is not None for value in raw_values.values()) else {}
+
+        alternative_rows: list[dict[str, Any]] = []
+        for alternative in alternatives:
+            evidence_item = _find_transparency_evidence(result, alternative, keywords)
+            raw_value: Any = raw_values.get(alternative)
+            source = "calculado" if raw_value is not None else "faltante"
+            confidence = "media" if raw_value is not None else "baja"
+            evidence = "Dato financiero calculado desde financial_model." if raw_value is not None else "Dato no disponible en financial_model."
+            comment = "Puntaje calculado con base cuantitativa disponible." if raw_value is not None else "Puntaje preliminar penalizado por falta de dato directo."
+
+            if evidence_item:
+                evidence_value = _value_or_status(evidence_item.get("value"), name)
+                evidence = f"{_as_text(evidence_item.get('field'))}: {evidence_value}"
+                source = _scorecard_source_from_type(evidence_item.get("type"))
+                confidence = _normalize_spanish_confidence(evidence_item.get("confidence_level"))
+                if raw_value is None:
+                    raw_value = evidence_value
+                    if source == "faltante":
+                        normalized_scores[alternative] = min(normalized_scores.get(alternative, 55), 55)
+                    elif mode == "benefit":
+                        normalized_scores[alternative] = _qualitative_benefit_score(evidence_value, confidence)
+
+            if mode == "risk" and raw_values.get(alternative) is None:
+                risk_score, risk_comment = _risk_penalty(result, alternative, keywords)
+                normalized_scores[alternative] = risk_score
+                comment = risk_comment
+
+            if source in {"estimado", "benchmark"}:
+                normalized_scores[alternative] = min(normalized_scores.get(alternative, 65), 72)
+                confidence = "media" if confidence == "alta" else confidence
+                comment = f"{comment} Dato estimado/benchmark; validar antes de decidir."
+            if source == "faltante":
+                normalized_scores[alternative] = min(normalized_scores.get(alternative, 55), 55)
+                confidence = "baja"
+
+            normalized = round(float(normalized_scores.get(alternative, 55)), 2)
+            weighted = round(normalized * float(weight) / 100, 2)
+            totals_accumulator[alternative] += weighted
+            confidence_by_alt[alternative].append(confidence)
+            strength_candidates[alternative].append((normalized, name))
+            weakness_candidates[alternative].append((normalized, name))
+            alternative_rows.append(
+                {
+                    "alternative": alternative,
+                    "raw_value": _value_or_status(raw_value, name),
+                    "normalized_score": normalized,
+                    "weighted_score": weighted,
+                    "evidence": evidence,
+                    "source": source,
+                    "confidence_level": confidence,
+                    "comment": comment,
+                }
+            )
+
+        criteria.append(
+            {
+                "criterion_id": criterion_id,
+                "criterion_name": name,
+                "description": f"Criterio ponderado para {_as_text(result.get('analysis_type'), profile_key)}.",
+                "weight": weight,
+                "applies_to_analysis_type": profile_key,
+                "scoring_logic": "Costo menor obtiene mayor puntaje; beneficios y soporte con mejor evidencia obtienen mayor puntaje; riesgos y datos faltantes penalizan score y confianza.",
+                "alternatives": alternative_rows,
+            }
+        )
+
+    ordered = sorted(totals_accumulator.items(), key=lambda item: item[1], reverse=True)
+    totals = []
+    for rank, (alternative, total_score) in enumerate(ordered, start=1):
+        strengths = sorted(strength_candidates.get(alternative, []), reverse=True)
+        weaknesses = sorted(weakness_candidates.get(alternative, []))
+        totals.append(
+            {
+                "alternative": alternative,
+                "total_score": round(total_score, 2),
+                "level": _score_level(total_score),
+                "rank": rank,
+                "main_strength": strengths[0][1] if strengths else "No determinado",
+                "main_weakness": weaknesses[0][1] if weaknesses else "No determinado",
+                "confidence_level": _combined_confidence(confidence_by_alt.get(alternative, [])),
+            }
+        )
+
+    economic_option = min(
+        (item for item in _as_list(result.get("financial_model")) if isinstance(item, dict) and _as_number(item.get("net_tco")) is not None),
+        key=lambda item: _as_number(item.get("net_tco")) or float("inf"),
+        default=None,
+    )
+    lowest_risk = max(
+        totals,
+        key=lambda item: ({"alta": 3, "media": 2, "baja": 1}.get(item["confidence_level"], 1), item["total_score"]),
+        default=None,
+    )
+    winner = totals[0] if totals else None
+    decision_summary = {
+        "economic_option": _as_text(economic_option.get("alternative") if isinstance(economic_option, dict) else None, winner["alternative"] if winner else "No determinado"),
+        "technical_option": winner["alternative"] if winner else "No determinado",
+        "lowest_risk_option": lowest_risk["alternative"] if lowest_risk else "No determinado",
+        "balanced_option": winner["alternative"] if winner else "No determinado",
+        "final_recommended_option": winner["alternative"] if winner else "No determinado",
+        "rationale": (
+            f"{winner['alternative']} obtiene el mayor score multicriterio ({winner['total_score']}/100), "
+            f"con fortaleza principal en {winner['main_strength']} y debilidad principal en {winner['main_weakness']}."
+        )
+        if winner
+        else "No hay suficientes alternativas para construir scorecard.",
+    }
+
+    return {
+        "scoring_method": f"Scorecard multicriterio TCO de 100 puntos adaptado a {profile_key}. Weighted score = normalized_score * weight / 100.",
+        "total_possible_score": 100,
+        "confidence_level": _combined_confidence([item["confidence_level"] for item in totals]),
+        "criteria": criteria,
+        "totals": totals,
+        "decision_summary": decision_summary,
+    }
+
+
+def sanitize_scorecard(result: dict[str, Any]) -> dict[str, Any]:
+    existing = result.get("scorecard") if isinstance(result.get("scorecard"), dict) else {}
+    if not existing.get("criteria") or not existing.get("totals"):
+        return build_scorecard(result)
+
+    criteria: list[dict[str, Any]] = []
+    for criterion in _as_list(existing.get("criteria")):
+        if not isinstance(criterion, dict):
+            continue
+        weight = _as_number(criterion.get("weight")) or 0
+        alternatives = []
+        for item in _as_list(criterion.get("alternatives")):
+            if not isinstance(item, dict):
+                continue
+            normalized = _as_number(item.get("normalized_score"))
+            weighted = _as_number(item.get("weighted_score"))
+            if weighted is not None and weighted > 100 and weight:
+                weighted = weighted / 100
+            if weighted is None and normalized is not None:
+                weighted = normalized * weight / 100
+            alternatives.append(
+                {
+                    "alternative": _as_text(item.get("alternative")),
+                    "raw_value": _value_or_status(item.get("raw_value"), _as_text(criterion.get("criterion_name"), "")),
+                    "normalized_score": round(normalized if normalized is not None else 55, 2),
+                    "weighted_score": round(weighted if weighted is not None else 0, 2),
+                    "evidence": _as_text(item.get("evidence"), "Evidencia no especificada."),
+                    "source": _scorecard_source_from_type(item.get("source")),
+                    "confidence_level": _normalize_spanish_confidence(item.get("confidence_level")),
+                    "comment": _as_text(item.get("comment"), "Puntaje preliminar."),
+                }
+            )
+        criteria.append(
+            {
+                "criterion_id": _as_text(criterion.get("criterion_id"), f"criterion_{len(criteria) + 1}"),
+                "criterion_name": _as_text(criterion.get("criterion_name"), "Criterio"),
+                "description": None if criterion.get("description") is None else _as_text(criterion.get("description")),
+                "weight": weight,
+                "applies_to_analysis_type": None if criterion.get("applies_to_analysis_type") is None else _as_text(criterion.get("applies_to_analysis_type")),
+                "scoring_logic": None if criterion.get("scoring_logic") is None else _as_text(criterion.get("scoring_logic")),
+                "alternatives": alternatives,
+            }
+        )
+
+    totals = []
+    for index, item in enumerate(_as_list(existing.get("totals")), start=1):
+        if not isinstance(item, dict):
+            continue
+        score = _as_number(item.get("total_score")) or 0
+        totals.append(
+            {
+                "alternative": _as_text(item.get("alternative")),
+                "total_score": round(score, 2),
+                "level": _as_text(item.get("level"), _score_level(score)),
+                "rank": int(_as_number(item.get("rank")) or index),
+                "main_strength": _as_text(item.get("main_strength"), "No determinado"),
+                "main_weakness": _as_text(item.get("main_weakness"), "No determinado"),
+                "confidence_level": _normalize_spanish_confidence(item.get("confidence_level")),
+            }
+        )
+    totals = sorted(totals, key=lambda item: item["rank"])
+    decision = existing.get("decision_summary") if isinstance(existing.get("decision_summary"), dict) else {}
+    fallback = build_scorecard({**result, "scorecard": {}})
+    fallback_decision = fallback["decision_summary"]
+    return {
+        "scoring_method": _as_text(existing.get("scoring_method"), "Scorecard multicriterio TCO ponderado de 100 puntos"),
+        "total_possible_score": _as_number(existing.get("total_possible_score")) or 100,
+        "confidence_level": _normalize_spanish_confidence(existing.get("confidence_level"), _combined_confidence([item["confidence_level"] for item in totals])),
+        "criteria": criteria,
+        "totals": totals,
+        "decision_summary": {
+            "economic_option": _as_text(decision.get("economic_option"), fallback_decision.get("economic_option")),
+            "technical_option": _as_text(decision.get("technical_option"), fallback_decision.get("technical_option")),
+            "lowest_risk_option": _as_text(decision.get("lowest_risk_option"), fallback_decision.get("lowest_risk_option")),
+            "balanced_option": _as_text(decision.get("balanced_option"), fallback_decision.get("balanced_option")),
+            "final_recommended_option": _as_text(decision.get("final_recommended_option"), fallback_decision.get("final_recommended_option")),
+            "rationale": _as_text(decision.get("rationale"), fallback_decision.get("rationale")),
+        },
+    }
+
+
+def reinforce_recommendation_from_scorecard(result: dict[str, Any]) -> None:
+    scorecard = result.get("scorecard") if isinstance(result.get("scorecard"), dict) else {}
+    decision = scorecard.get("decision_summary") if isinstance(scorecard.get("decision_summary"), dict) else {}
+    recommendation = result.get("strategic_recommendation") if isinstance(result.get("strategic_recommendation"), dict) else {}
+    for target, source in [
+        ("economic_option", "economic_option"),
+        ("technical_option", "technical_option"),
+        ("lowest_risk_option", "lowest_risk_option"),
+        ("balanced_option", "balanced_option"),
+        ("final_recommended_option", "final_recommended_option"),
+        ("recommendation_rationale", "rationale"),
+    ]:
+        current = _as_text(recommendation.get(target), "")
+        if not current or current in {"No especificado", "No determinado"}:
+            recommendation[target] = decision.get(source)
+    result["strategic_recommendation"] = recommendation
 
 
 def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -1029,6 +1474,8 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
     result["benchmark_assumptions"] = sanitize_benchmark_assumptions(result)
     result["financial_model"] = build_financial_model(result)
     result["transparency_table"] = build_transparency_table(result)
+    result["scorecard"] = sanitize_scorecard(result)
+    reinforce_recommendation_from_scorecard(result)
 
     if usage:
         result["tokens_input"] = usage.get("tokens_input")

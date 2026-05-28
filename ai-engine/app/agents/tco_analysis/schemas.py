@@ -200,6 +200,65 @@ class FinancialModelItem(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ScorecardAlternativeScore(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    alternative: str
+    raw_value: str | float | int | None = None
+    normalized_score: float | None = None
+    weighted_score: float | None = None
+    evidence: str | None = None
+    source: Literal["documento", "usuario", "calculado", "estimado", "benchmark", "faltante"] = "faltante"
+    confidence_level: Literal["alta", "media", "baja"] = "baja"
+    comment: str | None = None
+
+
+class ScorecardCriterion(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    criterion_id: str
+    criterion_name: str
+    description: str | None = None
+    weight: float
+    applies_to_analysis_type: str | None = None
+    scoring_logic: str | None = None
+    alternatives: list[ScorecardAlternativeScore] = Field(default_factory=list)
+
+
+class ScorecardTotal(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    alternative: str
+    total_score: float
+    level: str
+    rank: int
+    main_strength: str
+    main_weakness: str
+    confidence_level: Literal["alta", "media", "baja"] = "baja"
+
+
+class ScorecardDecisionSummary(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    economic_option: str | None = None
+    technical_option: str | None = None
+    lowest_risk_option: str | None = None
+    balanced_option: str | None = None
+    final_recommended_option: str | None = None
+    rationale: str | None = None
+
+
+class TcoScorecard(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    scoring_method: str = "Scorecard multicriterio TCO ponderado de 100 puntos"
+    total_possible_score: float = 100
+    confidence_level: Literal["alta", "media", "baja"] = "baja"
+    criteria: list[ScorecardCriterion] = Field(default_factory=list)
+    totals: list[ScorecardTotal] = Field(default_factory=list)
+    decision_summary: ScorecardDecisionSummary = Field(default_factory=ScorecardDecisionSummary)
+
+
 class TcoTotalItem(BaseModel):
     alternative: str
     initial_price: float | None = None
@@ -278,6 +337,7 @@ class TcoAnalysisResult(BaseModel):
     benchmark_assumptions: list[BenchmarkAssumption] = Field(default_factory=list)
     transparency_table: list[TransparencyItem] = Field(default_factory=list)
     financial_model: list[FinancialModelItem] = Field(default_factory=list)
+    scorecard: TcoScorecard | None = None
     tco_totals: list[TcoTotalItem] = Field(default_factory=list)
     ranking: list[RankingItem] = Field(default_factory=list)
     interpretation: Interpretation

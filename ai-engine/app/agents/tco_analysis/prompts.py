@@ -34,7 +34,7 @@ Principios obligatorios:
 - Construye una tabla de transparencia para cada dato clave con alternativa, dato,
   valor, fuente, tipo de dato, nivel de confianza y observacion.
 - Construye tablas comparativas claras usando las estructuras JSON solicitadas.
-- Genera score, ranking y recomendacion final.
+- Genera scorecard profesional, score, ranking y recomendacion final.
 - Identifica mejor opcion economica, mejor opcion tecnica, mejor opcion de menor riesgo
   y mejor opcion balanceada cuando existan varias alternativas.
 - La opcion recomendada no siempre debe ser la mas barata.
@@ -197,11 +197,20 @@ Tablas comparativas:
   como fila con "No especificado" solo para completar una plantilla.
 
 Calificacion y ranking:
-- Cuando existan varias alternativas, genera score de 0 a 100.
+- Cuando existan varias alternativas, genera scorecard profesional de 100 puntos.
+- El scorecard debe tener criterios ponderados, peso por criterio, puntaje por
+  alternativa, evidencia, fuente, confianza y comentario.
+- Calcula weighted_score como aporte ponderado del criterio en escala final:
+  normalized_score * weight / 100. El total_score final debe sumar hasta 100.
+- Usa financial_model, base_parameters, benchmark_assumptions, transparency_table,
+  risk_analysis y tco_dashboard_matrix como fuentes principales del scorecard.
+- Penaliza datos faltantes o estimados bajando puntaje y confianza; no asignes 100
+  a un dato faltante. No uses 0 automaticamente si el analisis puede ser preliminar.
 - Ponderacion base: TCO total 35%, riesgo total 20%, garantia/soporte 15%, calidad
   tecnica o desempeno 15%, tiempo de entrega 5%, valor estrategico 10%.
 - Puedes ajustar la ponderacion segun el caso, pero debes explicarla en
   score_breakdown.weighted_formula y en la razon del ranking.
+- Tambien debes explicar el metodo en scorecard.scoring_method.
 - En flota vehicular, da mas peso a mantenimiento, consumo, garantia, red de talleres
   y valor residual.
 - En software, da mas peso a implementacion, soporte, escalabilidad, usuarios y
@@ -215,8 +224,29 @@ Calificacion y ranking:
   preliminar razonado segun la evidencia disponible y reduce la calificacion por baja
   confianza.
 - Incluye score_label con escala: Excelente (90-100), Muy buena (80-89), Buena
-  (70-79), Regular (60-69), Debil (<60).
+  (70-79), Aceptable con reservas (60-69), Riesgosa / requiere revision (<60).
 - Explica por que una alternativa queda primera, segunda o tercera.
+
+Ponderaciones base dinamicas para scorecard:
+- Flota vehicular: inversion inicial 20%, TCO neto total 25%, consumo/operacion 15%,
+  garantia 10%, red de talleres/soporte 10%, valor residual/depreciacion 10%,
+  riesgo operativo y mantenimiento 10%.
+- Software/SaaS: TCO neto total 25%, implementacion 15%, soporte 15%,
+  integracion/escalabilidad 15%, riesgo contractual 10%, costo por usuario 10%,
+  tiempo de adopcion 10%.
+- Servicios: TCO total del contrato 25%, alcance 20%, SLA 15%,
+  experiencia/capacidad del proveedor 15%, riesgo de incumplimiento 10%,
+  soporte/continuidad 10%, penalidades/garantias 5%.
+- Importacion vs compra local: TCO puesto en destino 30%, lead time 15%,
+  riesgo logistico 15%, soporte local/garantia 15%, riesgo cambiario 10%,
+  flexibilidad de abastecimiento 10%, riesgo tributario/aduanero 5%.
+- Maquinaria/equipos: TCO neto total 25%, productividad 20%, mantenimiento 15%,
+  vida util 15%, repuestos/soporte 10%, energia/operacion 10%, valor residual 5%.
+- Repuestos/insumos: costo total de abastecimiento 25%, calidad/especificacion 20%,
+  lead time 15%, riesgo de abastecimiento 15%, costo logistico/almacenamiento 10%,
+  merma/obsolescencia 10%, flexibilidad del proveedor 5%.
+- Si un criterio no aplica, redistribuye o ajusta pesos y explicalo. No uses criterios
+  de vehiculos para software o servicios.
 
 Reglas anti-alucinacion:
 - No inventes impuestos, aranceles, tipo de cambio, fletes, seguros, costos legales ni
@@ -361,6 +391,52 @@ EXPECTED_JSON_SHAPE = {
             "warnings": ["string"],
         }
     ],
+    "scorecard": {
+        "scoring_method": "string",
+        "total_possible_score": 100,
+        "confidence_level": "alta|media|baja",
+        "criteria": [
+            {
+                "criterion_id": "string",
+                "criterion_name": "string",
+                "description": "string",
+                "weight": 0,
+                "applies_to_analysis_type": "string",
+                "scoring_logic": "string",
+                "alternatives": [
+                    {
+                        "alternative": "string",
+                        "raw_value": "numero o texto",
+                        "normalized_score": 0,
+                        "weighted_score": 0,
+                        "evidence": "string",
+                        "source": "documento|usuario|calculado|estimado|benchmark|faltante",
+                        "confidence_level": "alta|media|baja",
+                        "comment": "string",
+                    }
+                ],
+            }
+        ],
+        "totals": [
+            {
+                "alternative": "string",
+                "total_score": 0,
+                "level": "Excelente|Muy buena|Buena|Aceptable con reservas|Riesgosa / requiere revision",
+                "rank": 1,
+                "main_strength": "string",
+                "main_weakness": "string",
+                "confidence_level": "alta|media|baja",
+            }
+        ],
+        "decision_summary": {
+            "economic_option": "string",
+            "technical_option": "string",
+            "lowest_risk_option": "string",
+            "balanced_option": "string",
+            "final_recommended_option": "string",
+            "rationale": "string",
+        },
+    },
     "tco_matrix": [
         {
             "cost_component": "Componente TCO dinamico y aplicable al caso, por ejemplo licencia, implementacion, honorarios, SLA, flete, mantenimiento, repuestos, soporte, riesgo, costo anualizado, TCO por usuario/hora/km si aplica, valor residual solo si aplica, TCO total estimado",
@@ -510,6 +586,9 @@ def build_user_prompt(
             "Construye financial_model por alternativa usando TCO_NETO = inversion inicial + costos logisticos + implementacion + operacion + mantenimiento + soporte + seguros + financiamiento + costos administrativos + costos de riesgo + costos de salida - valor residual.",
             "Construye transparency_table para los datos clave: precios, cantidad, moneda, horizonte, impuestos, flete, seguro, instalacion, mantenimiento, operacion, soporte, riesgos, valor residual, TCO neto, TCO anualizado y unidad de uso si aplica.",
             "Si usas un benchmark o estimado, registralo en benchmark_assumptions, assumptions_and_limits y transparency_table con type estimado. Si no estimas, registralo como faltante.",
+            "Si hay dos o mas alternativas, construye scorecard profesional de 100 puntos con criterios ponderados adaptados al tipo de compra, puntaje por alternativa, evidencia, fuente, confianza y comentario.",
+            "El scorecard debe usar financial_model, transparency_table, benchmark_assumptions, riesgos y matriz TCO; no debe depender solo de texto narrativo.",
+            "El ranking debe ser coherente con scorecard.totals. Explica fortalezas y debilidades por alternativa. No hagas ganar automaticamente a la alternativa mas barata.",
             "Construye matriz TCO y tablas comparativas con datos reales cuando existan, datos calculados cuando haya base suficiente y 'No especificado' cuando no existan.",
             "En tco_matrix, usa una fila por componente TCO disponible o relevante adaptado al tipo de compra; no devuelvas solo una fila de TCO total si hay componentes mencionados.",
             "Ademas construye tco_dashboard_matrix como matriz visual universal: secciones por bloque de costo, filas por componente, columnas por alternativa, totales, KPIs compactos y celdas sin vacios.",

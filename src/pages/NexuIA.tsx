@@ -450,6 +450,21 @@ const NexuIA = () => {
       { value: 'custom_brand' as const, label: 'PDF con mi logo', enabled: Boolean(modes?.customBrand) },
     ].filter((mode) => mode.enabled);
   }, [pdfOptionsQuery.data]);
+  const exportFormatOptions = useMemo(
+    () => [
+      { value: 'pdf' as const, label: 'PDF' },
+      ...(!isDashboardCreator ? [{ value: 'docx' as const, label: 'Word' }] : []),
+      { value: 'pptx' as const, label: 'PowerPoint' },
+      { value: 'xlsx' as const, label: 'Excel' },
+    ],
+    [isDashboardCreator],
+  );
+
+  useEffect(() => {
+    if (isDashboardCreator && selectedExportFormat === 'docx') {
+      setSelectedExportFormat('pdf');
+    }
+  }, [isDashboardCreator, selectedExportFormat]);
   const isAdminUser = user?.role === 'admin';
   const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
   const canUseSelectedAgent = Boolean(selectedAgent) && (isAgentActive || (isAdminUser && selectedAgent?.status !== 'hidden'));
@@ -663,10 +678,9 @@ const NexuIA = () => {
         onChange={(event) => setSelectedExportFormat(event.target.value as AgentExportFormat)}
         className="h-9 rounded-full border border-border bg-background px-3 text-xs text-foreground"
       >
-        <option value="pdf">PDF</option>
-        <option value="docx">Word</option>
-        <option value="pptx">PowerPoint</option>
-        <option value="xlsx">Excel</option>
+        {exportFormatOptions.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
       </select>
       <span>Plantilla</span>
       <select
@@ -2774,6 +2788,79 @@ const NexuIA = () => {
                           </table>
                         </div>
                       </div>
+
+                      {tcoPresentation?.scorecard.criteria.length || tcoPresentation?.scorecard.totals.length ? (
+                        <div className="rounded-2xl border border-primary/15 bg-white p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-foreground">Scorecard profesional</p>
+                              <p className="mt-1 text-xs leading-5 text-muted-foreground/70">
+                                {tcoPresentation.scorecard.scoringMethod}. Confianza: {tcoPresentation.scorecard.confidenceLevel}.
+                              </p>
+                            </div>
+                            <div className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                              {tcoPresentation.scorecard.totalPossibleScore} pts
+                            </div>
+                          </div>
+
+                          {tcoPresentation.scorecard.criteria.length ? (
+                            <div className="mt-3 overflow-x-auto rounded-xl border border-primary/10">
+                              <table className="w-full min-w-[980px] text-left text-sm">
+                                <thead className="bg-primary/5 text-xs uppercase tracking-[0.14em] text-muted-foreground/70">
+                                  <tr>
+                                    <th className="px-4 py-3 font-medium">Criterio</th>
+                                    <th className="px-4 py-3 font-medium">Peso</th>
+                                    {tcoPresentation.alternatives.map((alternative) => (
+                                      <th key={alternative.id} className="px-4 py-3 text-right font-medium">{alternative.label}</th>
+                                    ))}
+                                    <th className="px-4 py-3 font-medium">Evidencia</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {tcoPresentation.scorecard.criteria.map((criterion, index) => {
+                                    const alternatives = Array.isArray(criterion.alternatives) ? criterion.alternatives as Array<Record<string, unknown>> : [];
+                                    return (
+                                      <tr key={String(criterion.criterion_id ?? index)} className="border-t border-primary/10">
+                                        <td className="px-4 py-3 font-medium text-foreground">{textValue(criterion.criterion_name)}</td>
+                                        <td className="px-4 py-3 text-muted-foreground">{textValue(criterion.weight)}%</td>
+                                        {tcoPresentation.alternatives.map((alternative) => {
+                                          const score = alternatives.find((item) => textValue(item.alternative, '') === alternative.label);
+                                          return (
+                                            <td key={`${String(criterion.criterion_id ?? index)}-${alternative.label}`} className="px-4 py-3 text-right text-muted-foreground">
+                                              {score ? `${textValue(score.normalized_score)} / 100` : 'Dato faltante'}
+                                            </td>
+                                          );
+                                        })}
+                                        <td className="px-4 py-3 text-xs leading-5 text-muted-foreground">
+                                          {textValue(alternatives[0]?.evidence ?? criterion.scoring_logic)}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          ) : null}
+
+                          {tcoPresentation.scorecard.totals.length ? (
+                            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                              {tcoPresentation.scorecard.totals.map((item) => (
+                                <div key={`${textValue(item.rank)}-${textValue(item.alternative)}`} className="rounded-xl bg-primary/5 p-3">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {textValue(item.rank)}. {textValue(item.alternative)}
+                                  </p>
+                                  <p className="mt-1 text-sm font-medium text-primary">
+                                    Score: {textValue(item.total_score)} / 100 - {textValue(item.level)}
+                                  </p>
+                                  <p className="mt-1 text-xs text-muted-foreground">Fortaleza: {textValue(item.main_strength)}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">Debilidad: {textValue(item.main_weakness)}</p>
+                                  <p className="mt-1 text-xs text-muted-foreground">Confianza: {textValue(item.confidence_level)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
 
                       <div className="grid gap-4 lg:grid-cols-2">
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
