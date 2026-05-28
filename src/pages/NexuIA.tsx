@@ -896,6 +896,22 @@ const NexuIA = () => {
     setTermsFields((current) => ({ ...current, [name]: value }));
   };
 
+  const getUsableTermsSuggestion = (placeholder?: string) => {
+    const suggestion = placeholder?.trim();
+    if (!suggestion) return '';
+    return suggestion.replace(/^(ejemplo|sugerencia)\s*:\s*/i, '').trim();
+  };
+
+  const applyTermsFieldSuggestion = (field: TermsFormField) => {
+    const suggestion = getUsableTermsSuggestion(field.placeholder);
+    if (!suggestion) return;
+    updateTermsField(field.name, suggestion);
+    toast({
+      title: 'Sugerencia aplicada',
+      description: 'Puedes editar el texto antes de generar los documentos.',
+    });
+  };
+
   const handleCreateTermsForm = () => {
     if (!termsInitialDescription.trim()) {
       toast({
@@ -1734,12 +1750,29 @@ const NexuIA = () => {
     }
 
     const Control = field.type === 'textarea' ? Textarea : Input;
+    const fieldSuggestion = getUsableTermsSuggestion(field.placeholder);
+    const canApplySuggestion = Boolean(fieldSuggestion) && !termsFields[field.name]?.trim();
     return (
       <div key={field.name} className="min-w-0 space-y-1.5">
-        <label className="text-sm font-medium text-foreground/80">
-          {field.label}
-          {field.required ? <span className="text-destructive"> *</span> : null}
-        </label>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+          <label className="text-sm font-medium text-foreground/80">
+            {field.label}
+            {field.required ? <span className="text-destructive"> *</span> : null}
+          </label>
+          {canApplySuggestion ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 rounded-full px-2 text-xs text-primary hover:bg-primary/10"
+              onClick={() => applyTermsFieldSuggestion(field)}
+              aria-label={`Usar sugerencia para ${field.label}`}
+            >
+              <Sparkles className="mr-1 h-3.5 w-3.5" />
+              Usar sugerencia
+            </Button>
+          ) : null}
+        </div>
         <Control
           value={termsFields[field.name] ?? ''}
           onChange={(event) => updateTermsField(field.name, event.target.value)}
