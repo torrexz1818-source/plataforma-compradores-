@@ -399,6 +399,24 @@ function formatDate() {
 }
 
 function getDefaultFileName(input: PdfInput, extension: AgentExportFormat) {
+  if (isTermsOfReferenceResult(input.result)) {
+    const result = asRecord(input.result);
+    const processCode = asText(result.process_code || asRecord(getTermsDocument(result).general_data).requirement_name || result.title || input.title, '')
+      .replace(/\.[a-z0-9]+$/i, '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 70) || new Date().toISOString().slice(0, 10);
+    const prefix = extension === 'pdf'
+      ? 'BuyerNodus_Paquete_Contratacion'
+      : extension === 'xlsx'
+        ? 'BuyerNodus_Matrices_Cronograma'
+        : extension === 'pptx'
+          ? 'BuyerNodus_Resumen_Comite'
+          : 'BuyerNodus_Documentos_Contratacion';
+    return `${prefix}_${processCode}.${extension}`;
+  }
   const base = (input.fileName || input.title || 'resultado-nodus-ia')
     .replace(/\.[a-z0-9]+$/i, '')
     .normalize('NFD')
@@ -1492,6 +1510,245 @@ function termsListRows(items: unknown[], label = 'Detalle') {
   return items.map((item, index) => ({ N: index + 1, [label]: asText(item) }));
 }
 
+function termsGeneratedDocuments(result: Record<string, unknown>) {
+  const docs = asArray(result.generated_documents).map((item) => asText(item, '')).filter(Boolean);
+  return docs.length ? docs : ['TDR', 'Bases del Concurso', 'Invitacion a postores', 'Cronograma'];
+}
+
+function normalizeTermsDocumentName(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function termsHasDocument(result: Record<string, unknown>, name: 'tdr' | 'bases' | 'invitacion' | 'cronograma') {
+  const docs = termsGeneratedDocuments(result).map(normalizeTermsDocumentName);
+  if (name === 'tdr') return docs.some((item) => item.includes('tdr') || item.includes('termino'));
+  if (name === 'bases') return docs.some((item) => item.includes('bases') || item.includes('concurso'));
+  if (name === 'invitacion') return docs.some((item) => item.includes('invitacion') || item.includes('correo') || item.includes('postor'));
+  return docs.some((item) => item.includes('cronograma') || item.includes('calendario'));
+}
+
+function getTermsContractingEntity(result: Record<string, unknown>) {
+  return asRecord(result.contracting_entity);
+}
+
+function getTermsKeyValueRows(result: Record<string, unknown>) {
+  const document = getTermsDocument(result);
+  const general = getTermsGeneralData(result);
+  const bases = getTermsTenderBases(result);
+  const entity = getTermsContractingEntity(result);
+  return [
+    { Campo: 'Nombre del proceso', Valor: general.requirement_name ?? result.title },
+    { Campo: 'Codigo del proceso', Valor: result.process_code },
+    { Campo: 'Documentos generados', Valor: termsGeneratedDocuments(result).join(', ') },
+    { Campo: 'Tipo de contratacion identificado', Valor: document.tdr_type ?? result.requirement_type },
+    { Campo: 'Entidad convocante', Valor: entity.business_name ?? entity.legal_name ?? entity.name ?? '[COMPLETAR: entidad convocante]' },
+    { Campo: 'Area solicitante', Valor: entity.requesting_area ?? general.category ?? result.category },
+    { Campo: 'Modalidad', Valor: bases.modality ?? bases.process_type ?? result.document_request ?? '[SUGERIDO] Concurso privado' },
+    { Campo: 'Presupuesto referencial', Valor: bases.reference_budget ?? document.reference_budget ?? '[COMPLETAR: presupuesto referencial]' },
+    { Campo: 'Plazo de ejecucion', Valor: general.required_date ?? bases.execution_term ?? '[SUGERIDO: confirmar plazo]' },
+    { Campo: 'Fecha limite de propuestas', Valor: bases.proposal_deadline ?? '[SUGERIDO: definir en cronograma]' },
+    { Campo: 'Puntaje tecnico/economico', Valor: asArray(document.evaluation_matrix).length ? 'Matriz de 100 puntos' : '[SUGERIDO: validar ponderacion]' },
+    { Campo: 'Nivel de riesgo', Valor: result.risk_level },
+  ];
+}
+
+function getTermsDashboardKpis(result: Record<string, unknown>) {
+  const document = getTermsDocument(result);
+  const bases = getTermsTenderBases(result);
+  const bidderCount = asArray(result.invited_bidders).length;
+  const pendingCount = asArray(result.missing_information).length + getTermsPendingRows(result).filter((row) => row.Tipo === '[COMPLETAR]').length;
+  const scoreTotal = asArray(document.evaluation_matrix).map(asRecord).reduce((sum, item) => sum + (Number(item.score) || 0), 0);
+  return [
+    { title: 'Tipo de contratacion', value: asText(document.tdr_type ?? result.requirement_type), description: 'Clasificacion usada para adaptar documentos.' },
+    { title: 'Presupuesto', value: asText(bases.reference_budget ?? document.reference_budget, '[COMPLETAR]'), description: 'Monto referencial informado o pendiente.' },
+    { title: 'Plazo', value: asText(getTermsGeneralData(result).required_date ?? bases.execution_term, '[SUGERIDO]'), description: 'Plazo visible en el paquete.' },
+    { title: 'Documentos', value: String(termsGeneratedDocuments(result).length), description: termsGeneratedDocuments(result).join(', ') },
+    { title: 'Postores', value: bidderCount ? String(bidderCount) : '[COMPLETAR]', description: 'Empresas o contactos invitados.' },
+    { title: 'Limite propuestas', value: asText(bases.proposal_deadline, '[SUGERIDO]'), description: 'Fecha o hito para recepcion.' },
+    { title: 'Evaluacion', value: scoreTotal ? `${scoreTotal} pts` : '[SUGERIDO]', description: 'La matriz debe sumar 100 puntos.' },
+    { title: 'Pendientes', value: String(pendingCount), description: 'Datos por completar o confirmar.' },
+  ];
+}
+
+function getTermsEvaluationRows(result: Record<string, unknown>) {
+  const document = getTermsDocument(result);
+  const matrix = asArray(document.evaluation_matrix).map(asRecord).map((item) => ({
+    Criterio: item.criterion,
+    Subcriterio: item.subcriterion,
+    'Puntaje maximo': item.score,
+    'Evidencia requerida': item.required_evidence,
+    Tipo: item.type ?? 'Tecnico/Economico',
+    Observaciones: item.observations ?? '',
+  }));
+  if (matrix.length) return matrix;
+  return termsListRows(asArray(document.evaluation_criteria).length ? asArray(document.evaluation_criteria) : asArray(getTermsTenderBases(result).evaluation_criteria), 'Criterio')
+    .map((item) => ({ ...item, 'Puntaje maximo': '[SUGERIDO]', 'Evidencia requerida': '[COMPLETAR]' }));
+}
+
+function getTermsComplianceRows(result: Record<string, unknown>) {
+  return asArray(getTermsDocument(result).compliance_matrix).map(asRecord).map((item) => ({
+    Requisito: item.requirement,
+    Tipo: item.type,
+    'Obligatorio/Deseable': item.mandatory,
+    'Evidencia requerida': item.expected_evidence,
+    Estado: item.status,
+    Comentario: item.comment ?? item.observations ?? '',
+  }));
+}
+
+function getTermsRequiredDocumentRows(result: Record<string, unknown>) {
+  const document = getTermsDocument(result);
+  const bases = getTermsTenderBases(result);
+  const docs = asArray(document.required_documents).length ? asArray(document.required_documents) : asArray(bases.requested_documentation);
+  return docs.map((item, index) => ({
+    Codigo: `DOC-${String(index + 1).padStart(2, '0')}`,
+    Documento: asText(item),
+    'Responsable de entrega': 'Postor',
+    'Obligatorio/Deseable': index < 5 ? 'Obligatorio' : 'Deseable',
+    Etapa: 'Presentacion de propuesta',
+    Observaciones: '',
+  }));
+}
+
+function getTermsGuaranteeRows(result: Record<string, unknown>) {
+  return asArray(getTermsDocument(result).guarantees_penalties).map(asRecord).map((item) => ({
+    Tipo: item.type ?? item.item,
+    'Porcentaje/Monto': item.amount ?? item.percentage ?? '[SUGERIDO]',
+    Vigencia: item.validity ?? '[SUGERIDO]',
+    'Momento de entrega': item.delivery_moment ?? '[SUGERIDO]',
+    'Condicion de ejecucion': item.condition,
+    Observaciones: item.status ?? '',
+  }));
+}
+
+function getTermsRiskRows(result: Record<string, unknown>) {
+  return asArray(getTermsDocument(result).identified_risks).map(asRecord).map((item) => ({
+    Riesgo: item.risk,
+    Impacto: item.impact,
+    Probabilidad: item.probability ?? '[SUGERIDO]',
+    Nivel: item.level ?? item.impact,
+    Mitigacion: item.mitigation,
+    Responsable: item.responsible ?? '[COMPLETAR]',
+  }));
+}
+
+function getTermsScheduleRows(result: Record<string, unknown>) {
+  const rows = asArray(result.process_schedule).map(asRecord);
+  if (rows.length) {
+    return rows.map((item, index) => ({
+      Fase: item.phase,
+      N: item.number ?? index + 1,
+      'Actividad/Hito': item.activity,
+      Responsable: item.responsible,
+      'Fecha inicio': item.start,
+      'Fecha fin': item.end,
+      Duracion: item.duration,
+      Entregable: item.deliverable,
+      Observaciones: item.observations,
+      Estado: asText(item.start, '').includes('[COMPLETAR]') ? '[COMPLETAR]' : 'Referencial',
+    }));
+  }
+  return termsListRows(asArray(result.tender_process), 'Actividad/Hito').map((item) => ({
+    Fase: 'Proceso de seleccion',
+    ...item,
+    Responsable: '[COMPLETAR]',
+    'Fecha inicio': '[SUGERIDO]',
+    'Fecha fin': '[SUGERIDO]',
+    Duracion: '[SUGERIDO]',
+    Entregable: 'Hito del proceso',
+    Observaciones: '',
+    Estado: 'Referencial',
+  }));
+}
+
+function getTermsTdrRows(result: Record<string, unknown>) {
+  const document = getTermsDocument(result);
+  const general = getTermsGeneralData(result);
+  const sections: Array<[string, string, unknown, string?]> = [
+    ['Encabezado', 'Nombre del proceso', general.requirement_name ?? result.title],
+    ['Generalidades', 'Tipo y categoria', `${asText(general.requirement_type ?? result.requirement_type)} | ${asText(general.category ?? result.category)}`],
+    ['Antecedentes y justificacion', 'Antecedentes', document.background],
+    ['Antecedentes y justificacion', 'Justificacion', document.justification],
+    ['Objeto y alcance', 'Objetivo', document.objective],
+    ['Objeto y alcance', 'Alcance', document.scope],
+    ['Documentos y normas tecnicas', 'Documentacion requerida', asArray(document.required_documents).join(' | ')],
+    ['Documentos y normas tecnicas', 'Normas o marco aplicable', asArray(document.applicable_standards).join(' | ')],
+    ['Especificaciones tecnicas minimas', 'Caracteristicas tecnicas', asArray(document.technical_characteristics).join(' | ')],
+    ['Plazo de ejecucion y cronograma', 'Cronograma sugerido', asArray(document.suggested_schedule).join(' | ')],
+    ['Presupuesto y condiciones de pago', 'Condiciones comerciales', asArray(document.commercial_conditions).join(' | ')],
+    ['Requisitos de habilitacion', 'Condiciones para proveedores', asArray(document.supplier_conditions).join(' | ')],
+    ['Contenido de la propuesta', 'Criterios de evaluacion', asArray(document.evaluation_criteria).join(' | ')],
+    ['Supervision y control de calidad', 'Condiciones de ejecucion', asArray(document.execution_conditions).join(' | ')],
+    ['Seguridad, salud y medio ambiente', 'Requisitos de seguridad', asArray(document.safety_requirements).join(' | ')],
+    ['Recepcion, garantia y penalidades', 'Garantias y penalidades', getTermsGuaranteeRows(result).map((item) => `${asText(item.Tipo)}: ${asText(item['Condicion de ejecucion'])}`).join(' | ')],
+    ['Disposiciones finales', 'Anexos sugeridos', asArray(document.suggested_annexes).join(' | ')],
+    ['Aprobacion y firmas', 'Firmas', '[COMPLETAR: responsables de aprobacion]'],
+  ];
+  return sections.map(([section, subsection, content, observations]) => ({
+    Seccion: section,
+    Subseccion: subsection,
+    Contenido: asText(content),
+    Observaciones: observations ?? '',
+  }));
+}
+
+function getTermsBasesRows(result: Record<string, unknown>) {
+  const bases = getTermsTenderBases(result);
+  return [
+    ['CAPITULO I - Disposiciones generales', 'Objeto del proceso', bases.object],
+    ['CAPITULO I - Disposiciones generales', 'Entidad convocante y modalidad', `${asText(getTermsContractingEntity(result).business_name ?? '[COMPLETAR: entidad convocante]')} | ${asText(bases.modality ?? '[SUGERIDO] Concurso privado')}`],
+    ['CAPITULO I - Disposiciones generales', 'Presupuesto, moneda y presentacion', asText(bases.reference_budget ?? '[COMPLETAR: presupuesto referencial]')],
+    ['CAPITULO II - Participantes y requisitos', 'Requisitos minimos del proveedor', asArray(bases.minimum_supplier_requirements).join(' | ')],
+    ['CAPITULO III - Contenido de la propuesta', 'Documentacion solicitada', asArray(bases.requested_documentation).join(' | ')],
+    ['CAPITULO III - Contenido de la propuesta', 'Condiciones de presentacion', asArray(bases.proposal_submission_conditions).join(' | ')],
+    ['CAPITULO IV - Garantias y seguros', 'Garantias y penalidades', getTermsGuaranteeRows(result).map((item) => `${asText(item.Tipo)}: ${asText(item['Condicion de ejecucion'])}`).join(' | ')],
+    ['CAPITULO V - Proceso de seleccion', 'Cronograma y etapas', getTermsScheduleRows(result).map((item) => `${asText(item.N)}. ${asText(item['Actividad/Hito'])}`).join(' | ')],
+    ['CAPITULO VI - Criterios de evaluacion', 'Matriz de evaluacion', getTermsEvaluationRows(result).map((item) => `${asText(item.Criterio)} (${asText(item['Puntaje maximo'])})`).join(' | ')],
+    ['CAPITULO VI - Criterios de evaluacion', 'Criterios de adjudicacion', asArray(bases.award_criteria).join(' | ')],
+    ['Disposiciones finales', 'Descalificacion y observaciones', [...asArray(bases.disqualification_conditions), ...asArray(bases.buyer_observations)].join(' | ')],
+  ].map(([chapter, numeral, content]) => ({ Capitulo: chapter, Numeral: numeral, Contenido: asText(content), Observaciones: '' }));
+}
+
+function getTermsInvitationRows(result: Record<string, unknown>) {
+  const email = getTermsEmail(result);
+  return [
+    { Seccion: 'Destinatario', Contenido: '[COMPLETAR: ingresar empresas invitadas]', 'Variable editable': '{razon_social}', Observaciones: '' },
+    { Seccion: 'Asunto', Contenido: email.subject, 'Variable editable': '', Observaciones: '' },
+    { Seccion: 'Referencia', Contenido: `Proceso ${asText(result.process_code)} - ${asText(result.title)}`, 'Variable editable': '', Observaciones: '' },
+    { Seccion: 'Saludo', Contenido: email.greeting, 'Variable editable': '{nombre_contacto}', Observaciones: '' },
+    { Seccion: 'Presentacion del proceso', Contenido: email.body, 'Variable editable': '', Observaciones: '' },
+    { Seccion: 'Documentos adjuntos', Contenido: asArray(email.attached_documents).join(', '), 'Variable editable': '', Observaciones: '' },
+    { Seccion: 'Fechas clave', Contenido: `Plazo: ${asText(email.response_deadline)} | Consultas: ${asText(getTermsTenderBases(result).question_deadline)} | Propuestas: ${asText(getTermsTenderBases(result).proposal_deadline)}`, 'Variable editable': '', Observaciones: '' },
+    { Seccion: 'Contacto', Contenido: email.contact_details, 'Variable editable': '', Observaciones: '' },
+    { Seccion: 'Cierre y firma', Contenido: email.closing, 'Variable editable': '{responsable_proceso}', Observaciones: '' },
+  ];
+}
+
+function getTermsPendingRows(result: Record<string, unknown>) {
+  const rows: Array<Record<string, unknown>> = [];
+  const addPending = (value: unknown, documentName: string) => {
+    const text = asText(value, '');
+    if (!text) return;
+    const matches = text.match(/\[(COMPLETAR|SUGERIDO)[^\]]*\][^|;\n.]*/gi);
+    matches?.forEach((match) => {
+      const type = normalizeTermsDocumentName(match).includes('completar') ? '[COMPLETAR]' : '[SUGERIDO]';
+      rows.push({
+        'Campo pendiente': match.trim(),
+        Tipo: type,
+        Urgencia: type === '[COMPLETAR]' ? 'Alta' : 'Media',
+        'Documento afectado': documentName,
+        'Accion requerida': type === '[COMPLETAR]' ? 'Completar antes de enviar el paquete.' : 'Confirmar o ajustar la sugerencia.',
+      });
+    });
+  };
+  asArray(result.missing_information).forEach((item) => addPending(item, 'Paquete'));
+  getTermsTdrRows(result).forEach((row) => addPending(row.Contenido, 'TDR'));
+  getTermsBasesRows(result).forEach((row) => addPending(row.Contenido, 'Bases'));
+  getTermsInvitationRows(result).forEach((row) => addPending(row.Contenido, 'Invitacion'));
+  getTermsScheduleRows(result).forEach((row) => Object.values(row).forEach((value) => addPending(value, 'Cronograma')));
+  return rows.length ? rows : [{ 'Campo pendiente': 'Sin pendientes criticos detectados', Tipo: 'OK', Urgencia: 'Baja', 'Documento afectado': 'Paquete', 'Accion requerida': 'Revisar internamente antes de enviar.' }];
+}
+
 function formatValue(value: unknown, depth = 0): string[] {
   const prefix = depth > 0 ? '  '.repeat(depth) : '';
   if (value === null || value === undefined) return [`${prefix}No especificado`];
@@ -1565,29 +1822,46 @@ function addTermsOfReferencePdf(input: PdfInput) {
   const general = getTermsGeneralData(result);
   const bases = getTermsTenderBases(result);
   const email = getTermsEmail(result);
-  const subtitle = `Tipo: ${asText(result.requirement_type)} | Categoria: ${asText(result.category)} | Riesgo: ${asText(result.risk_level)}`;
+  const generatedDocs = termsGeneratedDocuments(result);
+  const subtitle = `Tipo: ${asText(document.tdr_type ?? result.requirement_type)} | Categoria: ${asText(result.category)} | Riesgo: ${asText(result.risk_level)}`;
 
   addHeader(ctx, input, subtitle);
+  addCard(ctx, 'Portada ejecutiva', [
+    `${getBrandName(ctx.mode, ctx.options) || 'Buyer Nodus'} | Paquete de documentos de contratacion`,
+    `Proceso: ${asText(general.requirement_name ?? result.title)}`,
+    `Codigo: ${asText(result.process_code)}`,
+    `Entidad convocante: ${asText(getTermsContractingEntity(result).business_name ?? getTermsContractingEntity(result).legal_name, '[COMPLETAR: entidad convocante]')}`,
+    `Version del documento: ${formatDate()}`,
+  ], 'blue');
+
   addCard(ctx, 'Resumen ejecutivo', [
     asText(result.executive_summary),
-    `Documentos generados: ${asArray(result.generated_documents).map(asText).join(', ') || 'Paquete completo'}`,
+    `Documentos generados: ${generatedDocs.join(', ')}`,
     `Codigo de proceso: ${asText(result.process_code)}`,
+    `Presupuesto referencial: ${asText(bases.reference_budget ?? document.reference_budget, '[COMPLETAR: presupuesto referencial]')}`,
+    `Fecha limite de propuestas: ${asText(bases.proposal_deadline, '[SUGERIDO: definir fecha limite]')}`,
     `Completitud: ${asText(result.completion_level)} (${asText(result.completion_score)}%)`,
     `Ubicacion: ${asText(general.location)} | Fecha requerida: ${asText(general.required_date)}`,
   ]);
 
-  const metrics = asArray(result.dashboard_metrics).map(asRecord);
-  if (metrics.length) {
-    addSection(ctx, 'Metricas del requerimiento');
-    addTable(
-      ctx,
-      ['Metrica', 'Valor', 'Estado'],
-      metrics.map((item) => [item.label ?? item.metric, item.value, item.status]),
-      [70, 45, ctx.maxWidth - 115],
-    );
-  }
+  addSection(ctx, 'Indice del paquete');
+  addTable(
+    ctx,
+    ['Codigo', 'Documento', 'Estado'],
+    [
+      ['DOC-01', 'Terminos de Referencia', termsHasDocument(result, 'tdr') ? 'Generado' : 'No solicitado'],
+      ['DOC-02', 'Bases del Concurso', termsHasDocument(result, 'bases') ? 'Generado' : 'No solicitado'],
+      ['DOC-03', 'Invitacion a Postores', termsHasDocument(result, 'invitacion') ? 'Generado' : 'No solicitado'],
+      ['DOC-04', 'Cronograma del Proceso', termsHasDocument(result, 'cronograma') ? 'Generado' : 'No solicitado'],
+      ['DOC-05', 'Pendientes y recomendaciones', 'Incluido'],
+    ],
+    [28, ctx.maxWidth - 70, 42],
+  );
 
-  addSection(ctx, 'Documento generado');
+  addDashboardKpiCards(ctx, getTermsDashboardKpis(result));
+
+  if (termsHasDocument(result, 'tdr')) {
+    addSection(ctx, 'DOC-01 - Terminos de Referencia completo');
   addTable(
     ctx,
     ['Campo', 'Contenido'],
@@ -1605,23 +1879,31 @@ function addTermsOfReferencePdf(input: PdfInput) {
     ],
     [42, ctx.maxWidth - 42],
   );
-  addBulletList(ctx, 'Caracteristicas tecnicas', asArray(document.technical_characteristics), 30);
-  addBulletList(ctx, 'Actividades requeridas', asArray(document.required_activities), 30);
-  addBulletList(ctx, 'Entregables finales', asArray(document.final_deliverables), 30);
-  addBulletList(ctx, 'Documentacion requerida al proveedor', asArray(document.required_documents), 30);
-  addBulletList(ctx, 'Normas tecnicas, estandares o marco aplicable', asArray(document.applicable_standards), 30);
-  addBulletList(ctx, 'Plazo y cronograma sugerido', asArray(document.suggested_schedule), 30);
-  addBulletList(ctx, 'Condiciones de ejecucion o metodologia', asArray(document.execution_conditions), 30);
-  addBulletList(ctx, 'Requisitos de seguridad', asArray(document.safety_requirements), 30);
-  addBulletList(ctx, 'Condiciones para proveedores', asArray(document.supplier_conditions), 30);
-  addBulletList(ctx, 'Condiciones comerciales sugeridas', asArray(document.commercial_conditions), 30);
-  addBulletList(ctx, 'Criterios de evaluacion', asArray(document.evaluation_criteria), 30);
-  addBulletList(ctx, 'Estructura de informe final', asArray(document.final_report_structure), 30);
-  addBulletList(ctx, 'Anexos sugeridos', asArray(document.suggested_annexes), 30);
+    addTable(
+      ctx,
+      ['Seccion', 'Subseccion', 'Contenido'],
+      getTermsTdrRows(result).map((item) => [item.Seccion, item.Subseccion, item.Contenido]),
+      [42, 40, ctx.maxWidth - 82],
+    );
+    addBulletList(ctx, 'Caracteristicas tecnicas', asArray(document.technical_characteristics), 80);
+    addBulletList(ctx, 'Actividades requeridas', asArray(document.required_activities), 80);
+    addBulletList(ctx, 'Entregables finales', asArray(document.final_deliverables), 80);
+    addBulletList(ctx, 'Documentacion requerida al proveedor', asArray(document.required_documents), 80);
+    addBulletList(ctx, 'Normas tecnicas, estandares o marco aplicable', asArray(document.applicable_standards), 80);
+    addBulletList(ctx, 'Plazo y cronograma sugerido', asArray(document.suggested_schedule), 80);
+    addBulletList(ctx, 'Condiciones de ejecucion o metodologia', asArray(document.execution_conditions), 80);
+    addBulletList(ctx, 'Requisitos de seguridad', asArray(document.safety_requirements), 80);
+    addBulletList(ctx, 'Condiciones para proveedores', asArray(document.supplier_conditions), 80);
+    addBulletList(ctx, 'Condiciones comerciales sugeridas', asArray(document.commercial_conditions), 80);
+    addBulletList(ctx, 'Criterios de evaluacion', asArray(document.evaluation_criteria), 80);
+    addBulletList(ctx, 'Estructura de informe final', asArray(document.final_report_structure), 80);
+    addBulletList(ctx, 'Anexos sugeridos', asArray(document.suggested_annexes), 80);
+  }
 
+  addSection(ctx, 'Matrices y tablas clave');
   const evaluationRows = asArray(document.evaluation_matrix).map(asRecord);
   if (evaluationRows.length) {
-    addSection(ctx, 'Criterios de evaluacion ponderados');
+    addSection(ctx, 'Matriz de evaluacion 100 puntos');
     addTable(
       ctx,
       ['Criterio', 'Subcriterio', 'Puntaje', 'Evidencia'],
@@ -1674,7 +1956,8 @@ function addTermsOfReferencePdf(input: PdfInput) {
     );
   }
 
-  addSection(ctx, 'Bases sugeridas para licitacion');
+  if (termsHasDocument(result, 'bases')) {
+    addSection(ctx, 'DOC-02 - Bases del Concurso completas');
   addTable(
     ctx,
     ['Seccion', 'Contenido'],
@@ -1695,8 +1978,16 @@ function addTermsOfReferencePdf(input: PdfInput) {
     ],
     [50, ctx.maxWidth - 50],
   );
+    addTable(
+      ctx,
+      ['Capitulo', 'Numeral', 'Contenido'],
+      getTermsBasesRows(result).map((item) => [item.Capitulo, item.Numeral, item.Contenido]),
+      [54, 44, ctx.maxWidth - 98],
+    );
+  }
 
-  addSection(ctx, 'Correo sugerido para proveedores');
+  if (termsHasDocument(result, 'invitacion')) {
+    addSection(ctx, 'DOC-03 - Invitacion a postores completa');
   addTable(
     ctx,
     ['Campo', 'Contenido'],
@@ -1711,20 +2002,26 @@ function addTermsOfReferencePdf(input: PdfInput) {
     ],
     [38, ctx.maxWidth - 38],
   );
-
-  addSection(ctx, 'Proceso y acciones');
-  addBulletList(ctx, 'Flujo del requerimiento', asArray(result.flow_steps), 30);
-  addBulletList(ctx, 'Proceso sugerido de licitacion', asArray(result.tender_process), 30);
-
-  const scheduleRows = asArray(result.process_schedule).map(asRecord);
-  if (scheduleRows.length) {
-    addSection(ctx, 'Cronograma del proceso');
     addTable(
       ctx,
-      ['N', 'Fase', 'Actividad', 'Inicio', 'Fin', 'Entregable'],
-      scheduleRows.map((item) => [item.number, item.phase, item.activity, item.start, item.end, item.deliverable]),
-      [12, 38, 55, 28, 28, ctx.maxWidth - 161],
+      ['Seccion', 'Contenido', 'Variable editable'],
+      getTermsInvitationRows(result).map((item) => [item.Seccion, item.Contenido, item['Variable editable']]),
+      [38, ctx.maxWidth - 78, 40],
     );
+  }
+
+  if (termsHasDocument(result, 'cronograma')) {
+    addSection(ctx, 'DOC-04 - Cronograma completo');
+    addBulletList(ctx, 'Resumen de fechas clave', asArray(result.tender_process), 80);
+  const scheduleRows = asArray(result.process_schedule).map(asRecord);
+  if (scheduleRows.length) {
+    addTable(
+      ctx,
+        ['N', 'Fase', 'Actividad', 'Responsable', 'Inicio', 'Fin', 'Duracion', 'Entregable', 'Observaciones'],
+        scheduleRows.map((item) => [item.number, item.phase, item.activity, item.responsible, item.start, item.end, item.duration, item.deliverable, item.observations]),
+        [8, 24, 34, 22, 18, 18, 16, 28, ctx.maxWidth - 168],
+    );
+  }
   }
 
   const bidderRows = asArray(result.invited_bidders).map(asRecord);
@@ -1738,8 +2035,14 @@ function addTermsOfReferencePdf(input: PdfInput) {
     );
   }
 
-  addBulletList(ctx, 'Informacion faltante', asArray(result.missing_information), 30);
-  addBulletList(ctx, 'Recomendaciones accionables', asArray(result.buyer_recommendations), 30);
+  addSection(ctx, 'Pendientes y recomendaciones');
+  addTable(
+    ctx,
+    ['Campo pendiente', 'Tipo', 'Urgencia', 'Documento afectado', 'Accion requerida'],
+    getTermsPendingRows(result).map((item) => [item['Campo pendiente'], item.Tipo, item.Urgencia, item['Documento afectado'], item['Accion requerida']]),
+    [46, 24, 22, 36, ctx.maxWidth - 128],
+  );
+  addBulletList(ctx, 'Recomendaciones accionables', asArray(result.buyer_recommendations), 3);
   addBulletList(ctx, 'Preguntas recomendadas para completar el TDR', asArray(result.recommended_questions), 30);
   addBulletList(ctx, 'Validacion de consistencia', asArray(result.consistency_validation), 30);
 
@@ -2400,9 +2703,144 @@ async function downloadTcoResultXlsx(input: AgentExportInput, result: Record<str
   downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), getDefaultFileName(input, 'xlsx'));
 }
 
+async function downloadTermsOfReferenceXlsx(input: AgentExportInput, result: Record<string, unknown>) {
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Buyer Nodus';
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  const primary = '0E109E';
+  const secondary = '5A31D5';
+  const amber = 'FEF3C7';
+  const rose = 'FEE2E2';
+  const green = 'DCFCE7';
+  const borderColor = 'CBD5E1';
+  const textColor = '0F172A';
+
+  const styleHeader = (row: import('exceljs').Row, fill = primary) => {
+    row.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+      cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+      cell.alignment = { vertical: 'middle', wrapText: true };
+      cell.border = { bottom: { style: 'thin', color: { argb: borderColor } } };
+    });
+  };
+
+  const styleWorksheet = (worksheet: import('exceljs').Worksheet, headerRow = 1) => {
+    worksheet.views = [{ state: 'frozen', ySplit: headerRow, showGridLines: false }];
+    styleHeader(worksheet.getRow(headerRow));
+    worksheet.columns.forEach((column) => {
+      let width = 14;
+      column.eachCell?.({ includeEmpty: false }, (cell) => {
+        const text = String(cell.value ?? '');
+        width = Math.max(width, Math.min(text.length + 4, 58));
+        cell.alignment = { vertical: 'top', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'E2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
+          left: { style: 'thin', color: { argb: 'E2E8F0' } },
+          right: { style: 'thin', color: { argb: 'E2E8F0' } },
+        };
+        if (text.includes('[COMPLETAR]') || text.includes('[COMPLETAR:')) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rose } };
+          cell.font = { color: { argb: '991B1B' }, bold: true };
+        } else if (text.includes('[SUGERIDO]') || text.includes('[SUGERIDO')) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: amber } };
+          cell.font = { color: { argb: '92400E' } };
+        }
+      });
+      column.width = width;
+    });
+    const columnCount = worksheet.columnCount || 1;
+    worksheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow, column: columnCount } };
+  };
+
+  const addRowsSheet = (name: string, rows: Array<Record<string, unknown>>, fallback: Record<string, unknown>) => {
+    const worksheet = workbook.addWorksheet(name.slice(0, 31));
+    const safeRows = rows.length ? rows : [fallback];
+    const keys = Object.keys(safeRows[0] ?? {});
+    worksheet.addRow(keys);
+    safeRows.forEach((row) => worksheet.addRow(keys.map((key) => row[key] ?? '')));
+    styleWorksheet(worksheet);
+    return worksheet;
+  };
+
+  const summary = workbook.addWorksheet('Portada Resumen', { views: [{ showGridLines: false }] });
+  summary.columns = [{ width: 24 }, { width: 28 }, { width: 28 }, { width: 28 }, { width: 28 }, { width: 42 }];
+  summary.mergeCells('A1:F1');
+  summary.getCell('A1').value = 'BUYER NODUS | Paquete de documentos de contratacion';
+  summary.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primary } };
+  summary.getCell('A1').font = { bold: true, color: { argb: 'FFFFFF' }, size: 15 };
+  summary.getRow(1).height = 28;
+  summary.mergeCells('A3:F3');
+  summary.getCell('A3').value = asText(getTermsGeneralData(result).requirement_name ?? result.title, input.title);
+  summary.getCell('A3').font = { bold: true, color: { argb: textColor }, size: 20 };
+  summary.addRow([]);
+  summary.addRow(['Fecha', formatDate(), 'Codigo', asText(result.process_code), 'Estado', asText(result.completion_level, 'Borrador')]);
+  summary.getRow(5).eachCell((cell, colNumber) => {
+    if (colNumber % 2 === 1) cell.font = { bold: true, color: { argb: primary } };
+  });
+
+  const kpis = getTermsDashboardKpis(result);
+  summary.addRow([]);
+  const titleRow = summary.addRow(['Panel del proceso']);
+  titleRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: secondary } };
+  titleRow.getCell(1).font = { bold: true, color: { argb: 'FFFFFF' } };
+  kpis.forEach((kpi, index) => {
+    const row = 8 + Math.floor(index / 2) * 3;
+    const col = 1 + (index % 2) * 3;
+    summary.mergeCells(row, col, row, col + 2);
+    summary.mergeCells(row + 1, col, row + 1, col + 2);
+    summary.mergeCells(row + 2, col, row + 2, col + 2);
+    summary.getCell(row, col).value = asText(kpi.title);
+    summary.getCell(row + 1, col).value = asText(kpi.value);
+    summary.getCell(row + 2, col).value = asText(kpi.description);
+    [row, row + 1, row + 2].forEach((rowNumber) => {
+      for (let colNumber = col; colNumber <= col + 2; colNumber += 1) {
+        const cell = summary.getCell(rowNumber, colNumber);
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: rowNumber === row + 1 ? green : 'F8FAFC' } };
+        cell.border = { top: { style: 'thin', color: { argb: 'E2E8F0' } }, bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, left: { style: 'thin', color: { argb: 'E2E8F0' } }, right: { style: 'thin', color: { argb: 'E2E8F0' } } };
+        cell.alignment = { vertical: 'middle', wrapText: true };
+      }
+    });
+    summary.getCell(row, col).font = { bold: true, color: { argb: primary } };
+    summary.getCell(row + 1, col).font = { bold: true, color: { argb: textColor }, size: 14 };
+  });
+
+  addRowsSheet('Datos del proceso', getTermsKeyValueRows(result), { Campo: 'Datos del proceso', Valor: '[COMPLETAR]' });
+  addRowsSheet('Cronograma', getTermsScheduleRows(result), { Fase: '[COMPLETAR]', N: 1, 'Actividad/Hito': '[COMPLETAR]', Responsable: '[COMPLETAR]' });
+  addRowsSheet('Matriz de evaluacion', getTermsEvaluationRows(result), { Criterio: '[COMPLETAR]', 'Puntaje maximo': 100, 'Evidencia requerida': '[COMPLETAR]' });
+  addRowsSheet('Requisitos proveedor', [
+    ...termsListRows(asArray(getTermsDocument(result).supplier_conditions), 'Requisito').map((row) => ({ Requisito: row.Requisito, 'Obligatorio/Deseable': 'Obligatorio', Evidencia: '[COMPLETAR]', 'Aplica/No aplica': 'Aplica', Observaciones: '' })),
+    ...getTermsComplianceRows(result).map((row) => ({ Requisito: row.Requisito, 'Obligatorio/Deseable': row['Obligatorio/Deseable'], Evidencia: row['Evidencia requerida'], 'Aplica/No aplica': 'Por validar', Observaciones: row.Comentario })),
+  ], { Requisito: '[COMPLETAR]', 'Obligatorio/Deseable': 'Obligatorio', Evidencia: '[COMPLETAR]' });
+  addRowsSheet('Documentos requeridos', getTermsRequiredDocumentRows(result), { Codigo: 'DOC-01', Documento: '[COMPLETAR]', 'Responsable de entrega': 'Postor' });
+  addRowsSheet('Matriz cumplimiento', getTermsComplianceRows(result), { Requisito: '[COMPLETAR]', Tipo: 'Tecnico', 'Obligatorio/Deseable': 'Obligatorio', Estado: 'Por validar' });
+  addRowsSheet('Garantias penalidades', getTermsGuaranteeRows(result), { Tipo: '[SUGERIDO]', 'Porcentaje/Monto': '[SUGERIDO]', 'Condicion de ejecucion': '[COMPLETAR]' });
+  addRowsSheet('Riesgos mitigaciones', getTermsRiskRows(result), { Riesgo: '[COMPLETAR]', Impacto: 'Medio', Mitigacion: '[SUGERIDO]' });
+  addRowsSheet('Pendientes', getTermsPendingRows(result), { 'Campo pendiente': 'Sin pendientes criticos detectados', Tipo: 'OK', Urgencia: 'Baja' });
+  if (termsHasDocument(result, 'tdr')) addRowsSheet('TDR completo', getTermsTdrRows(result), { Seccion: 'TDR', Subseccion: '[COMPLETAR]', Contenido: '[COMPLETAR]' });
+  if (termsHasDocument(result, 'bases')) addRowsSheet('Bases completas', getTermsBasesRows(result), { Capitulo: 'Bases', Numeral: '[COMPLETAR]', Contenido: '[COMPLETAR]' });
+  if (termsHasDocument(result, 'invitacion')) addRowsSheet('Invitacion completa', getTermsInvitationRows(result), { Seccion: 'Invitacion', Contenido: '[COMPLETAR]', 'Variable editable': '{razon_social}' });
+  addRowsSheet('Postores invitados', asArray(result.invited_bidders).map(asRecord).map((item) => ({
+    Contacto: item.contact_name,
+    Empresa: item.business_name,
+    Cargo: item.role,
+    Correo: item.email,
+  })), { Contacto: '[COMPLETAR: ingresar empresas invitadas]', Empresa: '[COMPLETAR]', Correo: '[COMPLETAR]' });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), getDefaultFileName(input, 'xlsx'));
+}
+
 async function downloadAgentResultXlsx(input: AgentExportInput) {
-  const XLSX = await import('xlsx');
   const result = asRecord(input.result);
+  if (isTermsOfReferenceResult(result)) {
+    await downloadTermsOfReferenceXlsx(input, result);
+    return;
+  }
+  const XLSX = await import('xlsx');
   if (isDashboardResult(result)) {
     await downloadDashboardResultXlsx(input, result);
     return;
@@ -2413,97 +2851,6 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
   }
   if (isTcoAnalysisResult(result)) {
     await downloadTcoResultXlsx(input, result);
-    return;
-  }
-  if (isTermsOfReferenceResult(result)) {
-    const workbook = XLSX.utils.book_new();
-    const used = new Set<string>();
-    const document = getTermsDocument(result);
-    const general = getTermsGeneralData(result);
-    const bases = getTermsTenderBases(result);
-
-    appendJsonSheet(XLSX, workbook, used, 'Resumen', [
-      { Campo: 'Nombre del requerimiento', Valor: general.requirement_name ?? result.title },
-      { Campo: 'Documentos generados', Valor: asArray(result.generated_documents).map(asText).join(', ') },
-      { Campo: 'Codigo de proceso', Valor: result.process_code },
-      { Campo: 'Tipo de TDR identificado', Valor: document.tdr_type },
-      { Campo: 'Tipo de compra', Valor: general.requirement_type ?? result.requirement_type },
-      { Campo: 'Categoria', Valor: general.category ?? result.category },
-      { Campo: 'Fecha o plazo estimado', Valor: general.required_date },
-      { Campo: 'Resumen ejecutivo', Valor: result.executive_summary },
-      { Campo: 'Antecedentes', Valor: document.background },
-      { Campo: 'Objetivo', Valor: document.objective },
-      { Campo: 'Alcance', Valor: document.scope },
-      { Campo: 'Completitud', Valor: `${asText(result.completion_level)} (${asText(result.completion_score)}%)` },
-      { Campo: 'Nivel de riesgo', Valor: result.risk_level },
-    ]);
-    appendJsonSheet(XLSX, workbook, used, 'Matriz de requisitos', [
-      ...termsListRows(asArray(document.technical_characteristics), 'Especificacion tecnica'),
-      ...termsListRows(asArray(document.supplier_conditions), 'Requisito proveedor'),
-      ...asArray(document.compliance_matrix).map(asRecord).map((item) => ({
-        Requisito: item.requirement,
-        Tipo: item.type,
-        Evidencia: item.expected_evidence,
-        Obligatorio: item.mandatory,
-        Estado: item.status,
-      })),
-    ]);
-    appendJsonSheet(XLSX, workbook, used, 'Documentos requeridos', termsListRows(asArray(document.required_documents).length ? asArray(document.required_documents) : asArray(bases.requested_documentation), 'Documento'));
-    appendJsonSheet(XLSX, workbook, used, 'Criterios de evaluacion', [
-      ...asArray(document.evaluation_matrix).map(asRecord).map((item) => ({
-        Criterio: item.criterion,
-        Subcriterio: item.subcriterion,
-        Puntaje: item.score,
-        Evidencia: item.required_evidence,
-      })),
-      ...termsListRows(asArray(document.evaluation_criteria).length ? asArray(document.evaluation_criteria) : asArray(bases.evaluation_criteria), 'Criterio'),
-      ...termsListRows(asArray(bases.award_criteria), 'Criterio de adjudicacion'),
-    ]);
-    appendJsonSheet(XLSX, workbook, used, 'Cronograma', [
-      ...asArray(result.process_schedule).map(asRecord).map((item) => ({
-        N: item.number,
-        Fase: item.phase,
-        Actividad: item.activity,
-        Responsable: item.responsible,
-        Inicio: item.start,
-        Fin: item.end,
-        Duracion: item.duration,
-        Entregable: item.deliverable,
-        Observaciones: item.observations,
-      })),
-      ...termsListRows(asArray(document.suggested_schedule), 'Hito sugerido'),
-      ...termsListRows(asArray(result.tender_process), 'Paso de proceso'),
-    ]);
-    appendJsonSheet(XLSX, workbook, used, 'Checklist de cumplimiento', asArray(result.checklist).map(asRecord).map((item) => ({
-      Punto: item.label,
-      Estado: item.status,
-      Detalle: item.detail,
-    })));
-    appendJsonSheet(XLSX, workbook, used, 'Riesgos y recomendaciones', [
-      ...asArray(document.identified_risks).map(asRecord).map((item) => ({
-        Tipo: 'Riesgo',
-        Descripcion: item.risk,
-        Impacto: item.impact,
-        Accion: item.mitigation,
-      })),
-      ...termsListRows(asArray(result.buyer_recommendations), 'Accion').map((item) => ({ Tipo: 'Recomendacion', ...item })),
-      ...termsListRows(asArray(result.missing_information), 'Dato pendiente').map((item) => ({ Tipo: 'Dato pendiente', ...item })),
-      ...termsListRows(asArray(result.recommended_questions), 'Pregunta').map((item) => ({ Tipo: 'Pregunta recomendada', ...item })),
-    ]);
-    appendJsonSheet(XLSX, workbook, used, 'Garantias y penalidades', asArray(document.guarantees_penalties).map(asRecord).map((item) => ({
-      Tipo: item.type ?? item.item,
-      Condicion: item.condition,
-      Estado: item.status,
-    })));
-    appendJsonSheet(XLSX, workbook, used, 'Postores invitados', asArray(result.invited_bidders).map(asRecord).map((item) => ({
-      Contacto: item.contact_name,
-      Empresa: item.business_name,
-      Cargo: item.role,
-      Correo: item.email,
-    })));
-    appendJsonSheet(XLSX, workbook, used, 'Anexos sugeridos', termsListRows(asArray(document.suggested_annexes), 'Anexo'));
-    appendJsonSheet(XLSX, workbook, used, 'Documentos de apoyo', asArray(result.supporting_documents_summary).map(asRecord));
-    XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
     return;
   }
   const workbook = XLSX.utils.book_new();
@@ -2962,13 +3309,24 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   const bases = getTermsTenderBases(result);
   const email = getTermsEmail(result);
   let slide = pptx.addSlide();
-  addPptTitle(slide, asText(result.title, input.title));
-  slide.addText(asText(result.executive_summary), { x: 0.65, y: 1.45, w: 11.8, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
-  slide.addText(`Tipo: ${asText(result.requirement_type)}\nCategoria: ${asText(result.category)}\nCompletitud: ${asText(result.completion_level)} (${asText(result.completion_score)}%)\nRiesgo: ${asText(result.risk_level)}`, {
-    x: 0.7,
-    y: 3.1,
-    w: 5.6,
-    h: 1.3,
+  slide.background = { color: 'FFFFFF' };
+  slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'BUYER NODUS', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: '6B63D9' });
+  slide.addText(asText(result.title, input.title), { x: 0.55, y: 1.0, w: 11.9, h: 0.85, fontSize: 29, bold: true, color: '09008B', fit: 'shrink' });
+  slide.addText(asText(result.executive_summary), { x: 0.6, y: 2.15, w: 11.7, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
+  slide.addText(`Codigo: ${asText(result.process_code)}\nEntidad: ${asText(getTermsContractingEntity(result).business_name ?? '[COMPLETAR]')}\nFecha: ${formatDate()}`, {
+    x: 0.65,
+    y: 3.85,
+    w: 5.8,
+    h: 1.1,
+    fontSize: 12,
+    color: '475569',
+    fit: 'shrink',
+  });
+  slide.addText(`Tipo: ${asText(document.tdr_type ?? result.requirement_type)}\nDocumentos: ${termsGeneratedDocuments(result).join(', ')}\nRiesgo: ${asText(result.risk_level)}`, {
+    x: 6.9,
+    y: 3.85,
+    w: 5.4,
+    h: 1.1,
     fontSize: 12,
     color: '475569',
     fit: 'shrink',
@@ -2976,8 +3334,31 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
-  addPptTitle(slide, 'Mini dashboard del requerimiento');
-  addPptRows(slide, asArray(result.dashboard_metrics).map(asRecord), { maxRows: 8 });
+  addPptTitle(slide, 'Resumen del paquete generado', 'Documentos y estado general del proceso de contratacion.');
+  addPptRows(slide, [
+    { Documento: 'TDR', Estado: termsHasDocument(result, 'tdr') ? 'Generado' : 'No solicitado', Uso: 'Detalle tecnico y alcance' },
+    { Documento: 'Bases', Estado: termsHasDocument(result, 'bases') ? 'Generado' : 'No solicitado', Uso: 'Reglas del concurso' },
+    { Documento: 'Invitacion', Estado: termsHasDocument(result, 'invitacion') ? 'Generado' : 'No solicitado', Uso: 'Correo formal a postores' },
+    { Documento: 'Cronograma', Estado: termsHasDocument(result, 'cronograma') ? 'Generado' : 'No solicitado', Uso: 'Hitos y fechas del proceso' },
+  ], { maxRows: 4 });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Datos clave del proceso');
+  slide.addText(`Objeto: ${asText(bases.object ?? document.objective)}\n\nTipo: ${asText(document.tdr_type ?? result.requirement_type)}\nModalidad: ${asText(bases.modality ?? result.document_request)}\nPresupuesto: ${asText(bases.reference_budget ?? document.reference_budget, '[COMPLETAR]')}\nPlazo: ${asText(getTermsGeneralData(result).required_date, '[SUGERIDO]')}\nFecha limite: ${asText(bases.proposal_deadline, '[SUGERIDO]')}`, {
+    x: 0.7,
+    y: 1.35,
+    w: 11.7,
+    h: 4.8,
+    fontSize: 12,
+    color: '475569',
+    fit: 'shrink',
+  });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Panel ejecutivo del proceso', 'KPIs del paquete con el mismo resultado visible en plataforma.');
+  addPptKpiCards(slide, getTermsDashboardKpis(result));
   addPptFooter(slide, input);
 
   slide = pptx.addSlide();
@@ -3061,19 +3442,21 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   })).concat(termsListRows(asArray(bases.award_criteria), 'Criterio de adjudicacion')), { maxRows: 10 });
   addPptFooter(slide, input);
 
-  slide = pptx.addSlide();
-  addPptTitle(slide, 'Bases sugeridas para licitacion');
-  slide.addText(`Objeto: ${asText(bases.object)}\n\nAlcance: ${asText(bases.scope)}\n\nCriterios: ${asArray(bases.evaluation_criteria).map(asText).join(', ')}\n\nAdvertencia: ${asText(bases.disclaimer)}`, {
-    x: 0.65,
-    y: 1.35,
-    w: 11.8,
-    h: 5.2,
-    fontSize: 12,
-    color: '334155',
-    fit: 'shrink',
-    breakLine: false,
-  });
-  addPptFooter(slide, input);
+  if (termsHasDocument(result, 'bases')) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Bases del Concurso', 'Reglas principales, etapas y condiciones de presentacion.');
+    slide.addText(`Objeto: ${asText(bases.object)}\n\nAlcance: ${asText(bases.scope)}\n\nCriterios: ${asArray(bases.evaluation_criteria).map(asText).join(', ')}\n\nAdvertencia: ${asText(bases.disclaimer)}`, {
+      x: 0.65,
+      y: 1.35,
+      w: 11.8,
+      h: 5.2,
+      fontSize: 12,
+      color: '334155',
+      fit: 'shrink',
+      breakLine: false,
+    });
+    addPptFooter(slide, input);
+  }
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Riesgos');
@@ -3084,36 +3467,42 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   })), { maxRows: 8 });
   addPptFooter(slide, input);
 
-  slide = pptx.addSlide();
-  addPptTitle(slide, 'Requisitos y condiciones de licitacion');
-  addPptRows(slide, [
-    ...termsListRows(asArray(bases.minimum_supplier_requirements), 'Requisito'),
-    ...termsListRows(asArray(bases.requested_documentation), 'Documentacion'),
-    ...termsListRows(asArray(bases.proposal_submission_conditions), 'Condicion'),
-    ...termsListRows(asArray(bases.award_criteria), 'Criterio'),
-    ...termsListRows(asArray(bases.disqualification_conditions), 'Descalificacion'),
-    ...termsListRows(asArray(bases.buyer_observations), 'Observacion'),
-  ], { maxRows: 12 });
-  addPptFooter(slide, input);
+  if (termsHasDocument(result, 'bases')) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Requisitos y condiciones del concurso');
+    addPptRows(slide, [
+      ...termsListRows(asArray(bases.minimum_supplier_requirements), 'Requisito'),
+      ...termsListRows(asArray(bases.requested_documentation), 'Documentacion'),
+      ...termsListRows(asArray(bases.proposal_submission_conditions), 'Condicion'),
+      ...termsListRows(asArray(bases.award_criteria), 'Criterio'),
+      ...termsListRows(asArray(bases.disqualification_conditions), 'Descalificacion'),
+      ...termsListRows(asArray(bases.buyer_observations), 'Observacion'),
+    ], { maxRows: 12 });
+    addPptFooter(slide, input);
+  }
 
-  slide = pptx.addSlide();
-  addPptTitle(slide, 'Correo sugerido para proveedores');
-  slide.addText(`Asunto: ${asText(email.subject)}\n\n${asText(email.greeting)}\n\n${asText(email.body)}\n\nAdjuntos: ${asArray(email.attached_documents).map(asText).join(', ')}\nPlazo: ${asText(email.response_deadline)}\nContacto: ${asText(email.contact_details)}\n\n${asText(email.closing)}`, {
-    x: 0.65,
-    y: 1.25,
-    w: 11.8,
-    h: 5.5,
-    fontSize: 11,
-    color: '334155',
-    fit: 'shrink',
-    breakLine: false,
-  });
-  addPptFooter(slide, input);
+  if (termsHasDocument(result, 'invitacion')) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Invitacion a postores', 'Resumen del correo formal y fechas clave.');
+    slide.addText(`Asunto: ${asText(email.subject)}\n\n${asText(email.greeting)}\n\n${asText(email.body)}\n\nAdjuntos: ${asArray(email.attached_documents).map(asText).join(', ')}\nPlazo: ${asText(email.response_deadline)}\nContacto: ${asText(email.contact_details)}\n\n${asText(email.closing)}`, {
+      x: 0.65,
+      y: 1.25,
+      w: 11.8,
+      h: 5.5,
+      fontSize: 11,
+      color: '334155',
+      fit: 'shrink',
+      breakLine: false,
+    });
+    addPptFooter(slide, input);
+  }
 
-  slide = pptx.addSlide();
-  addPptTitle(slide, 'Proceso sugerido de licitacion');
-  addPptRows(slide, termsListRows(asArray(result.tender_process), 'Paso'), { maxRows: 10 });
-  addPptFooter(slide, input);
+  if (termsHasDocument(result, 'cronograma') || termsHasDocument(result, 'bases')) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Proceso sugerido de seleccion');
+    addPptRows(slide, termsListRows(asArray(result.tender_process), 'Paso'), { maxRows: 10 });
+    addPptFooter(slide, input);
+  }
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Faltantes y recomendaciones');
@@ -3124,15 +3513,18 @@ async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Rec
   ], { maxRows: 12 });
   addPptFooter(slide, input);
 
-  slide = pptx.addSlide();
-  addPptTitle(slide, 'Cronograma principal');
-  addPptRows(slide, asArray(result.process_schedule).map(asRecord).map((item) => ({
-    Fase: item.phase,
-    Actividad: item.activity,
-    Inicio: item.start,
-    Fin: item.end,
-  })), { maxRows: 8 });
-  addPptFooter(slide, input);
+  if (termsHasDocument(result, 'cronograma')) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Cronograma del proceso', 'Linea de tiempo visual con fases e hitos criticos.');
+    addPptRows(slide, getTermsScheduleRows(result).map((item) => ({
+      Fase: item.Fase,
+      Hito: item['Actividad/Hito'],
+      Inicio: item['Fecha inicio'],
+      Fin: item['Fecha fin'],
+      Entregable: item.Entregable,
+    })), { maxRows: 9 });
+    addPptFooter(slide, input);
+  }
 
   slide = pptx.addSlide();
   addPptTitle(slide, 'Recomendacion final');
@@ -3530,8 +3922,6 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
 
 export async function downloadAgentResultPdf(input: PdfInput) {
   if (isTermsOfReferenceResult(input.result)) {
-    const captured = await addCapturedDashboardPdf(input);
-    if (captured) return;
     addTermsOfReferencePdf(input);
     return;
   }
