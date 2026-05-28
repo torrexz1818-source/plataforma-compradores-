@@ -749,6 +749,93 @@ function dashboardListRows(items: unknown[], valueKey = 'Valor') {
   return items.map((item, index) => ({ N: index + 1, [valueKey]: asText(item) }));
 }
 
+function proposalSuppliers(result: Record<string, unknown>) {
+  return asArray(result.suppliers).map(asRecord);
+}
+
+function proposalSupplierNames(result: Record<string, unknown>) {
+  return proposalSuppliers(result).map((supplier) => asText(supplier.supplier_name)).filter(Boolean);
+}
+
+function proposalExecutiveRows(result: Record<string, unknown>) {
+  const supplierNames = proposalSupplierNames(result);
+  return asArray(result.executive_comparison_table).map(asRecord).map((row) => {
+    const values = asRecord(row.values);
+    return {
+      'Dato clave': row.row_label,
+      ...supplierNames.reduce<Record<string, unknown>>((record, supplier) => {
+        record[supplier] = values[supplier] || 'No especificado';
+        return record;
+      }, {}),
+    };
+  });
+}
+
+function proposalMatrixRows(result: Record<string, unknown>) {
+  const supplierNames = proposalSupplierNames(result);
+  return asArray(asRecord(result.evaluation_matrix).criteria).map(asRecord).map((criterion) => {
+    const ratings = asRecord(criterion.ratings);
+    return {
+      N: criterion.number,
+      Criterio: criterion.criterion,
+      'Peso %': criterion.weight_percent,
+      ...supplierNames.reduce<Record<string, unknown>>((record, supplier) => {
+        record[supplier] = ratings[supplier] ?? 'No especificado';
+        return record;
+      }, {}),
+      Observaciones: criterion.observations,
+    };
+  });
+}
+
+function proposalWeightedRows(result: Record<string, unknown>) {
+  return asArray(asRecord(result.evaluation_matrix).weighted_totals).map(asRecord).map((item) => ({
+    Proveedor: item.supplier_name,
+    'Puntaje ponderado': Number.isFinite(Number(item.weighted_score))
+      ? `${Number(item.weighted_score).toFixed(2)} / 5.00`
+      : asText(item.weighted_score),
+    Ranking: item.ranking_position,
+  }));
+}
+
+function proposalCriteriaGuideRows(result: Record<string, unknown>) {
+  return asArray(result.criteria_guide).map(asRecord).map((item) => ({
+    N: item.number,
+    Criterio: item.criterion,
+    'Peso %': item.weight_percent,
+    'Escala de valoracion 1 a 5': item.evaluation_scale_description,
+    'Fuente de verificacion': item.verification_source,
+  }));
+}
+
+function proposalRankingRows(result: Record<string, unknown>) {
+  return asArray(result.ranking).map(asRecord).map((item) => ({
+    Posicion: item.position,
+    Proveedor: item.supplier_name,
+    Puntaje: item.weighted_score ? `${Number(item.weighted_score).toFixed(2)} / 5` : `${asText(item.score)} / 100`,
+    Motivo: item.reason,
+  }));
+}
+
+function proposalComparisonRows(result: Record<string, unknown>) {
+  const supplierNames = proposalSupplierNames(result);
+  return asArray(result.comparison_table).map(asRecord).map((row) => {
+    const values = asRecord(row.values);
+    return {
+      Criterio: row.criterion,
+      ...supplierNames.reduce<Record<string, unknown>>((record, supplier) => {
+        record[supplier] = values[supplier] || 'No especificado';
+        return record;
+      }, {}),
+      Comentario: row.comment,
+    };
+  });
+}
+
+function proposalListRows(items: unknown[], valueKey: string) {
+  return items.map((item, index) => ({ N: index + 1, [valueKey]: asText(item) }));
+}
+
 function dashboardChartLegendText(chart: Record<string, unknown>) {
   const explicitLegend = asArray(chart.legend).map(asRecord);
   if (explicitLegend.length) {
@@ -791,10 +878,10 @@ function tcoMatrixRows(result: Record<string, unknown>) {
 }
 
 function tcoRankingRows(result: Record<string, unknown>) {
-  return asArray(result.ranking).map(asRecord).map((item) => ({
+  const model = tcoPresentationModel(result);
+  return model.ranking.map(asRecord).map((item) => ({
     Posicion: item.position,
     Alternativa: item.alternative,
-    Tipo: item.ranking_type,
     Calificacion: item.score,
     Nivel: item.score_label,
     TCO: item.total_tco,
@@ -869,7 +956,6 @@ function tcoTransparencyRows(model: TcoPresentationModel) {
     Dato: item.field,
     Valor: item.value,
     Fuente: item.source,
-    Tipo: item.type,
     Confianza: item.confidence_level,
     Observacion: item.observation,
   }));
@@ -962,7 +1048,7 @@ function tcoRecommendationRows(result: Record<string, unknown>) {
 }
 
 function renderTcoMatrixForPdf(ctx: PdfContext, model: TcoPresentationModel) {
-  const alternatives = model.alternatives.slice(0, 5);
+  const alternatives = model.alternatives.slice(0, 3);
   const headers = ['Componente', ...alternatives.map((item) => item.label), 'Nota'];
   const componentWidth = 46;
   const noteWidth = 36;
@@ -1016,18 +1102,18 @@ function renderTcoScorecardForPdf(ctx: PdfContext, model: TcoPresentationModel) 
   if (totals.length) {
     addTable(
       ctx,
-      ['Pos', 'Alternativa', 'Score', 'Nivel', 'Fortaleza', 'Debilidad'],
-      totals.map((item) => [item.Posicion, item.Alternativa, item.Score, item.Nivel, item.Fortaleza, item.Debilidad]),
-      [13, 34, 18, 30, 48, ctx.maxWidth - 143],
+      ['Pos', 'Alternativa', 'Score', 'Nivel', 'Motivo'],
+      totals.map((item) => [item.Posicion, item.Alternativa, item.Score, item.Nivel, `Fortaleza: ${asText(item.Fortaleza)}. Debilidad: ${asText(item.Debilidad)}.`]),
+      [13, 36, 18, 30, ctx.maxWidth - 97],
     );
   }
   const rows = tcoScorecardRows(model).slice(0, 18);
   if (rows.length) {
     addTable(
       ctx,
-      ['Criterio', 'Peso', 'Alternativa', 'Puntaje', 'Evidencia', 'Confianza'],
-      rows.map((item) => [item.Criterio, item.Peso, item.Alternativa, item.Puntaje, item.Evidencia, item.Confianza]),
-      [38, 15, 32, 19, ctx.maxWidth - 126, 22],
+      ['Criterio', 'Peso', 'Alternativa', 'Puntaje', 'Evidencia'],
+      rows.map((item) => [item.Criterio, item.Peso, item.Alternativa, item.Puntaje, `${asText(item.Evidencia)} (${asText(item.Confianza)})`]),
+      [38, 15, 34, 19, ctx.maxWidth - 106],
     );
   }
 }
@@ -1049,85 +1135,18 @@ function addProposalComparisonPdf(input: PdfInput) {
 
   addHeader(ctx, input, subtitle);
   addCard(ctx, 'Resumen ejecutivo', [
-    `Propuestas evaluadas: ${suppliers.length}`,
-    `Proveedor recomendado: ${recommendedName}`,
-    `Motivo principal: ${asText(recommended.reason || result.executive_summary)}`,
-    `Riesgo principal: ${asText(asArray(recommended.main_risks)[0] || asArray(result.global_risks)[0])}`,
+    asText(result.executive_summary),
   ]);
 
-  addCard(ctx, 'Proveedor recomendado', [
-    `${recommendedName}`,
-    `Puntaje: ${asText(recommended.weighted_score ?? recommended.score, 'Sin puntaje')} / 5`,
-    `Por que gana: ${asText(recommended.reason)}`,
-  ], 'green');
-  addBulletList(ctx, 'Fortalezas clave', asArray(recommended.main_strengths));
-  addBulletList(ctx, 'Riesgos a validar', asArray(recommended.main_risks));
-
-  addSection(ctx, 'Ranking de proveedores');
-  addTable(
-    ctx,
-    ['Posicion', 'Proveedor', 'Puntaje ponderado', 'Nivel', 'Motivo breve'],
-    ranking.map((item, index) => [
-      item.position ?? index + 1,
-      item.supplier_name,
-      item.weighted_score ?? item.score,
-      index === 0 ? 'Recomendado' : index === 1 ? 'Alternativa viable' : 'Requiere validacion',
-      item.reason,
-    ]),
-    [18, 38, 31, 32, ctx.maxWidth - 119],
-  );
-
-  const matrix = asRecord(result.evaluation_matrix);
-  const criteria = asArray(matrix.criteria).map(asRecord);
-  if (criteria.length && suppliers.length) {
-    addSection(ctx, 'Matriz de evaluacion comparativa');
-    const supplierNames = suppliers.map((supplier) => asText(supplier.supplier_name));
-    addTable(
-      ctx,
-      ['N', 'Criterio', 'Peso', ...supplierNames, 'Observacion'],
-      criteria.map((criterion) => {
-        const ratings = asRecord(criterion.ratings);
-        return [
-          criterion.number,
-          criterion.criterion,
-          `${asText(criterion.weight_percent)}%`,
-          ...supplierNames.map((name) => `${asText(ratings[name], '-')}/5`),
-          criterion.observations,
-        ];
-      }),
-      [10, 34, 16, ...supplierNames.map(() => 22), ctx.maxWidth - 60 - supplierNames.length * 22],
-    );
-  }
-
-  addSection(ctx, 'Puntaje ponderado total');
-  addTable(
-    ctx,
-    ['Proveedor', 'Puntaje ponderado', 'Posicion'],
-    asArray(matrix.weighted_totals).map((item) => {
-      const total = asRecord(item);
-      return [total.supplier_name, total.weighted_score, total.ranking_position];
-    }),
-    [70, 55, 35],
-  );
-
-  const criteriaGuide = asArray(result.criteria_guide).map(asRecord);
-  if (criteriaGuide.length) {
-    addSection(ctx, 'Guia de criterios');
-    addTable(
-      ctx,
-      ['Criterio', 'Peso', 'Que evalua', 'Fuente de verificacion'],
-      criteriaGuide.map((item) => [item.criterion, `${asText(item.weight_percent)}%`, item.evaluation_scale_description, item.verification_source]),
-      [40, 18, 65, ctx.maxWidth - 123],
-    );
-  }
+  addCard(ctx, 'Proveedor recomendado', [recommendedName], 'green');
 
   const executiveRows = asArray(result.executive_comparison_table).map(asRecord);
   if (executiveRows.length) {
-    addSection(ctx, 'Comparativo ejecutivo');
+    addSection(ctx, 'Resumen ejecutivo comparativo');
     const supplierNames = suppliers.map((supplier) => asText(supplier.supplier_name));
     addTable(
       ctx,
-      ['Aspecto', ...supplierNames],
+      ['Dato clave', ...supplierNames],
       executiveRows.map((row) => {
         const values = asRecord(row.values);
         return [row.row_label, ...supplierNames.map((name) => values[name] ?? 'No especificado')];
@@ -1136,47 +1155,105 @@ function addProposalComparisonPdf(input: PdfInput) {
     );
   }
 
-  addSection(ctx, 'Ficha resumida por proveedor');
-  suppliers.forEach((supplier) => {
-    addCard(ctx, asText(supplier.supplier_name), [
-      `RUC: ${asText(supplier.ruc)}`,
-      `Contacto: ${asText(supplier.contact || supplier.email || supplier.phone)}`,
-      `Precio: ${asText(supplier.total_amount)} ${asText(supplier.currency, '')}`.trim(),
-      `Forma de pago: ${asText(supplier.payment_terms)}`,
-      `Garantia: ${asText(supplier.warranty)}`,
-    ]);
-    addBulletList(ctx, 'Fortalezas', asArray(supplier.strengths));
-    addBulletList(ctx, 'Riesgos', asArray(supplier.risks));
-    addBulletList(ctx, 'Informacion faltante', asArray(supplier.missing_information));
-  });
+  const matrix = asRecord(result.evaluation_matrix);
+  const criteria = asArray(matrix.criteria).map(asRecord);
+  if (criteria.length && suppliers.length) {
+    addSection(ctx, 'Matriz de evaluación comparativa');
+    addText(ctx, asText(result.auto_generated_criteria_note), { size: 8, color: '#64748b' });
+    addText(ctx, 'Escala de valoración: 1 = Muy deficiente | 2 = Deficiente | 3 = Aceptable | 4 = Bueno | 5 = Excelente. Puntaje ponderado = Valoración x Peso.', { size: 8, color: '#64748b', gap: 1 });
+    const supplierNames = suppliers.map((supplier) => asText(supplier.supplier_name));
+    addTable(
+      ctx,
+      ['N', 'Criterio', 'Peso %', ...supplierNames, 'Observaciones'],
+      criteria.map((criterion) => {
+        const ratings = asRecord(criterion.ratings);
+        return [
+          criterion.number,
+          criterion.criterion,
+          `${asText(criterion.weight_percent)}%`,
+          ...supplierNames.map((name) => asText(ratings[name], 'No especificado')),
+          criterion.observations,
+        ];
+      }),
+      [10, 34, 17, ...supplierNames.map(() => 20), ctx.maxWidth - 61 - supplierNames.length * 20],
+    );
+  }
 
-  addSection(ctx, 'Riesgos globales');
-  addCard(ctx, 'Alertas principales', asArray(result.global_risks).map((item) => `- ${asText(item)}`).join('\n') || 'Sin riesgos globales registrados.', 'amber');
+  const weightedTotals = asArray(matrix.weighted_totals).map(asRecord);
+  if (weightedTotals.length) {
+    addSection(ctx, 'Puntaje ponderado total');
+    addTable(
+      ctx,
+      ['Proveedor', 'Puntaje ponderado', 'Ranking'],
+      weightedTotals.map((item) => [
+        item.supplier_name,
+        Number.isFinite(Number(item.weighted_score)) ? `${Number(item.weighted_score).toFixed(2)} / 5.00` : item.weighted_score,
+        item.ranking_position,
+      ]),
+      [70, 55, 35],
+    );
+  }
 
-  addSection(ctx, 'Informacion faltante');
-  addBulletList(ctx, 'Datos a solicitar o validar', asArray(result.missing_information), 8);
+  const criteriaGuide = asArray(result.criteria_guide).map(asRecord);
+  if (criteriaGuide.length) {
+    addSection(ctx, 'Guía de criterios');
+    addTable(
+      ctx,
+      ['N', 'Criterio', 'Peso %', 'Escala de valoracion 1 a 5', 'Fuente de verificacion'],
+      criteriaGuide.map((item) => [item.number, item.criterion, `${asText(item.weight_percent)}%`, item.evaluation_scale_description, item.verification_source]),
+      [10, 34, 17, 66, ctx.maxWidth - 127],
+    );
+  }
 
-  addSection(ctx, 'Preguntas para proveedores');
+  addSection(ctx, 'Ranking');
   addTable(
     ctx,
-    ['Proveedor', 'Pregunta'],
-    asArray(result.questions_for_suppliers).map((question) => {
-      const text = asText(question);
-      const supplier = suppliers.find((item) => text.toLowerCase().includes(asText(item.supplier_name, '').toLowerCase()));
-      return [supplier?.supplier_name ?? 'General', text];
-    }),
-    [50, ctx.maxWidth - 50],
+    ['Posicion', 'Proveedor', 'Puntaje', 'Motivo'],
+    ranking.map((item, index) => [
+      item.position ?? index + 1,
+      item.supplier_name,
+      item.weighted_score ? `${Number(item.weighted_score).toFixed(2)} / 5` : `${asText(item.score)} / 100`,
+      item.reason,
+    ]),
+    [18, 42, 28, ctx.maxWidth - 88],
   );
 
-  addCard(ctx, 'Recomendacion final', asText(result.final_recommendation), 'green');
+  addSection(ctx, 'Tabla comparativa');
+  const supplierNames = suppliers.map((supplier) => asText(supplier.supplier_name));
+  addTable(
+    ctx,
+    ['Criterio', ...supplierNames, 'Comentario'],
+    asArray(result.comparison_table).map(asRecord).map((row) => {
+      const values = asRecord(row.values);
+      return [row.criterion, ...supplierNames.map((name) => values[name] || 'No especificado'), row.comment];
+    }),
+    [36, ...supplierNames.map(() => 28), ctx.maxWidth - 36 - supplierNames.length * 28],
+  );
+
+  addSection(ctx, 'Riesgos globales');
+  addBulletList(ctx, 'Riesgos globales', asArray(result.global_risks), 12);
+
+  addSection(ctx, 'Información faltante');
+  addBulletList(ctx, 'Información faltante', asArray(result.missing_information), 12);
+
+  addSection(ctx, 'Preguntas sugeridas');
+  addBulletList(ctx, 'Preguntas sugeridas', asArray(result.questions_for_suppliers), 12);
+
+  addCard(ctx, 'Recomendación final', asText(result.final_recommendation), 'green');
   addAdditionalResultSections(ctx, result, [
+    'analysis_title',
+    'service',
+    'objective',
     'recommended_supplier',
     'executive_summary',
     'suppliers',
     'ranking',
+    'auto_generated_criteria_note',
+    'evaluation_scale',
     'evaluation_matrix',
     'criteria_guide',
     'executive_comparison_table',
+    'comparison_table',
     'global_risks',
     'missing_information',
     'questions_for_suppliers',
@@ -1311,9 +1388,9 @@ function addTcoAnalysisPdf(input: PdfInput) {
     addSection(ctx, 'Modelo financiero TCO');
     addTable(
       ctx,
-      ['Alternativa', 'TCO neto', 'TCO anual', 'TCO unitario', 'Adquisicion', 'Operacion', 'Mantenimiento', 'Confianza'],
-      financialRows.map((item) => [item.Alternativa, item['TCO neto'], item['TCO anual'], item['TCO unitario'], item.Adquisicion, item.Operacion, item.Mantenimiento, item.Confianza]),
-      [30, 24, 24, 24, 24, 24, 28, ctx.maxWidth - 178],
+      ['Alternativa', 'TCO neto', 'TCO anual', 'TCO unitario', 'Confianza'],
+      financialRows.map((item) => [item.Alternativa, item['TCO neto'], item['TCO anual'], item['TCO unitario'], item.Confianza]),
+      [42, 34, 34, 34, ctx.maxWidth - 144],
     );
   }
 
@@ -1336,9 +1413,9 @@ function addTcoAnalysisPdf(input: PdfInput) {
     addSection(ctx, 'Transparencia de datos');
     addTable(
       ctx,
-      ['Alternativa', 'Dato', 'Valor', 'Tipo', 'Confianza', 'Observacion'],
-      transparency.map((item) => [item.Alternativa, item.Dato, item.Valor, item.Tipo, item.Confianza, item.Observacion]),
-      [30, 34, 28, 22, 24, ctx.maxWidth - 138],
+      ['Dato', 'Valor', 'Fuente', 'Confianza', 'Observacion'],
+      transparency.map((item) => [item.Dato, item.Valor, item.Fuente, item.Confianza, item.Observacion]),
+      [40, 34, 24, 24, ctx.maxWidth - 122],
     );
   }
 
@@ -1987,6 +2064,134 @@ async function downloadDashboardResultXlsx(input: AgentExportInput, result: Reco
   downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), getDefaultFileName(input, 'xlsx'));
 }
 
+async function downloadProposalComparisonXlsx(input: AgentExportInput, result: Record<string, unknown>) {
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'Buyer Nodus';
+  workbook.created = new Date();
+  workbook.modified = new Date();
+
+  const primary = '0E109E';
+  const secondary = '5A31D5';
+  const success = 'B2EB4A';
+  const warning = 'FFF3CD';
+  const borderColor = 'CBD5E1';
+  const textColor = '0F172A';
+  const recommendedName = asText(result.recommended_supplier || getRecommendedRanking(result).supplier_name, 'No especificado');
+
+  const styleHeader = (row: import('exceljs').Row, fill = primary) => {
+    row.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+      cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+      cell.alignment = { vertical: 'middle', wrapText: true };
+      cell.border = { bottom: { style: 'thin', color: { argb: borderColor } } };
+    });
+  };
+  const styleSheet = (worksheet: import('exceljs').Worksheet, headerRows: number[] = [1]) => {
+    headerRows.forEach((rowNumber, index) => styleHeader(worksheet.getRow(rowNumber), index % 2 === 0 ? primary : secondary));
+    worksheet.views = [{ state: 'frozen', ySplit: Math.max(...headerRows) }];
+    worksheet.columns.forEach((column) => {
+      let width = 14;
+      column.eachCell?.({ includeEmpty: false }, (cell) => {
+        width = Math.max(width, Math.min(String(cell.value ?? '').length + 4, 58));
+        cell.alignment = { vertical: 'top', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'E2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
+          left: { style: 'thin', color: { argb: 'E2E8F0' } },
+          right: { style: 'thin', color: { argb: 'E2E8F0' } },
+        };
+      });
+      column.width = width;
+    });
+  };
+  const addRowsSheet = (name: string, rows: Array<Record<string, unknown>>, highlightRecommended = false) => {
+    if (!rows.length) return undefined;
+    const worksheet = workbook.addWorksheet(name.slice(0, 31), { views: [{ showGridLines: false }] });
+    const keys = Object.keys(rows[0] ?? {});
+    worksheet.addRow(keys);
+    rows.forEach((row) => worksheet.addRow(keys.map((key) => row[key] ?? '')));
+    styleSheet(worksheet);
+    if (highlightRecommended) {
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const matchesRecommended = row.values?.toString().toLowerCase().includes(recommendedName.toLowerCase());
+        if (!matchesRecommended) return;
+        row.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: success } };
+          cell.font = { bold: true, color: { argb: textColor } };
+        });
+      });
+    }
+    worksheet.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + Math.min(keys.length, 26))}1` };
+    return worksheet;
+  };
+
+  const summary = workbook.addWorksheet('Resumen', { views: [{ showGridLines: false }] });
+  summary.columns = [{ width: 24 }, { width: 32 }, { width: 28 }, { width: 28 }, { width: 28 }, { width: 48 }];
+  summary.mergeCells('A1:F1');
+  summary.getCell('A1').value = 'BUYER NODUS | Comparativo de propuestas de proveedores';
+  summary.getCell('A1').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primary } };
+  summary.getCell('A1').font = { bold: true, color: { argb: 'FFFFFF' }, size: 15 };
+  summary.getRow(1).height = 26;
+  summary.mergeCells('A3:F3');
+  summary.getCell('A3').value = asText(result.analysis_title, input.title);
+  summary.getCell('A3').font = { bold: true, color: { argb: textColor }, size: 20 };
+  summary.getCell('A5').value = 'Servicio evaluado';
+  summary.getCell('B5').value = asText(result.service, 'No especificado');
+  summary.getCell('C5').value = 'Objetivo';
+  summary.mergeCells('D5:F5');
+  summary.getCell('D5').value = asText(result.objective, 'No especificado');
+  summary.getCell('A7').value = 'Proveedor recomendado';
+  summary.getCell('B7').value = recommendedName;
+  summary.getCell('B7').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: success } };
+  summary.getCell('B7').font = { bold: true, color: { argb: textColor } };
+  summary.mergeCells('A9:F11');
+  summary.getCell('A9').value = asText(result.executive_summary);
+  summary.getCell('A9').alignment = { wrapText: true, vertical: 'top' };
+  summary.mergeCells('A13:F13');
+  summary.getCell('A13').value = 'Recomendacion final';
+  summary.getCell('A13').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: secondary } };
+  summary.getCell('A13').font = { bold: true, color: { argb: 'FFFFFF' } };
+  summary.mergeCells('A14:F16');
+  summary.getCell('A14').value = asText(result.final_recommendation);
+  summary.getCell('A14').alignment = { wrapText: true, vertical: 'top' };
+  summary.mergeCells('A18:F19');
+  summary.getCell('A18').value = asText(result.disclaimer);
+  summary.getCell('A18').alignment = { wrapText: true, vertical: 'top' };
+  ['A5', 'C5', 'A7'].forEach((address) => {
+    summary.getCell(address).font = { bold: true, color: { argb: primary } };
+  });
+  summary.eachRow((row) => row.eachCell((cell) => {
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'E2E8F0' } },
+      bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
+      left: { style: 'thin', color: { argb: 'E2E8F0' } },
+      right: { style: 'thin', color: { argb: 'E2E8F0' } },
+    };
+    cell.alignment = { vertical: 'top', wrapText: true };
+  }));
+
+  addRowsSheet('Resumen comparativo', proposalExecutiveRows(result), true);
+  addRowsSheet('Matriz evaluacion', proposalMatrixRows(result), true);
+  addRowsSheet('Puntajes', proposalWeightedRows(result), true);
+  addRowsSheet('Guia criterios', proposalCriteriaGuideRows(result));
+  addRowsSheet('Ranking', proposalRankingRows(result), true);
+  addRowsSheet('Tabla comparativa', proposalComparisonRows(result), true);
+  addRowsSheet('Riesgos', proposalListRows(asArray(result.global_risks), 'Riesgo'), false)?.eachRow((row, rowNumber) => {
+    if (rowNumber > 1) row.eachCell((cell) => { cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: warning } }; });
+  });
+  addRowsSheet('Informacion faltante', proposalListRows(asArray(result.missing_information), 'Informacion faltante'));
+  addRowsSheet('Preguntas', proposalListRows(asArray(result.questions_for_suppliers), 'Pregunta sugerida'));
+  addRowsSheet('Recomendacion', [
+    { Seccion: 'Recomendacion final', Contenido: asText(result.final_recommendation) },
+    { Seccion: 'Disclaimer', Contenido: asText(result.disclaimer) },
+  ]);
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  downloadBlob(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), getDefaultFileName(input, 'xlsx'));
+}
+
 async function downloadTcoResultXlsx(input: AgentExportInput, result: Record<string, unknown>) {
   const ExcelJS = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
@@ -2061,11 +2266,10 @@ async function downloadTcoResultXlsx(input: AgentExportInput, result: Record<str
   }));
 
   const matrixRows = model.matrix.flatMap((section) => [
-    { Seccion: section.title, Componente: section.description || section.title, Tipo: 'Seccion', ...Object.fromEntries(model.alternatives.map((alt) => [alt.label, ''])), Fuente: '', Nota: '' },
+    { Seccion: section.title, Componente: section.description || section.title, ...Object.fromEntries(model.alternatives.map((alt) => [alt.label, ''])), Fuente: '', Unidad: '', Nota: '' },
     ...[...section.rows, ...(section.totalRow ? [section.totalRow] : [])].map((row) => ({
       Seccion: section.title,
       Componente: row.component,
-      Tipo: row.isTotal ? 'Total' : 'Detalle',
       ...row.values,
       Fuente: row.source ?? '',
       Unidad: row.unit ?? '',
@@ -2074,14 +2278,17 @@ async function downloadTcoResultXlsx(input: AgentExportInput, result: Record<str
   ]);
   const matrixSheet = addRowsSheet('Matriz TCO', matrixRows);
   matrixSheet?.eachRow((row, rowNumber) => {
-    const type = String(row.getCell(3).value ?? '');
-    if (rowNumber > 1 && type === 'Seccion') {
+    const section = String(row.getCell(1).value ?? '');
+    const component = String(row.getCell(2).value ?? '');
+    const isSectionRow = rowNumber > 1 && section === component;
+    const isTotalRow = rowNumber > 1 && /total|tco neto|tco anual|tco unitario/i.test(component);
+    if (isSectionRow) {
       row.eachCell((cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: light } };
         cell.font = { bold: true, color: { argb: primary } };
       });
     }
-    if (rowNumber > 1 && type === 'Total') {
+    if (isTotalRow) {
       row.eachCell((cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E8F5E9' } };
         cell.font = { bold: true, color: { argb: green } };
@@ -2111,6 +2318,10 @@ async function downloadAgentResultXlsx(input: AgentExportInput) {
   const result = asRecord(input.result);
   if (isDashboardResult(result)) {
     await downloadDashboardResultXlsx(input, result);
+    return;
+  }
+  if (isProposalComparison(result)) {
+    await downloadProposalComparisonXlsx(input, result);
     return;
   }
   if (isTcoAnalysisResult(result)) {
@@ -2691,6 +2902,27 @@ function addPptChartVisual(slide: PptxSlide, chart: Record<string, unknown>, opt
   });
 }
 
+function addPptProposalTable(slide: PptxSlide, rows: Array<Record<string, unknown>>, options: { x?: number; y?: number; w?: number; h?: number; maxRows?: number; fontSize?: number } = {}) {
+  if (!rows.length) return;
+  const keys = Object.keys(rows[0]);
+  const visibleRows = rows.slice(0, options.maxRows ?? 9);
+  slide.addTable(
+    [
+      keys.map((name) => ({ text: name, options: { bold: true, color: '09008B', fill: 'EEF2FF' } })),
+      ...visibleRows.map((row) => keys.map((name) => ({ text: asText(row[name]), options: { color: '334155' } }))),
+    ],
+    {
+      x: options.x ?? 0.55,
+      y: options.y ?? 1.35,
+      w: options.w ?? 12.2,
+      h: options.h ?? 5.3,
+      border: { color: 'CBD5E1', pt: 0.5 },
+      fontSize: options.fontSize ?? (keys.length > 6 ? 6.2 : 8),
+      valign: 'mid',
+    },
+  );
+}
+
 async function downloadTermsOfReferencePptx(input: AgentExportInput, result: Record<string, unknown>) {
   const pptxgen = (await import('pptxgenjs')).default;
   const pptx = new pptxgen();
@@ -3023,6 +3255,96 @@ async function downloadTcoResultPptx(input: AgentExportInput, result: Record<str
   await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
 }
 
+async function downloadProposalComparisonPptx(input: AgentExportInput, result: Record<string, unknown>) {
+  const pptxgen = (await import('pptxgenjs')).default;
+  const pptx = new pptxgen();
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'Buyer Nodus';
+  pptx.subject = input.agentName || input.title;
+  pptx.title = asText(result.analysis_title, input.title);
+  pptx.company = getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Buyer Nodus';
+  pptx.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'es-PE' };
+
+  const recommendedName = asText(result.recommended_supplier || getRecommendedRanking(result).supplier_name, 'No especificado');
+  let slide = pptx.addSlide();
+  slide.background = { color: 'FFFFFF' };
+  slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'BUYER NODUS', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: '6B63D9' });
+  slide.addText(asText(result.analysis_title, input.title), { x: 0.55, y: 1.0, w: 11.9, h: 0.85, fontSize: 29, bold: true, color: '09008B', fit: 'shrink' });
+  slide.addText(asText(result.executive_summary), { x: 0.6, y: 2.15, w: 11.7, h: 1.25, fontSize: 14, color: '334155', fit: 'shrink' });
+  slide.addText(`Servicio evaluado: ${asText(result.service, 'No especificado')}\nObjetivo: ${asText(result.objective, 'No especificado')}\nProveedor recomendado: ${recommendedName}`, {
+    x: 0.65,
+    y: 3.85,
+    w: 11.6,
+    h: 1.15,
+    fontSize: 12,
+    color: '475569',
+    fit: 'shrink',
+  });
+  addPptFooter(slide, input);
+
+  const executiveRows = proposalExecutiveRows(result);
+  if (executiveRows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Resumen ejecutivo comparativo', 'Mismo resumen visible en la plataforma.');
+    addPptProposalTable(slide, executiveRows, { maxRows: executiveRows.length, fontSize: 7.2 });
+    addPptFooter(slide, input);
+  }
+
+  const matrixRows = proposalMatrixRows(result);
+  if (matrixRows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Matriz de evaluación comparativa', asText(result.auto_generated_criteria_note));
+    addPptProposalTable(slide, matrixRows, { maxRows: Math.min(matrixRows.length, 8), fontSize: 6.2 });
+    addPptFooter(slide, input);
+  }
+
+  const weightedRows = proposalWeightedRows(result);
+  const rankingRows = proposalRankingRows(result);
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Ranking y puntaje ponderado total');
+  if (weightedRows.length) addPptProposalTable(slide, weightedRows, { x: 0.55, y: 1.25, w: 5.7, h: 2.25, maxRows: weightedRows.length, fontSize: 8 });
+  if (rankingRows.length) addPptProposalTable(slide, rankingRows, { x: 6.55, y: 1.25, w: 6.15, h: 5.3, maxRows: Math.min(rankingRows.length, 6), fontSize: 7.2 });
+  addPptFooter(slide, input);
+
+  const criteriaRows = proposalCriteriaGuideRows(result);
+  if (criteriaRows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Guia de criterios', 'Escala de valoracion y fuente de verificacion.');
+    addPptProposalTable(slide, criteriaRows, { maxRows: Math.min(criteriaRows.length, 7), fontSize: 6.3 });
+    addPptFooter(slide, input);
+  }
+
+  const comparisonRows = proposalComparisonRows(result);
+  if (comparisonRows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Tabla comparativa', 'Misma tabla comparativa visible en la plataforma.');
+    addPptProposalTable(slide, comparisonRows, { maxRows: Math.min(comparisonRows.length, 8), fontSize: 6.2 });
+    addPptFooter(slide, input);
+  }
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Riesgos, información faltante y preguntas sugeridas');
+  const riskText = proposalListRows(asArray(result.global_risks), 'Riesgo').map((row) => `- ${asText(row.Riesgo)}`).join('\n') || 'Sin riesgos globales registrados.';
+  const missingText = proposalListRows(asArray(result.missing_information), 'Informacion').map((row) => `- ${asText(row.Informacion)}`).join('\n') || 'Sin informacion faltante registrada.';
+  const questionsText = proposalListRows(asArray(result.questions_for_suppliers), 'Pregunta').map((row) => `- ${asText(row.Pregunta)}`).join('\n') || 'Sin preguntas sugeridas registradas.';
+  slide.addText('Riesgos globales', { x: 0.65, y: 1.35, w: 3.6, h: 0.28, fontSize: 11, bold: true, color: '09008B' });
+  slide.addText(riskText, { x: 0.65, y: 1.75, w: 3.6, h: 4.65, fontSize: 8.5, color: '334155', fit: 'shrink', breakLine: false });
+  slide.addText('Información faltante', { x: 4.65, y: 1.35, w: 3.6, h: 0.28, fontSize: 11, bold: true, color: '09008B' });
+  slide.addText(missingText, { x: 4.65, y: 1.75, w: 3.6, h: 4.65, fontSize: 8.5, color: '334155', fit: 'shrink', breakLine: false });
+  slide.addText('Preguntas sugeridas', { x: 8.65, y: 1.35, w: 3.6, h: 0.28, fontSize: 11, bold: true, color: '09008B' });
+  slide.addText(questionsText, { x: 8.65, y: 1.75, w: 3.6, h: 4.65, fontSize: 8.5, color: '334155', fit: 'shrink', breakLine: false });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Recomendación final', `Proveedor recomendado: ${recommendedName}`);
+  slide.addShape('roundRect', { x: 0.7, y: 1.35, w: 11.75, h: 3.5, fill: { color: 'ECFDF5' }, line: { color: 'A7F3D0', pt: 1 }, radius: 0.12 });
+  slide.addText(asText(result.final_recommendation), { x: 1.0, y: 1.75, w: 11.15, h: 2.55, fontSize: 16, color: '064E3B', fit: 'shrink' });
+  slide.addText(asText(result.disclaimer), { x: 0.7, y: 5.35, w: 11.75, h: 0.75, fontSize: 9, color: '64748B', fit: 'shrink' });
+  addPptFooter(slide, input);
+
+  await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
+}
+
 async function downloadAgentResultPptx(input: AgentExportInput) {
   const result = asRecord(input.result);
   if (isTermsOfReferenceResult(result)) {
@@ -3031,6 +3353,10 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
   }
   if (isDashboardResult(result)) {
     await downloadDashboardResultPptx(input, result);
+    return;
+  }
+  if (isProposalComparison(result)) {
+    await downloadProposalComparisonPptx(input, result);
     return;
   }
   if (isTcoAnalysisResult(result)) {

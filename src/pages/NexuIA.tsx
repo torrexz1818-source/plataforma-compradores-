@@ -1,5 +1,6 @@
 ﻿import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { DragEvent } from 'react';
 import {
   ArrowRight,
   ArrowLeft,
@@ -213,6 +214,7 @@ const NexuIA = () => {
     additionalContext: '',
   });
   const [dashboardFiles, setDashboardFiles] = useState<File[]>([]);
+  const [isDashboardDropActive, setIsDashboardDropActive] = useState(false);
   const [dashboardProgressStep, setDashboardProgressStep] = useState(0);
   const dashboardProgressStages = useMemo(
     () => buildDashboardProgressStages(
@@ -237,15 +239,15 @@ const NexuIA = () => {
   const [tcoProgressStep, setTcoProgressStep] = useState(0);
   const tcoProgressStages = useMemo(
     () => [
-      { label: 'Leyendo archivos', message: 'Leyendo archivos…' },
-      { label: 'Extrayendo datos', message: 'Extrayendo datos de propuestas…' },
-      { label: 'Detectando tipo', message: 'Detectando tipo de análisis…' },
-      { label: 'Organizando datos', message: 'Organizando datos, supuestos y faltantes…' },
-      { label: 'Matriz TCO', message: 'Construyendo matriz TCO…' },
-      { label: 'Modelo financiero', message: 'Calculando modelo financiero…' },
-      { label: 'Scorecard y ranking', message: 'Generando scorecard y ranking…' },
-      { label: 'Descargables', message: 'Preparando descargables…' },
-      { label: 'Finalizando', message: 'Finalizando análisis…' },
+      { label: 'Leyendo archivos', message: 'Leyendo archivos...' },
+      { label: 'Extrayendo datos', message: 'Extrayendo datos de propuestas...' },
+      { label: 'Detectando tipo', message: 'Detectando tipo de analisis...' },
+      { label: 'Organizando datos', message: 'Organizando datos, supuestos y faltantes...' },
+      { label: 'Matriz TCO', message: 'Construyendo matriz TCO...' },
+      { label: 'Modelo financiero', message: 'Calculando modelo financiero...' },
+      { label: 'Scorecard y ranking', message: 'Generando scorecard y ranking...' },
+      { label: 'Descargables', message: 'Preparando descargables...' },
+      { label: 'Finalizando', message: 'Finalizando analisis...' },
     ],
     [],
   );
@@ -401,7 +403,7 @@ const NexuIA = () => {
     }, 1400);
 
     return () => window.clearInterval(intervalId);
-  }, [tcoAnalysisMutation.isPending, tcoAnalysisMutation.isSuccess, tcoProgressStages.length]);
+  }, [tcoAnalysisMutation.isPending, tcoAnalysisMutation.isSuccess]);
 
   const runMutation = useMutation({
     mutationFn: runAgent,
@@ -556,6 +558,7 @@ const NexuIA = () => {
       setSelectedExportFormat('pdf');
     }
   }, [selectedExportFormat]);
+  const selectedExportFormatLabel = exportFormatOptions.find((option) => option.value === selectedExportFormat)?.label ?? 'PDF';
   const isAdminUser = user?.role === 'admin';
   const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
   const canUseSelectedAgent = Boolean(selectedAgent) && (isAgentActive || (isAdminUser && selectedAgent?.status !== 'hidden'));
@@ -650,6 +653,19 @@ const NexuIA = () => {
 
   const handleComparisonFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
+    const hasUnsupportedFile = files.some((file) => {
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      return !extension || !['pdf', 'xlsx', 'csv', 'png', 'jpg', 'jpeg'].includes(extension);
+    });
+    if (hasUnsupportedFile) {
+      toast({
+        title: 'Formato no soportado para este agente.',
+        description: 'Formatos soportados: PDF, XLSX, CSV, JPG, JPEG y PNG.',
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
     setUploadedComparisonFiles(files);
   };
 
@@ -785,7 +801,7 @@ const NexuIA = () => {
       </select>
       <Button type="button" variant="outline" className="rounded-full" onClick={() => void onDownload()} disabled={isExportingResult}>
         <Download className="mr-2 h-4 w-4" />
-        {isExportingResult ? 'Preparando...' : 'Descargar resultado'}
+        {isExportingResult ? 'Preparando...' : `Descargar ${selectedExportFormatLabel}`}
       </Button>
     </div>
   );
@@ -815,8 +831,11 @@ const NexuIA = () => {
     setDashboardForm((current) => ({ ...current, [field]: value }));
   };
 
-  const handleDashboardFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = Array.from(event.target.files ?? []);
+  const addDashboardFiles = (selectedFiles: File[]) => {
+    if (!selectedFiles.length) return;
+    const duplicateFiles = selectedFiles.filter((file) =>
+      dashboardFiles.some((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified),
+    );
     const mergedFiles = [...dashboardFiles, ...selectedFiles].filter(
       (file, index, allFiles) =>
         index === allFiles.findIndex((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified),
@@ -828,7 +847,6 @@ const NexuIA = () => {
         description: 'Formatos soportados: XLSX, CSV, PDF, DOCX, JPG, JPEG y PNG.',
         variant: 'destructive',
       });
-      event.target.value = '';
       return;
     }
     if (mergedFiles.length > 8) {
@@ -837,11 +855,26 @@ const NexuIA = () => {
         description: 'Reduce la cantidad de archivos de datos para este dashboard.',
         variant: 'destructive',
       });
-      event.target.value = '';
       return;
     }
     setDashboardFiles(mergedFiles);
+    if (duplicateFiles.length) {
+      toast({
+        title: 'Se omitieron archivos duplicados.',
+        description: `${duplicateFiles.length} archivo(s) ya estaban cargados en el dashboard.`,
+      });
+    }
+  };
+
+  const handleDashboardFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    addDashboardFiles(Array.from(event.target.files ?? []));
     event.target.value = '';
+  };
+
+  const handleDashboardDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setIsDashboardDropActive(false);
+    addDashboardFiles(Array.from(event.dataTransfer.files ?? []));
   };
 
   const removeDashboardFile = (targetFile: File) => {
@@ -1085,29 +1118,6 @@ const NexuIA = () => {
     'Disclaimer': result.disclaimer,
   });
 
-  const buildProposalVisibleExport = (result: NonNullable<typeof proposalComparisonResult>) => ({
-    'Resumen ejecutivo': result.executive_summary,
-    'Proveedor recomendado': result.recommended_supplier,
-    'Resumen ejecutivo comparativo': result.executive_comparison_table?.map((row) => ({ 'Dato clave': row.row_label, ...row.values })) ?? [],
-    'Matriz de evaluación comparativa': result.evaluation_matrix?.criteria.map((criterion) => ({
-      'N°': criterion.number,
-      Criterio: criterion.criterion,
-      'Peso %': criterion.weight_percent,
-      ...criterion.ratings,
-      Observaciones: criterion.observations,
-    })) ?? [],
-    'Nota de criterios': result.auto_generated_criteria_note,
-    'Puntaje ponderado total': result.evaluation_matrix?.weighted_totals ?? [],
-    'Guía de criterios': result.criteria_guide ?? [],
-    'Ranking': result.ranking,
-    'Tabla comparativa': result.comparison_table.map((row) => ({ Criterio: row.criterion, ...row.values, Comentario: row.comment })),
-    'Riesgos globales': listRows(result.global_risks),
-    'Información faltante': listRows(result.missing_information),
-    'Preguntas sugeridas': listRows(result.questions_for_suppliers),
-    'Recomendación final': result.final_recommendation,
-    'Disclaimer': result.disclaimer,
-  });
-
   const handleDownloadTermsPdf = async () => {
     if (!termsGenerateMutation.data) return;
     await handleExportResult({
@@ -1246,7 +1256,7 @@ const NexuIA = () => {
     if (!proposalComparisonResult) return;
     await handleExportResult({
       title: 'Comparativos de propuestas de proveedores',
-      result: buildProposalVisibleExport(proposalComparisonResult) as unknown as Record<string, unknown>,
+      result: proposalComparisonResult as unknown as Record<string, unknown>,
       fileName: 'comparativo-propuestas-nodus-ia',
       operationName: 'Descarga comparativo de propuestas',
       captureElementId: 'proposal-comparison-export-view',
@@ -2044,7 +2054,7 @@ const NexuIA = () => {
                                 <Upload className="h-5 w-5 text-muted-foreground" />
                                 <div>
                                   <p className="text-sm font-medium text-foreground">
-                                    Subir PDF, DOCX, Excel, CSV o imágenes
+                                    Subir PDF, Excel, CSV o imágenes
                                   </p>
                                   <p className="mt-1 text-xs text-muted-foreground/70">
                                     Carga 2 a 5 propuestas. Los archivos se procesan temporalmente.
@@ -2053,7 +2063,7 @@ const NexuIA = () => {
                                 <input
                                   type="file"
                                   multiple
-                                  accept=".pdf,.xlsx,.csv,.docx,.png,.jpg,.jpeg"
+                                  accept=".pdf,.xlsx,.csv,.png,.jpg,.jpeg"
                                   onChange={handleComparisonFilesChange}
                                   className="hidden"
                                 />
@@ -2123,16 +2133,41 @@ const NexuIA = () => {
                               <p className="text-xs leading-5 text-muted-foreground/70">
                                 Sube Excel, CSV, PDF, imágenes, reportes o documentos con datos. El agente unificará la información y generará un dashboard visual con KPIs, gráficos, tablas, insights y recomendaciones.
                               </p>
-                              <label className="flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-primary/25 bg-white px-4 py-6 text-center transition hover:border-primary/35 hover:bg-primary/10">
-                                <Upload className="h-5 w-5 text-muted-foreground" />
+                              <label
+                                onDragEnter={(event) => {
+                                  event.preventDefault();
+                                  setIsDashboardDropActive(true);
+                                }}
+                                onDragOver={(event) => event.preventDefault()}
+                                onDragLeave={(event) => {
+                                  event.preventDefault();
+                                  setIsDashboardDropActive(false);
+                                }}
+                                onDrop={handleDashboardDrop}
+                                className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed px-4 py-6 text-center transition ${
+                                  isDashboardDropActive
+                                    ? 'border-primary bg-primary/10 shadow-sm ring-2 ring-primary/15'
+                                    : 'border-primary/25 bg-white hover:border-primary/35 hover:bg-primary/10'
+                                }`}
+                              >
+                                <Upload className={`h-5 w-5 ${isDashboardDropActive ? 'text-primary' : 'text-muted-foreground'}`} />
                                 <div>
-                                  <p className="text-sm font-medium text-foreground">Subir archivos para dashboard</p>
+                                  <p className="text-sm font-medium text-foreground">
+                                    {isDashboardDropActive ? 'Suelta los archivos aquí' : 'Arrastra archivos o selecciónalos'}
+                                  </p>
                                   <p className="mt-1 text-xs text-muted-foreground/70">XLSX, CSV, PDF, DOCX, JPG, JPEG o PNG. Máximo 8 archivos.</p>
+                                  <span className="mt-3 inline-flex rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white">
+                                    Seleccionar archivos
+                                  </span>
                                 </div>
                                 <input type="file" multiple accept=".xlsx,.csv,.pdf,.docx,.jpg,.jpeg,.png" onChange={handleDashboardFilesChange} className="hidden" />
                               </label>
                               {dashboardFiles.length ? (
                                 <div className="space-y-2 rounded-2xl border border-primary/15 bg-white p-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <p className="text-xs font-semibold text-foreground">{dashboardFiles.length} archivo(s) cargado(s)</p>
+                                    <p className="text-xs text-muted-foreground/70">Puedes quitar archivos antes de crear el dashboard.</p>
+                                  </div>
                                   {dashboardFiles.map((file) => {
                                     const isSpreadsheet = file.name.endsWith('.xls') || file.name.endsWith('.xlsx') || file.name.endsWith('.csv');
                                     const FileIcon = isSpreadsheet ? FileSpreadsheet : FileText;
@@ -3104,17 +3139,17 @@ const NexuIA = () => {
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">D. Ranking</p>
                           <div className="mt-3 space-y-2">
-                            {tcoResult.ranking.map((item) => (
-                              <div key={`${item.position}-${item.alternative}`} className="rounded-xl bg-primary/5 p-3">
-                                <p className="text-sm font-medium text-foreground">{item.position}. {item.alternative}</p>
+                            {(tcoPresentation?.ranking ?? []).map((item) => (
+                              <div key={`${textValue(item.position)}-${textValue(item.alternative)}`} className="rounded-xl bg-primary/5 p-3">
+                                <p className="text-sm font-medium text-foreground">{textValue(item.position)}. {textValue(item.alternative)}</p>
                                 <p className="mt-1 text-sm font-semibold text-primary">
-                                  Calificación: {item.score ?? 'No especificado'} / 100{item.score_label ? ` - ${item.score_label}` : ''}
+                                  Calificación: {textValue(item.score)} / 100{textValue(item.score_label, '') ? ` - ${textValue(item.score_label)}` : ''}
                                 </p>
-                                <p className="mt-1 text-sm text-muted-foreground">TCO: {item.total_tco ?? 'No especificado'}</p>
-                                {item.source_basis?.length ? (
-                                  <p className="mt-1 text-xs text-muted-foreground/80">Base: {item.source_basis.join(' | ')}</p>
+                                <p className="mt-1 text-sm text-muted-foreground">TCO: {textValue(item.total_tco)}</p>
+                                {Array.isArray(item.source_basis) && item.source_basis.length ? (
+                                  <p className="mt-1 text-xs text-muted-foreground/80">Base: {item.source_basis.map((value) => textValue(value)).join(' | ')}</p>
                                 ) : null}
-                                <p className="mt-1 text-sm text-muted-foreground">{item.reason}</p>
+                                <p className="mt-1 text-sm text-muted-foreground">{textValue(item.reason)}</p>
                               </div>
                             ))}
                           </div>
@@ -3209,7 +3244,7 @@ const NexuIA = () => {
                             <table className="w-full min-w-[1040px] text-left text-sm">
                               <thead className="bg-[#ECEFF1] text-xs uppercase tracking-[0.14em] text-muted-foreground/80">
                                 <tr>
-                                  {['Alternativa', 'Dato', 'Valor', 'Fuente', 'Tipo', 'Confianza', 'Observación'].map((heading) => (
+                                  {['Dato', 'Valor', 'Fuente', 'Confianza', 'Observación'].map((heading) => (
                                     <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>
                                   ))}
                                 </tr>
@@ -3217,13 +3252,9 @@ const NexuIA = () => {
                               <tbody>
                                 {tcoPresentation.transparencyTable.slice(0, 30).map((item, index) => (
                                   <tr key={`${textValue(item.alternative)}-${textValue(item.field)}-${index}`} className="border-t border-primary/10">
-                                    <td className="px-4 py-3 font-medium text-foreground">{textValue(item.alternative)}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{textValue(item.field)}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{textValue(item.value)}</td>
                                     <td className="px-4 py-3 text-muted-foreground">{textValue(item.source)}</td>
-                                    <td className="px-4 py-3">
-                                      <span className="rounded-full bg-[#E0F7FA] px-2 py-1 text-xs font-medium text-[#00838F]">{textValue(item.type)}</span>
-                                    </td>
                                     <td className="px-4 py-3 text-muted-foreground">{textValue(item.confidence_level)}</td>
                                     <td className="px-4 py-3 text-xs leading-5 text-muted-foreground">{textValue(item.observation)}</td>
                                   </tr>

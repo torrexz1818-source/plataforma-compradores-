@@ -1,5 +1,7 @@
 from typing import Any
 
+from app.agents.proposal_comparison.evaluation_config import DEFAULT_EVALUATION_CRITERIA
+
 
 def _clamp_score(value: Any) -> float:
     try:
@@ -27,9 +29,9 @@ def _supplier_names(result: dict[str, Any]) -> list[str]:
     suppliers = result.get("suppliers")
     if isinstance(suppliers, list):
         names = [
-            supplier.get("supplier_name")
+            supplier if isinstance(supplier, str) else supplier.get("supplier_name")
             for supplier in suppliers
-            if isinstance(supplier, dict) and supplier.get("supplier_name")
+            if isinstance(supplier, str) or (isinstance(supplier, dict) and supplier.get("supplier_name"))
         ]
         if names:
             return [str(name) for name in names]
@@ -37,9 +39,9 @@ def _supplier_names(result: dict[str, Any]) -> list[str]:
     ranking = result.get("ranking")
     if isinstance(ranking, list):
         names = [
-            item.get("supplier_name")
+            item.get("supplier_name") or item.get("supplier")
             for item in ranking
-            if isinstance(item, dict) and item.get("supplier_name")
+            if isinstance(item, dict) and (item.get("supplier_name") or item.get("supplier"))
         ]
         if names:
             return [str(name) for name in names]
@@ -74,7 +76,7 @@ def _normalize_matrix_weights(criteria: list[dict[str, Any]]) -> list[dict[str, 
 
 def _fallback_matrix_from_ranking(result: dict[str, Any], suppliers: list[str]) -> dict[str, Any]:
     ranking_scores = {
-        item.get("supplier_name"): _clamp_score(item.get("score")) / 20
+        item.get("supplier_name") or item.get("supplier"): _clamp_score(item.get("score")) / 20
         for item in result.get("ranking", [])
         if isinstance(item, dict)
     }
@@ -82,22 +84,25 @@ def _fallback_matrix_from_ranking(result: dict[str, Any], suppliers: list[str]) 
         supplier: round(_clamp_rating(ranking_scores.get(supplier, 3)), 2)
         for supplier in suppliers
     }
+    criteria = [
+        {
+            "number": item["number"],
+            "criterion": item["criterion"],
+            "weight_percent": item["weight_percent"],
+            "ratings": ratings,
+            "observations": (
+                "Criterio generado como respaldo porque la respuesta no incluyo una matriz "
+                "detallada. Si un dato no fue declarado, debe validarse con el proveedor y "
+                "corresponde nota 1 para ese punto."
+            ),
+        }
+        for item in DEFAULT_EVALUATION_CRITERIA
+    ]
 
     return {
-        "title": "Matriz de evaluación comparativa de proveedores",
+        "title": "Matriz de evaluacion comparativa de proveedores",
         "weight_sum": 100,
-        "criteria": [
-            {
-                "number": 1,
-                "criterion": "Evaluación integral técnico-comercial y de riesgo",
-                "weight_percent": 100,
-                "ratings": ratings,
-                "observations": (
-                    "Criterio integral generado como respaldo porque la respuesta no incluyó "
-                    "una matriz detallada."
-                ),
-            }
-        ],
+        "criteria": criteria,
         "weighted_totals": [],
     }
 

@@ -39,9 +39,8 @@ async def analyze_proposals(
             detail=f"Puedes subir como máximo {settings.max_files_per_analysis} archivos por análisis.",
         )
 
-    # criteria se conserva en la firma por compatibilidad con clientes antiguos,
-    # pero este agente ahora genera criterios y pesos automaticamente.
-    _ = criteria
+    # criteria se conserva por compatibilidad y se usa como instruccion opcional
+    # para pesos, prioridades o criterios declarados por el usuario.
     temp_paths: list[Path] = []
 
     try:
@@ -72,7 +71,7 @@ async def analyze_proposals(
             for doc in extracted_documents
         ]
 
-        prompt = build_user_prompt(title, service, objective, documents_for_prompt)
+        prompt = build_user_prompt(title, service, objective, criteria, documents_for_prompt)
         raw_result = await analyze_with_openai(prompt)
         normalized_result = normalize_ranking(raw_result)
 
