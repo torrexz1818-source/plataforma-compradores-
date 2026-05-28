@@ -2118,11 +2118,11 @@ const NexuIA = () => {
                                 ))}
                               </div>
                               <div className="space-y-1.5">
-                                <label className="text-sm font-medium text-foreground/80">Objetivo del análisis</label>
+                                <label className="text-sm font-medium text-foreground/80">Información importante / instrucciones para el análisis</label>
                                 <Textarea
                                   value={tcoGeneral.objective}
                                   onChange={(event) => updateTcoGeneral('objective', event.target.value)}
-                                  placeholder="Ejemplo: Determinar qué alternativa tiene menor costo total considerando mantenimiento, garantía, operación y riesgos."
+                                  placeholder="Ejemplo: Considera un horizonte de 5 años, 12 unidades, uso en campo, 25,000 km/año, prioridad en menor TCO, mantenimiento, garantía, consumo, riesgos y valor residual. Usa el Excel adjunto como referencia estructural si existe."
                                   className="min-h-[88px] rounded-2xl border-primary/15"
                                 />
                               </div>

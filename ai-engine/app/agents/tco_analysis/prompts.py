@@ -572,6 +572,7 @@ def build_user_prompt(
             "evaluation_horizon": evaluation_horizon,
             "comparison_unit": comparison_unit,
             "currency": currency,
+            "important_information_and_analysis_instructions": objective or "No especificado",
             "objective": objective or "No especificado",
             "general_context": general_context or "No especificado",
             "additional_instructions": additional_instructions or "No especificado",
@@ -579,6 +580,8 @@ def build_user_prompt(
         "document_context_available_to_model": documents,
         "methodology": [
             "Detecta automaticamente el tipo de analisis real segun documentos y contexto; si difiere del campo seleccionado por el usuario, explicalo como hallazgo dentro de interpretation.conditions_that_change_decision o assumptions_and_limits.",
+            "Trata important_information_and_analysis_instructions como instrucciones prioritarias del usuario, no como texto decorativo. Usa ese campo para extraer objetivo, horizonte, moneda, cantidad, criterios de decision, uso estimado, datos relevantes, instrucciones especiales y prioridades como menor TCO, riesgo, garantia, mantenimiento, consumo, soporte, valor residual o uso de un Excel como referencia estructural.",
+            "Si important_information_and_analysis_instructions contiene parametros concretos, reflejalos en base_parameters cuando correspondan; si contiene criterios o prioridades, reflejalos en scorecard, strategic_recommendation, assumptions_and_limits o transparency_table segun aplique.",
             "Devuelve analysis_type como el tipo de analisis detectado, por ejemplo: Analisis TCO de software/SaaS, Analisis TCO de servicios, Analisis TCO de importacion vs compra local, Analisis TCO de maquinaria, Analisis TCO de flota vehicular, Analisis TCO de repuestos/insumos o Analisis TCO comparativo de proveedores.",
             "Identifica alternativas/proveedores desde documentos e instrucciones.",
             "Extrae proveedor, marca/modelo, precio, moneda, cantidad, origen/destino, incoterm, flete, seguro, aduanas si aparece, instalacion, mantenimiento, operacion, energia, repuestos, soporte, capacitacion, garantia, vida util, lead time, forma de pago, exclusiones, riesgos y costos no incluidos. Si no aparece, escribe No especificado.",

@@ -1586,6 +1586,16 @@ async def analyze_tco(
             currency=currency,
         )
         raw_result = sanitize_tco_result(raw_result)
+        if (objective or "").strip():
+            user_instructions = objective.strip()
+            raw_result["user_priority_instructions"] = user_instructions
+            base_parameters = raw_result.get("base_parameters") or {}
+            notes = _as_list(base_parameters.get("notes"))
+            instruction_note = f"Informacion importante/instrucciones del usuario: {user_instructions}"
+            if instruction_note not in notes:
+                notes.append(instruction_note)
+            base_parameters["notes"] = notes
+            raw_result["base_parameters"] = base_parameters
         raw_result["supporting_documents_summary"] = [
             SupportingDocumentSummary.model_validate(item).model_dump() for item in documents_for_prompt
         ]
