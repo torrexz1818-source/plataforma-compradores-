@@ -2069,12 +2069,7 @@ const NexuIA = () => {
                             </div>
 
                             <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
-                              <label className="text-sm font-medium text-foreground/80">Paso 3 - Contexto adicional</label>
-                              <Textarea value={dashboardForm.additionalContext} onChange={(event) => updateDashboardForm('additionalContext', event.target.value)} placeholder="Agrega instrucciones, restricciones, definiciones de columnas, objetivos de negocio, KPIs deseados, filtros, áreas, centros de costo, categorías o cualquier dato que ayude a interpretar el dashboard." className="min-h-[96px] rounded-2xl border-primary/15" />
-                            </div>
-
-                            <div className="space-y-1.5 rounded-2xl border border-primary/15 bg-white p-4">
-                              <label className="text-sm font-medium text-foreground/80">Paso 4 - Enfoque del dashboard</label>
+                              <label className="text-sm font-medium text-foreground/80">Paso 3 - Enfoque del dashboard</label>
                               <select value={dashboardForm.visualizationFocus} onChange={(event) => updateDashboardForm('visualizationFocus', event.target.value)} className="h-10 w-full rounded-xl border border-primary/15 bg-white px-3 text-sm text-foreground">
                                 {dashboardFocusOptions.map((option) => <option key={option} value={option}>{option}</option>)}
                               </select>
