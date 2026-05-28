@@ -91,15 +91,6 @@ const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
 const dashboardAudiences = ['Gerencia', 'Compras', 'Finanzas', 'Operaciones', 'Proveedores', 'Auditoría', 'Otro'];
 const dashboardDataTypes = ['Gastos', 'Proveedores', 'Compras', 'Contratos', 'Inventario', 'Cotizaciones', 'Indicadores KPI', 'Datos mixtos', 'Otro'];
 const dashboardFocusOptions = ['Automático', 'Categorías', 'Proveedores', 'Ahorro', 'Cumplimiento', 'Compradores', 'Pagos', 'Ejecutivo', 'Operativo', 'Financiero', 'Gastos', 'Compras', 'Auditoría'];
-const dashboardLoadingSteps = [
-  'Leyendo archivos',
-  'Extrayendo información',
-  'Organizando datos',
-  'Generando KPIs',
-  'Creando gráficos',
-  'Preparando dashboard',
-  'Finalizando',
-];
 const termsGenerationSteps = [
   'Leyendo informacion',
   'Analizando requerimiento',
@@ -134,6 +125,52 @@ function normalizeAgentKey(agent: Pick<Agent, 'id' | 'agentKey' | 'slug'>) {
   };
 
   return legacyMap[raw] ?? raw;
+}
+
+function getDashboardFocusProgressMessage(focus: string) {
+  const normalized = focus.toLowerCase();
+  if (normalized.includes('categor')) return 'Priorizando análisis por categorías…';
+  if (normalized.includes('proveedor')) return 'Priorizando análisis por proveedores…';
+  if (normalized.includes('ahorro')) return 'Priorizando ahorro y oportunidades de negociación…';
+  if (normalized.includes('cumplimiento')) return 'Revisando estados y cumplimiento de compras…';
+  if (normalized.includes('comprador')) return 'Construyendo análisis por comprador…';
+  if (normalized.includes('pago')) return 'Revisando condiciones y plazos de pago…';
+  if (normalized.includes('financiero') || normalized.includes('gasto')) return 'Priorizando indicadores financieros de compras…';
+  return 'Aplicando instrucciones del dashboard…';
+}
+
+function buildDashboardProgressStages(focus: string, hasInstructions: boolean) {
+  const instructionMessage = hasInstructions
+    ? 'Aplicando instrucciones del usuario…'
+    : getDashboardFocusProgressMessage(focus);
+
+  return [
+    { label: 'Subiendo archivos', message: 'Subiendo archivos de compras…' },
+    { label: 'Leyendo archivos', message: 'Leyendo archivos de compras…' },
+    { label: 'Detectando hojas y columnas', message: 'Detectando proveedores, categorías, montos y fechas…' },
+    { label: 'Limpiando datos', message: 'Limpiando datos y descartando valores no válidos…' },
+    { label: 'Aplicando instrucciones', message: instructionMessage },
+    { label: 'Calculando KPIs', message: 'Calculando KPIs de compras…' },
+    { label: 'Generando gráficos', message: 'Generando gráficos ejecutivos…' },
+    { label: 'Construyendo dashboard', message: 'Preparando dashboard visual…' },
+    { label: 'Preparando resultado final', message: 'Finalizando resultado y descargas disponibles…' },
+    { label: 'Dashboard listo', message: 'Dashboard listo para revisar y descargar.' },
+  ];
+}
+
+function getDashboardErrorMessage(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : '';
+  const normalized = rawMessage.toLowerCase();
+  if (normalized.includes('timeout') || normalized.includes('time') || normalized.includes('tiempo')) {
+    return 'El análisis tomó más tiempo de lo esperado. Intenta nuevamente o reduce el tamaño de los archivos.';
+  }
+  if (normalized.includes('archivo') || normalized.includes('file') || normalized.includes('format')) {
+    return 'El archivo no pudo procesarse. Verifica el formato o vuelve a cargarlo.';
+  }
+  if (normalized.includes('conectar') || normalized.includes('network') || normalized.includes('fetch')) {
+    return 'No se pudo conectar con el motor de IA. Intenta nuevamente en unos minutos.';
+  }
+  return 'No se pudo generar el dashboard. Revisa que los archivos tengan datos válidos de compras o intenta con otro archivo.';
 }
 
 const NexuIA = () => {
@@ -177,6 +214,13 @@ const NexuIA = () => {
   });
   const [dashboardFiles, setDashboardFiles] = useState<File[]>([]);
   const [dashboardProgressStep, setDashboardProgressStep] = useState(0);
+  const dashboardProgressStages = useMemo(
+    () => buildDashboardProgressStages(
+      dashboardForm.visualizationFocus,
+      Boolean(dashboardForm.objective.trim() || dashboardForm.additionalContext.trim()),
+    ),
+    [dashboardForm.additionalContext, dashboardForm.objective, dashboardForm.visualizationFocus],
+  );
   const [tcoGeneral, setTcoGeneral] = useState({
     title: '',
     itemName: '',
@@ -299,17 +343,31 @@ const NexuIA = () => {
   }, [routeAgentId]);
 
   useEffect(() => {
+    if (dashboardCreatorMutation.isSuccess) {
+      setDashboardProgressStep(dashboardProgressStages.length - 1);
+      return undefined;
+    }
+
     if (!dashboardCreatorMutation.isPending) {
       setDashboardProgressStep(0);
       return undefined;
     }
 
     const intervalId = window.setInterval(() => {
-      setDashboardProgressStep((current) => Math.min(current + 1, dashboardLoadingSteps.length - 1));
-    }, 1100);
+      setDashboardProgressStep((current) => Math.min(current + 1, dashboardProgressStages.length - 2));
+    }, 1400);
 
     return () => window.clearInterval(intervalId);
-  }, [dashboardCreatorMutation.isPending]);
+  }, [dashboardCreatorMutation.isPending, dashboardCreatorMutation.isSuccess, dashboardProgressStages.length]);
+
+  useEffect(() => {
+    if (!dashboardCreatorMutation.data) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+
+    new Notification('Buyer Nodus', {
+      body: 'Tu dashboard ya está listo para revisar y descargar.',
+    });
+  }, [dashboardCreatorMutation.data]);
 
   const runMutation = useMutation({
     mutationFn: runAgent,
@@ -783,6 +841,7 @@ const NexuIA = () => {
       return;
     }
 
+    setDashboardProgressStep(0);
     dashboardCreatorMutation.mutate(
       {
         title: dashboardForm.title.trim(),
@@ -809,7 +868,7 @@ const NexuIA = () => {
         onError: (error) => {
           toast({
             title: 'No se pudo generar el dashboard.',
-            description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
+            description: getDashboardErrorMessage(error),
             variant: 'destructive',
           });
         },
@@ -2317,25 +2376,61 @@ const NexuIA = () => {
                         <Sparkles className="h-4 w-4 animate-pulse" />
                         <span>
                           {dashboardCreatorMutation.isPending
-                            ? 'Analizando archivos y construyendo dashboard…'
+                            ? dashboardProgressStages[dashboardProgressStep]?.message ?? 'Preparando dashboard visual…'
                             : tcoAnalysisMutation.isPending
                               ? 'Analizando documentos y construyendo análisis TCO…'
                           : 'Nodus IA está trabajando en tu solicitud…'}
                         </span>
                       </div>
-                      <Progress value={dashboardCreatorMutation.isPending ? ((dashboardProgressStep + 1) / dashboardLoadingSteps.length) * 100 : 72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+                      <Progress value={dashboardCreatorMutation.isPending ? ((dashboardProgressStep + 1) / dashboardProgressStages.length) * 100 : 72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
                       {dashboardCreatorMutation.isPending ? (
                         <div className="grid gap-2 sm:grid-cols-2">
-                          {dashboardLoadingSteps.map((step, index) => (
-                            <div key={step} className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs ${index <= dashboardProgressStep ? 'bg-white text-primary' : 'bg-white/60 text-primary/55'}`}>
-                              <span className={`h-2 w-2 rounded-full ${index <= dashboardProgressStep ? 'animate-pulse bg-primary' : 'bg-primary/25'}`} />
-                              <span>{step}…</span>
-                            </div>
-                          ))}
+                          {dashboardProgressStages.map((step, index) => {
+                            const isCompleted = index < dashboardProgressStep;
+                            const isActive = index === dashboardProgressStep;
+                            return (
+                              <div
+                                key={step.label}
+                                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs transition ${
+                                  isCompleted
+                                    ? 'bg-white text-primary'
+                                    : isActive
+                                      ? 'bg-white text-primary shadow-sm ring-1 ring-primary/15'
+                                      : 'bg-white/60 text-primary/55'
+                                }`}
+                              >
+                                {isCompleted ? (
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                                ) : (
+                                  <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse bg-primary' : 'bg-primary/25'}`} />
+                                )}
+                                <span>{step.label}{isActive ? '…' : ''}</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : null}
-                      <p className="text-xs leading-5 text-primary/70">
-                        Mantén esta pantalla abierta mientras el agente procesa la información.
+                      {dashboardCreatorMutation.isPending ? (
+                        <p className="text-xs leading-5 text-primary/70">
+                          Mantén esta pantalla abierta mientras procesamos tu dashboard.
+                        </p>
+                      ) : (
+                        <p className="text-xs leading-5 text-primary/70">
+                          Mantén esta pantalla abierta mientras el agente procesa la información.
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
+
+                  {isDashboardCreator && dashboardCreatorMutation.isError ? (
+                    <div className="space-y-2 rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+                      <div className="flex items-center gap-2 font-medium">
+                        <TriangleAlert className="h-4 w-4" />
+                        <span>No se pudo generar el dashboard</span>
+                      </div>
+                      <Progress value={Math.max(((dashboardProgressStep + 1) / dashboardProgressStages.length) * 100, 12)} className="h-2 bg-destructive/10" />
+                      <p className="text-xs leading-5 text-destructive/80">
+                        {getDashboardErrorMessage(dashboardCreatorMutation.error)}
                       </p>
                     </div>
                   ) : null}
