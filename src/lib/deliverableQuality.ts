@@ -257,7 +257,6 @@ export function auditDeliverableBeforeDownload(params: {
   else if (agentKey.includes('tco')) auditTco(result, criticalIssues, warnings, suggestions, detectedData);
 
   const sanitizedContent = sanitizeMissingFieldsForExport(result);
-  addUnique(warnings, asArray(sanitizedContent.consideraciones_del_analisis));
   const missingOptional = [...new Set(suggestions)].slice(0, 8);
   const uniqueCritical = [...new Set(criticalIssues)].slice(0, 8);
   const uniqueWarnings = [...new Set(warnings)].slice(0, 8);

@@ -8,23 +8,6 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env", encoding="utf-8-sig")
 
-REQUIRED_CORS_ORIGINS = (
-    "https://buyernodus.com",
-    "https://www.buyernodus.com",
-)
-
-
-def _parse_cors_origins() -> list[str]:
-    configured_origins = [
-        origin.strip().rstrip("/")
-        for origin in os.getenv(
-            "CORS_ORIGINS",
-            "http://localhost:5173,http://127.0.0.1:5173,https://buyernodus.com,https://www.buyernodus.com",
-        ).split(",")
-        if origin.strip()
-    ]
-    return list(dict.fromkeys([*configured_origins, *REQUIRED_CORS_ORIGINS]))
-
 
 class Settings(BaseModel):
     openai_api_key: str = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
@@ -49,7 +32,14 @@ class Settings(BaseModel):
         default_factory=lambda: os.getenv("GOOGLE_PUBSUB_TOPIC_DASHBOARD_READY", "").strip()
     )
     cors_origins: list[str] = Field(
-        default_factory=_parse_cors_origins
+        default_factory=lambda: [
+            origin.strip().rstrip("/")
+            for origin in os.getenv(
+                "CORS_ORIGINS",
+                "http://localhost:5173,http://127.0.0.1:5173,https://buyernodus.com,https://www.buyernodus.com",
+            ).split(",")
+            if origin.strip()
+        ]
     )
     temp_dir: Path = BASE_DIR / "temp"
 

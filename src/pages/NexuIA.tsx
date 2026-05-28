@@ -963,7 +963,6 @@ const NexuIA = () => {
       {
         onSuccess: (result) => {
           logAgentUsage(selectedAgent.id, 'Comparativo de propuestas de proveedores', result as unknown as Record<string, unknown>);
-          setConfirmedQualityWarnings((current) => ({ ...current, proposal: false }));
           toast({
             title: 'Análisis completado',
             description: 'El comparativo ya está listo para revisar.',
@@ -1315,7 +1314,6 @@ const NexuIA = () => {
       {
         onSuccess: (result) => {
           logAgentUsage(selectedAgent.id, 'Creador de Dashboard', result as unknown as Record<string, unknown>, false);
-          setConfirmedQualityWarnings((current) => ({ ...current, dashboard: false }));
           toast({
             title: 'Dashboard creado',
             description: 'El dashboard visual ya está listo para revisar.',
@@ -1393,7 +1391,6 @@ const NexuIA = () => {
         onSuccess: (result) => {
           setTermsEditedResult(result as unknown as Record<string, unknown>);
           setTermsPendingReview(null);
-          setConfirmedQualityWarnings((current) => ({ ...current, terms: false }));
           if (selectedAgent) {
             logAgentUsage(selectedAgent.id, 'Elaboración de términos de referencia', result as unknown as Record<string, unknown>);
           }
@@ -1744,7 +1741,6 @@ const NexuIA = () => {
             result as unknown as Record<string, unknown>,
             false,
           );
-          setConfirmedQualityWarnings((current) => ({ ...current, tco: false }));
           toast({
             title: 'Análisis TCO completado',
             description: 'El análisis de costo total ya está listo para revisar.',
