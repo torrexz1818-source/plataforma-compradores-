@@ -8,6 +8,9 @@ const routes = [
   'admin/dashboard',
   'become-expert',
   'buyer',
+  'buyer/dashboard',
+  'buyer/directory',
+  'buyer/sale',
   'calendar-setup',
   'community',
   'contenido-educativo',
@@ -31,7 +34,10 @@ const routes = [
   'register',
   'reportes',
   'supplier',
+  'supplier/dashboard',
+  'supplier/directory',
   'supplier/inicio',
+  'supplier/sale',
 ];
 
 if (!existsSync(indexPath)) {
