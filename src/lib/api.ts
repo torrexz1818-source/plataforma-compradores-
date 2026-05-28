@@ -361,6 +361,7 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
 
   const requestOptions = {
     ...options,
+    cache: options.cache ?? (options.auth ? 'no-store' : undefined),
     headers,
   };
 

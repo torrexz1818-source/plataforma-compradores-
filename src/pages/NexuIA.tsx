@@ -793,6 +793,8 @@ const NexuIA = () => {
     selectedAgent?.agentKey === 'dashboard_creator' ||
     selectedAgent?.slug === 'creador-dashboard';
   const selectedAgentKey = selectedAgent ? normalizeAgentKey(selectedAgent) : '';
+  const runExecution = runMutation.data?.execution;
+  const isCurrentRunForSelectedAgent = Boolean(selectedAgent?.id && runExecution?.agentId === selectedAgent.id);
   const pdfOptionsQuery = useQuery({
     queryKey: ['agent-pdf-options', selectedAgentKey],
     queryFn: () => getMyAgentPdfOptions(selectedAgentKey),
@@ -819,8 +821,8 @@ const NexuIA = () => {
   const isAgentActive = selectedAgent?.status ? selectedAgent.status === 'active' : Boolean(selectedAgent?.isActive);
   const canUseSelectedAgent = Boolean(selectedAgent) && (isAgentActive || (isAdminUser && selectedAgent?.status !== 'hidden'));
   const currentFeedbackRunId =
-    selectedAgent?.id && runMutation.data?.execution.agentId === selectedAgent.id
-      ? runMutation.data.execution.agentRunId
+    isCurrentRunForSelectedAgent && runExecution
+      ? runExecution.agentRunId
       : selectedAgent?.id
         ? loggedRunIds[selectedAgent.id]
         : undefined;
@@ -1797,10 +1799,11 @@ const NexuIA = () => {
   };
 
   const handleDownloadRunPdf = async () => {
-    if (!runMutation.data || !runQualityReport) return;
+    const runExecution = runMutation.data?.execution;
+    if (!runExecution || !runQualityReport) return;
     await handleExportResult({
       title: selectedAgent?.name ?? 'Resultado Nodus IA',
-      result: runMutation.data.execution.outputData,
+      result: runExecution.outputData,
       fileName: 'resultado-nodus-ia',
       operationName: 'Descarga resultado agente',
       qualityId: 'generic-run',
@@ -1865,8 +1868,8 @@ const NexuIA = () => {
   const dashboardQualityReport = dashboardResult
     ? auditDeliverableBeforeDownload({ agentKey: 'dashboard_creator', result: dashboardResult })
     : undefined;
-  const runQualityReport = runMutation.data?.execution.agentId === selectedAgent?.id
-    ? auditDeliverableBeforeDownload({ agentKey: selectedAgentKey, result: runMutation.data.execution.outputData })
+  const runQualityReport = isCurrentRunForSelectedAgent && runExecution
+    ? auditDeliverableBeforeDownload({ agentKey: selectedAgentKey, result: runExecution.outputData })
     : undefined;
   const dashboardProgressPercent = dashboardProgressStep === 0 && dashboardUploadPercent > 0
     ? Math.max(8, Math.min(18, (dashboardUploadPercent / 100) * 18))
@@ -3388,7 +3391,7 @@ const NexuIA = () => {
                     </div>
                   ) : null}
 
-                  {runMutation.data?.execution.agentId === selectedAgent.id ? (
+                  {isCurrentRunForSelectedAgent && runExecution ? (
                     <div className="rounded-[24px] border border-success/15 bg-success/15 p-4">
                       {renderDeliverableQualityReview('generic-run', runQualityReport)}
                       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -3396,15 +3399,15 @@ const NexuIA = () => {
                         {renderExportControls(handleDownloadRunPdf, undefined, { id: 'generic-run', report: runQualityReport })}
                       </div>
                       <p className="mt-2 text-sm text-success-foreground">
-                        {String(runMutation.data.execution.outputData.summary ?? 'Ejecucion completada')}
+                        {String(runExecution.outputData.summary ?? 'Ejecucion completada')}
                       </p>
                       <p className="mt-2 text-xs text-success-foreground">
-                        Ejecutado el {formatDateTime(runMutation.data.execution.executedAt)}
+                        Ejecutado el {formatDateTime(runExecution.executedAt)}
                       </p>
                     </div>
                   ) : null}
 
-                  {runMutation.data?.execution.agentId === selectedAgent.id ? renderAgentFeedbackPanel() : null}
+                  {isCurrentRunForSelectedAgent ? renderAgentFeedbackPanel() : null}
 
                   {isTermsReference && termsResult ? (
                     <div id="terms-of-reference-export-view" className="space-y-5 rounded-[8px] border border-primary/15 bg-white p-4 shadow-sm">

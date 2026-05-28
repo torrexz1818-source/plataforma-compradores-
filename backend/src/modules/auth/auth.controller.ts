@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Req, UseGuards } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthenticatedGuard } from '../../common/auth/authenticated.guard';
 import { CurrentUser } from '../../common/auth/current-user.decorator';
@@ -70,6 +70,7 @@ export class AuthController {
 
   @UseGuards(AuthenticatedGuard)
   @Get('me')
+  @Header('Cache-Control', 'no-store')
   me(@CurrentUser() user: { sub: string }) {
     return this.authService.me(user.sub);
   }
