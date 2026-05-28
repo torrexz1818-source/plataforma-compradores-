@@ -234,6 +234,21 @@ const NexuIA = () => {
     additionalInstructions: '',
   });
   const [tcoFiles, setTcoFiles] = useState<File[]>([]);
+  const [tcoProgressStep, setTcoProgressStep] = useState(0);
+  const tcoProgressStages = useMemo(
+    () => [
+      { label: 'Leyendo archivos', message: 'Leyendo archivos…' },
+      { label: 'Extrayendo datos', message: 'Extrayendo datos de propuestas…' },
+      { label: 'Detectando tipo', message: 'Detectando tipo de análisis…' },
+      { label: 'Organizando datos', message: 'Organizando datos, supuestos y faltantes…' },
+      { label: 'Matriz TCO', message: 'Construyendo matriz TCO…' },
+      { label: 'Modelo financiero', message: 'Calculando modelo financiero…' },
+      { label: 'Scorecard y ranking', message: 'Generando scorecard y ranking…' },
+      { label: 'Descargables', message: 'Preparando descargables…' },
+      { label: 'Finalizando', message: 'Finalizando análisis…' },
+    ],
+    [],
+  );
   const [limitNotice, setLimitNotice] = useState('');
   const [showUpgradePanel, setShowUpgradePanel] = useState(false);
 
@@ -335,6 +350,7 @@ const NexuIA = () => {
       additionalInstructions: '',
     });
     setTcoFiles([]);
+    setTcoProgressStep(0);
     setFeedbackComment('');
     setFeedbackCorrection('');
     setSelectedPdfMode('standard_branded');
@@ -368,6 +384,24 @@ const NexuIA = () => {
       body: 'Tu dashboard ya está listo para revisar y descargar.',
     });
   }, [dashboardCreatorMutation.data]);
+
+  useEffect(() => {
+    if (tcoAnalysisMutation.isSuccess) {
+      setTcoProgressStep(tcoProgressStages.length - 1);
+      return undefined;
+    }
+
+    if (!tcoAnalysisMutation.isPending) {
+      setTcoProgressStep(0);
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setTcoProgressStep((current) => Math.min(current + 1, tcoProgressStages.length - 2));
+    }, 1400);
+
+    return () => window.clearInterval(intervalId);
+  }, [tcoAnalysisMutation.isPending, tcoAnalysisMutation.isSuccess, tcoProgressStages.length]);
 
   const runMutation = useMutation({
     mutationFn: runAgent,
@@ -1147,6 +1181,7 @@ const NexuIA = () => {
       return;
     }
 
+    setTcoProgressStep(0);
     tcoAnalysisMutation.mutate(
       {
         title: tcoGeneral.title.trim(),
@@ -2353,7 +2388,7 @@ const NexuIA = () => {
                         disabled={tcoAnalysisMutation.isPending}
                       >
                         <PlayCircle className="mr-2 h-4 w-4" />
-                        {tcoAnalysisMutation.isPending ? 'Analizando documentos y construyendo análisis TCO…' : 'Analizar TCO'}
+                        {tcoAnalysisMutation.isPending ? 'Analizando archivos y construyendo matriz TCO…' : 'Analizar TCO'}
                       </Button>
                     ) : (
                       <>
@@ -2370,16 +2405,65 @@ const NexuIA = () => {
                     )}
                   </div>
 
-                  {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || dashboardCreatorMutation.isPending || tcoAnalysisMutation.isPending || runMutation.isPending) ? (
+                  {tcoAnalysisMutation.isPending ? (
+                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-white p-5 text-sm shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 font-semibold text-primary">
+                            <Sparkles className="h-4 w-4 animate-pulse" />
+                            <span>Analizando archivos y construyendo matriz TCO…</span>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                            {tcoProgressStages[tcoProgressStep]?.message ?? 'Construyendo matriz TCO…'}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                          Paso {Math.min(tcoProgressStep + 1, tcoProgressStages.length)} de {tcoProgressStages.length}
+                        </span>
+                      </div>
+
+                      <Progress value={((tcoProgressStep + 1) / tcoProgressStages.length) * 100} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {tcoProgressStages.map((step, index) => {
+                          const isCompleted = index < tcoProgressStep;
+                          const isActive = index === tcoProgressStep;
+                          return (
+                            <div
+                              key={step.label}
+                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                                isCompleted
+                                  ? 'border-success/20 bg-success/10 text-success-foreground'
+                                  : isActive
+                                    ? 'border-primary/20 bg-primary/10 text-primary shadow-sm'
+                                    : 'border-primary/10 bg-muted/30 text-muted-foreground'
+                              }`}
+                            >
+                              {isCompleted ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                              ) : (
+                                <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse bg-primary' : 'bg-muted-foreground/30'}`} />
+                              )}
+                              <span>{step.label}{isActive ? '…' : ''}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <p className="rounded-2xl bg-primary/5 px-3 py-2 text-xs leading-5 text-primary/75">
+                        Mantén esta pantalla abierta mientras el agente procesa la información.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {(proposalComparisonMutation.isPending || termsGenerateMutation.isPending || dashboardCreatorMutation.isPending || runMutation.isPending) ? (
                     <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
                       <div className="flex items-center gap-2 font-medium">
                         <Sparkles className="h-4 w-4 animate-pulse" />
                         <span>
                           {dashboardCreatorMutation.isPending
                             ? dashboardProgressStages[dashboardProgressStep]?.message ?? 'Preparando dashboard visual…'
-                            : tcoAnalysisMutation.isPending
-                              ? 'Analizando documentos y construyendo análisis TCO…'
-                          : 'Nodus IA está trabajando en tu solicitud…'}
+                            : 'Nodus IA está trabajando en tu solicitud…'}
                         </span>
                       </div>
                       <Progress value={dashboardCreatorMutation.isPending ? ((dashboardProgressStep + 1) / dashboardProgressStages.length) * 100 : 72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
@@ -2431,6 +2515,19 @@ const NexuIA = () => {
                       <Progress value={Math.max(((dashboardProgressStep + 1) / dashboardProgressStages.length) * 100, 12)} className="h-2 bg-destructive/10" />
                       <p className="text-xs leading-5 text-destructive/80">
                         {getDashboardErrorMessage(dashboardCreatorMutation.error)}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {isTcoAnalysis && tcoAnalysisMutation.isError ? (
+                    <div className="space-y-3 rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
+                      <div className="flex items-center gap-2 font-medium">
+                        <TriangleAlert className="h-4 w-4" />
+                        <span>No se pudo completar el análisis TCO.</span>
+                      </div>
+                      <Progress value={Math.max(((tcoProgressStep + 1) / tcoProgressStages.length) * 100, 12)} className="h-2 bg-destructive/10" />
+                      <p className="text-xs leading-5 text-destructive/80">
+                        Revisa los archivos cargados o intenta nuevamente. Si el problema continúa, valida que los documentos sean legibles.
                       </p>
                     </div>
                   ) : null}
