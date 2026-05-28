@@ -132,6 +132,7 @@ export type GenerateDashboardPayload = {
   additionalContext?: string;
   useLlmInsights?: boolean;
   files: File[];
+  onProgress?: (event: { stage: 'uploading_files' | 'reading_files'; uploadPercent?: number }) => void;
 };
 
 const DEFAULT_AI_ENGINE_URL = '/ai-engine';
@@ -139,26 +140,6 @@ const DEFAULT_AI_ENGINE_URL = '/ai-engine';
 function getAiEngineBaseUrl() {
   const configuredUrl = import.meta.env.VITE_AI_ENGINE_URL?.trim();
   return (configuredUrl || DEFAULT_AI_ENGINE_URL).replace(/\/$/, '');
-}
-
-async function readError(response: Response, fallback: string) {
-  try {
-    const data = (await response.clone().json()) as { detail?: unknown; message?: unknown };
-    if (typeof data.detail === 'string') return data.detail;
-    if (typeof data.message === 'string') return data.message;
-    if (Array.isArray(data.detail)) {
-      return data.detail
-        .map((item) => {
-          if (item && typeof item === 'object' && 'msg' in item) return String((item as { msg: unknown }).msg);
-          return String(item);
-        })
-        .join(' ');
-    }
-  } catch {
-    const text = await response.text().catch(() => '');
-    return text.trim().slice(0, 220) || response.statusText || fallback;
-  }
-  return fallback;
 }
 
 export async function generateDashboard(payload: GenerateDashboardPayload): Promise<DashboardResult> {
@@ -174,19 +155,62 @@ export async function generateDashboard(payload: GenerateDashboardPayload): Prom
   if (payload.additionalContext?.trim()) formData.append('additional_context', payload.additionalContext.trim());
   payload.files.forEach((file) => formData.append('files', file, file.name));
 
-  let response: Response;
-  try {
-    response = await fetch(`${getAiEngineBaseUrl()}/agents/dashboard-creator/generate`, {
-      method: 'POST',
-      body: formData,
-    });
-  } catch {
-    throw new Error('No se pudo conectar con el motor de IA.');
-  }
+  payload.onProgress?.({ stage: 'uploading_files', uploadPercent: 0 });
 
-  if (!response.ok) {
-    throw new Error(await readError(response, 'No se pudo generar el dashboard.'));
-  }
+  return new Promise<DashboardResult>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', `${getAiEngineBaseUrl()}/agents/dashboard-creator/generate`);
+    request.responseType = 'text';
 
-  return response.json() as Promise<DashboardResult>;
+    request.upload.onprogress = (event) => {
+      if (!event.lengthComputable) {
+        payload.onProgress?.({ stage: 'uploading_files' });
+        return;
+      }
+      payload.onProgress?.({
+        stage: 'uploading_files',
+        uploadPercent: Math.round((event.loaded / event.total) * 100),
+      });
+    };
+
+    request.upload.onload = () => {
+      payload.onProgress?.({ stage: 'reading_files', uploadPercent: 100 });
+    };
+
+    request.onerror = () => reject(new Error('No se pudo conectar con el motor de IA.'));
+    request.ontimeout = () => reject(new Error('El análisis tomó más tiempo de lo esperado.'));
+    request.onload = () => {
+      const responseText = request.responseText || '';
+      if (request.status < 200 || request.status >= 300) {
+        try {
+          const data = JSON.parse(responseText) as { detail?: unknown; message?: unknown };
+          if (typeof data.detail === 'string') {
+            reject(new Error(data.detail));
+            return;
+          }
+          if (typeof data.message === 'string') {
+            reject(new Error(data.message));
+            return;
+          }
+          if (Array.isArray(data.detail)) {
+            reject(new Error(data.detail.map((item) => (item && typeof item === 'object' && 'msg' in item ? String((item as { msg: unknown }).msg) : String(item))).join(' ')));
+            return;
+          }
+        } catch {
+          reject(new Error(responseText.trim().slice(0, 220) || 'No se pudo generar el dashboard.'));
+          return;
+        }
+        reject(new Error('No se pudo generar el dashboard.'));
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(responseText) as DashboardResult);
+      } catch {
+        reject(new Error('No se pudo leer el resultado del dashboard.'));
+      }
+    };
+
+    request.send(formData);
+  });
 }

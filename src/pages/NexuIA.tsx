@@ -157,6 +157,10 @@ function buildDashboardProgressStages(focus: string, hasInstructions: boolean) {
   ];
 }
 
+function getDashboardProgressStageIndex(stage: 'uploading_files' | 'reading_files') {
+  return stage === 'uploading_files' ? 0 : 1;
+}
+
 function getDashboardErrorMessage(error: unknown) {
   const rawMessage = error instanceof Error ? error.message : '';
   const normalized = rawMessage.toLowerCase();
@@ -216,6 +220,7 @@ const NexuIA = () => {
   const [dashboardFiles, setDashboardFiles] = useState<File[]>([]);
   const [isDashboardDropActive, setIsDashboardDropActive] = useState(false);
   const [dashboardProgressStep, setDashboardProgressStep] = useState(0);
+  const [dashboardUploadPercent, setDashboardUploadPercent] = useState(0);
   const dashboardProgressStages = useMemo(
     () => buildDashboardProgressStages(
       dashboardForm.visualizationFocus,
@@ -340,6 +345,7 @@ const NexuIA = () => {
     });
     setDashboardFiles([]);
     setDashboardProgressStep(0);
+    setDashboardUploadPercent(0);
     tcoAnalysisMutation.reset();
     setTcoGeneral({
       title: '',
@@ -383,11 +389,13 @@ const NexuIA = () => {
   useEffect(() => {
     if (dashboardCreatorMutation.isSuccess) {
       setDashboardProgressStep(dashboardProgressStages.length - 1);
+      setDashboardUploadPercent(100);
       return undefined;
     }
 
     if (!dashboardCreatorMutation.isPending) {
       setDashboardProgressStep(0);
+      if (!dashboardCreatorMutation.isError) setDashboardUploadPercent(0);
       return undefined;
     }
 
@@ -895,6 +903,8 @@ const NexuIA = () => {
       return;
     }
     setDashboardFiles(mergedFiles);
+    setDashboardProgressStep(0);
+    setDashboardUploadPercent(0);
     if (duplicateFiles.length) {
       toast({
         title: 'Se omitieron archivos duplicados.',
@@ -946,6 +956,7 @@ const NexuIA = () => {
     }
 
     setDashboardProgressStep(0);
+    setDashboardUploadPercent(0);
     dashboardCreatorMutation.mutate(
       {
         title: dashboardForm.title.trim(),
@@ -960,6 +971,10 @@ const NexuIA = () => {
         additionalContext: dashboardForm.additionalContext,
         useLlmInsights: true,
         files: dashboardFiles,
+        onProgress: ({ stage, uploadPercent }) => {
+          setDashboardProgressStep((current) => Math.max(current, getDashboardProgressStageIndex(stage)));
+          if (typeof uploadPercent === 'number') setDashboardUploadPercent(uploadPercent);
+        },
       },
       {
         onSuccess: (result) => {
@@ -1364,6 +1379,9 @@ const NexuIA = () => {
   const tcoWinningFinancial = tcoPresentation?.financialModel.find((item) => textValue(item.alternative, '') === textValue(tcoScoreWinner?.alternative ?? tcoRecommendation?.final_recommended_option ?? tcoResult?.executive_summary.best_alternative, ''));
   const tcoConfidence = tcoPresentation?.scorecard.confidenceLevel || tcoResult?.extracted_data_quality?.confidence_level || 'No especificado';
   const dashboardResult = dashboardCreatorMutation.data;
+  const dashboardProgressPercent = dashboardProgressStep === 0 && dashboardUploadPercent > 0
+    ? Math.max(8, Math.min(18, (dashboardUploadPercent / 100) * 18))
+    : ((dashboardProgressStep + 1) / dashboardProgressStages.length) * 100;
   const termsSections = termsFormSchema?.form_sections ?? [];
   const termsTotalSteps = termsFormSchema ? termsSections.length + 2 : 1;
   const termsProgressPercent = termsFormSchema
@@ -2627,53 +2645,80 @@ const NexuIA = () => {
                     </div>
                   ) : null}
 
-                  {(proposalComparisonMutation.isPending || dashboardCreatorMutation.isPending || runMutation.isPending) ? (
+                  {dashboardCreatorMutation.isPending ? (
+                    <div className="space-y-4 rounded-[24px] border border-primary/15 bg-white p-5 text-sm shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2 font-semibold text-primary">
+                            <Sparkles className="h-4 w-4 animate-pulse" />
+                            <span>Analizando archivos y construyendo dashboard…</span>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                            {dashboardProgressStages[dashboardProgressStep]?.message ?? 'Preparando resultado final…'}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                          Paso {Math.min(dashboardProgressStep + 1, dashboardProgressStages.length)} de {dashboardProgressStages.length}
+                        </span>
+                      </div>
+
+                      <Progress value={dashboardProgressPercent} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {dashboardProgressStages.map((step, index) => {
+                          const isCompleted = index < dashboardProgressStep;
+                          const isActive = index === dashboardProgressStep;
+                          return (
+                            <div
+                              key={step.label}
+                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
+                                isCompleted
+                                  ? 'border-success/20 bg-success/10 text-success-foreground'
+                                  : isActive
+                                    ? 'border-primary/20 bg-primary/10 text-primary shadow-sm'
+                                    : 'border-primary/10 bg-muted/30 text-muted-foreground'
+                              }`}
+                            >
+                              {isCompleted ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                              ) : (
+                                <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse bg-primary' : 'bg-muted-foreground/30'}`} />
+                              )}
+                              <span>{step.label}{isActive ? '…' : ''}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <p className="rounded-2xl bg-primary/5 px-3 py-2 text-xs leading-5 text-primary/75">
+                        Mantén esta pantalla abierta mientras procesamos tu dashboard.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {isDashboardCreator && dashboardCreatorMutation.isSuccess ? (
+                    <div className="space-y-2 rounded-2xl border border-success/20 bg-success/10 p-4 text-sm text-success-foreground">
+                      <div className="flex items-center gap-2 font-medium">
+                        <CheckCircle2 className="h-4 w-4 text-success" />
+                        <span>Dashboard listo</span>
+                      </div>
+                      <Progress value={100} className="h-2 bg-success/10" />
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Ya puedes revisar y descargar el resultado.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {(proposalComparisonMutation.isPending || runMutation.isPending) ? (
                     <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-primary">
                       <div className="flex items-center gap-2 font-medium">
                         <Sparkles className="h-4 w-4 animate-pulse" />
-                        <span>
-                          {dashboardCreatorMutation.isPending
-                            ? dashboardProgressStages[dashboardProgressStep]?.message ?? 'Preparando dashboard visual…'
-                            : 'Nodus IA está trabajando en tu solicitud…'}
-                        </span>
+                        <span>Nodus IA está trabajando en tu solicitud…</span>
                       </div>
-                      <Progress value={dashboardCreatorMutation.isPending ? ((dashboardProgressStep + 1) / dashboardProgressStages.length) * 100 : 72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
-                      {dashboardCreatorMutation.isPending ? (
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {dashboardProgressStages.map((step, index) => {
-                            const isCompleted = index < dashboardProgressStep;
-                            const isActive = index === dashboardProgressStep;
-                            return (
-                              <div
-                                key={step.label}
-                                className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs transition ${
-                                  isCompleted
-                                    ? 'bg-white text-primary'
-                                    : isActive
-                                      ? 'bg-white text-primary shadow-sm ring-1 ring-primary/15'
-                                      : 'bg-white/60 text-primary/55'
-                                }`}
-                              >
-                                {isCompleted ? (
-                                  <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                                ) : (
-                                  <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse bg-primary' : 'bg-primary/25'}`} />
-                                )}
-                                <span>{step.label}{isActive ? '…' : ''}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                      {dashboardCreatorMutation.isPending ? (
-                        <p className="text-xs leading-5 text-primary/70">
-                          Mantén esta pantalla abierta mientras procesamos tu dashboard.
-                        </p>
-                      ) : (
-                        <p className="text-xs leading-5 text-primary/70">
-                          Mantén esta pantalla abierta mientras el agente procesa la información.
-                        </p>
-                      )}
+                      <Progress value={72} className="h-2 bg-primary/10 [&>div]:animate-pulse" />
+                      <p className="text-xs leading-5 text-primary/70">
+                        Mantén esta pantalla abierta mientras el agente procesa la información.
+                      </p>
                     </div>
                   ) : null}
 
