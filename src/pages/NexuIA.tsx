@@ -56,12 +56,17 @@ import {
 import {
   validateTermsFiles,
   type TermsFormField,
+  type TermsFormSection,
 } from '@/features/terms-of-reference/termsOfReferenceApi';
 import { useDashboardCreator } from '@/features/dashboard-creator/useDashboardCreator';
 import { DashboardReportView } from '@/features/dashboard-creator/components/DashboardReportView';
 import { useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
 import { normalizeTcoForPresentation } from '@/features/tco-analysis/tcoPresentation';
-import { downloadAgentResult, type AgentExportFormat } from '@/lib/agentPdf';
+import { downloadAgentResult, type AgentExportFormat, type TermsExportScope } from '@/lib/agentPdf';
+import {
+  auditDeliverableBeforeDownload,
+  type DeliverableQualityReport,
+} from '@/lib/deliverableQuality';
 import MonetizationPanel from '@/components/MonetizationPanel';
 
 const iconMap = {
@@ -88,6 +93,78 @@ const tcoAnalysisTypes = [
 
 const tcoEvaluationHorizons = ['Por compra', '1 año', '3 años', '5 años', 'Vida útil', 'Personalizado'];
 const tcoComparisonUnits = ['Por unidad', 'Por lote', 'Por usuario', 'Por km', 'Por hora', 'Por contrato', 'Por proyecto', 'Por año', 'Por mes'];
+
+const optionalTermsField = (name: string, label: string, placeholder: string, type: TermsFormField['type'] = 'text', options: string[] = []): TermsFormField => ({
+  name,
+  label,
+  type,
+  required: false,
+  placeholder,
+  options,
+});
+
+const termsContractingExtraSections: TermsFormSection[] = [
+  {
+    section_title: 'BC-01 Bases del Concurso',
+    fields: [
+      optionalTermsField('process_code', 'Código del proceso', 'Ejemplo: CP-2026-001'),
+      optionalTermsField('contracting_entity', 'Entidad convocante', 'Razón social o área convocante'),
+      optionalTermsField('tender_modality', 'Modalidad del concurso', 'Ejemplo: Concurso privado'),
+      optionalTermsField('reference_budget', 'Presupuesto referencial', 'Monto referencial si aplica'),
+      optionalTermsField('currency', 'Moneda', 'Ejemplo: PEN, USD'),
+      optionalTermsField('proposal_submission_format', 'Forma de presentación de propuestas', 'Ejemplo: propuesta técnica y económica separadas'),
+      optionalTermsField('submission_channel', 'Medio de envío', 'Presencial, correo, plataforma u otro'),
+      optionalTermsField('allow_consortium', '¿Se permitirá consorcio?', 'Sí / No / Por definir'),
+      optionalTermsField('technical_visit', '¿Habrá visita técnica?', 'Sí / No / Por definir'),
+      optionalTermsField('minimum_supplier_requirements', 'Requisitos mínimos del proveedor', 'Experiencia, equipo, certificaciones o recursos mínimos', 'textarea'),
+      optionalTermsField('mandatory_documents', 'Documentos obligatorios', 'Lista de documentos obligatorios', 'textarea'),
+      optionalTermsField('subsanable_documents', 'Documentos subsanables', 'Lista de documentos subsanables', 'textarea'),
+      optionalTermsField('technical_economic_criteria', 'Criterio técnico/económico', 'Ejemplo: 70/30'),
+      optionalTermsField('minimum_technical_score', 'Puntaje mínimo técnico', 'Ejemplo: 60 puntos'),
+      optionalTermsField('tie_breaker_criteria', 'Criterios de desempate', 'Reglas de desempate', 'textarea'),
+      optionalTermsField('disqualification_rules', 'Causales de descalificación', 'Causales o reglas críticas', 'textarea'),
+      optionalTermsField('legal_review_owner', 'Área legal o responsable de revisión', 'Nombre, cargo o área responsable'),
+    ],
+  },
+  {
+    section_title: 'INV-03 Invitación a postores',
+    fields: [
+      optionalTermsField('invited_company_name', 'Nombre de empresa invitada', 'Empresa invitada principal'),
+      optionalTermsField('invited_contact_name', 'Nombre del contacto', 'Nombre del contacto'),
+      optionalTermsField('invited_contact_role', 'Cargo del contacto', 'Cargo del contacto'),
+      optionalTermsField('invited_contact_email', 'Correo del contacto', 'correo@empresa.com'),
+      optionalTermsField('invited_contact_phone', 'Teléfono del contacto', 'Teléfono o anexo'),
+      optionalTermsField('internal_process_owner', 'Responsable interno del proceso', 'Nombre del responsable interno'),
+      optionalTermsField('internal_process_owner_role', 'Cargo del responsable interno', 'Cargo o área'),
+      optionalTermsField('questions_contact_email', 'Correo de contacto para consultas', 'correo@empresa.com'),
+      optionalTermsField('participation_confirmation_deadline', 'Fecha límite para confirmar participación', 'Fecha o hito'),
+      optionalTermsField('questions_deadline', 'Fecha límite para consultas', 'Fecha o hito'),
+      optionalTermsField('proposal_deadline', 'Fecha límite para presentar propuesta', 'Fecha o hito'),
+      optionalTermsField('attached_documents_list', 'Lista de documentos adjuntos', 'TDR, bases, cronograma, anexos', 'textarea'),
+      optionalTermsField('bidder_message', 'Mensaje adicional para postores', 'Mensaje breve para incluir en la invitación', 'textarea'),
+      optionalTermsField('confidentiality_level', 'Nivel de confidencialidad', 'Interno, confidencial, reservado'),
+      optionalTermsField('invited_bidders_list', 'Múltiples postores invitados', 'Una empresa por línea, con contacto/correo si existe', 'textarea'),
+    ],
+  },
+  {
+    section_title: 'CRO-04 Cronograma',
+    fields: [
+      optionalTermsField('call_date', 'Fecha de convocatoria', 'Fecha o Día 1'),
+      optionalTermsField('confirmation_deadline', 'Fecha límite de confirmación', 'Fecha o hito'),
+      optionalTermsField('technical_visit_date', 'Fecha de visita técnica, si aplica', 'Fecha o No aplica'),
+      optionalTermsField('query_deadline', 'Fecha límite de consultas', 'Fecha o hito'),
+      optionalTermsField('query_response_date', 'Fecha de absolución de consultas', 'Fecha o hito'),
+      optionalTermsField('technical_opening_date', 'Fecha de apertura técnica', 'Fecha o hito'),
+      optionalTermsField('economic_opening_date', 'Fecha de apertura económica', 'Fecha o hito'),
+      optionalTermsField('award_date', 'Fecha de adjudicación', 'Fecha o hito'),
+      optionalTermsField('contract_signature_date', 'Fecha estimada de firma de contrato', 'Fecha o hito'),
+      optionalTermsField('execution_start_date', 'Fecha de inicio de ejecución', 'Fecha o hito'),
+      optionalTermsField('execution_term', 'Plazo de ejecución', 'Ejemplo: 30 días calendario'),
+      optionalTermsField('stage_responsible', 'Responsable por etapa', 'Responsables por fase o hito', 'textarea'),
+      optionalTermsField('schedule_observations', 'Observaciones del cronograma', 'Restricciones, feriados, dependencias o hitos críticos', 'textarea'),
+    ],
+  },
+];
 const tcoCurrencies = ['PEN', 'USD', 'EUR', 'Otra'];
 const dashboardAudiences = ['Gerencia', 'Compras', 'Finanzas', 'Operaciones', 'Proveedores', 'Auditoría', 'Otro'];
 const dashboardDataTypes = ['Gastos', 'Proveedores', 'Compras', 'Contratos', 'Inventario', 'Cotizaciones', 'Indicadores KPI', 'Datos mixtos', 'Otro'];
@@ -291,6 +368,12 @@ const NexuIA = () => {
   const [termsFiles, setTermsFiles] = useState<File[]>([]);
   const [termsCurrentStep, setTermsCurrentStep] = useState(0);
   const [termsProcessingStep, setTermsProcessingStep] = useState(0);
+  const [termsActiveTab, setTermsActiveTab] = useState('documento');
+  const [termsEditedResult, setTermsEditedResult] = useState<Record<string, unknown> | null>(null);
+  const [termsPendingReview, setTermsPendingReview] = useState<{
+    scope: TermsExportScope;
+    items: Array<{ token: string; type: 'COMPLETAR' | 'SUGERIDO'; replacement: string; document: string }>;
+  } | null>(null);
   const [isTermsDropActive, setIsTermsDropActive] = useState(false);
   const [loggedRunIds, setLoggedRunIds] = useState<Record<string, string>>({});
   const [feedbackStars, setFeedbackStars] = useState(5);
@@ -300,6 +383,7 @@ const NexuIA = () => {
   const [selectedPdfMode, setSelectedPdfMode] = useState<AgentPdfMode>('standard_branded');
   const [selectedExportFormat, setSelectedExportFormat] = useState<AgentExportFormat>('pdf');
   const [isExportingResult, setIsExportingResult] = useState(false);
+  const [confirmedQualityWarnings, setConfirmedQualityWarnings] = useState<Record<string, boolean>>({});
   const termsFormSchemaMutation = useTermsFormSchema();
   const termsGenerateMutation = useGenerateTermsOfReference();
   const dashboardCreatorMutation = useDashboardCreator();
@@ -441,6 +525,9 @@ const NexuIA = () => {
     setTermsFiles([]);
     setTermsCurrentStep(0);
     setTermsProcessingStep(0);
+    setTermsActiveTab('documento');
+    setTermsEditedResult(null);
+    setTermsPendingReview(null);
     setIsTermsDropActive(false);
     termsFormSchemaMutation.reset();
     termsGenerateMutation.reset();
@@ -960,7 +1047,18 @@ const NexuIA = () => {
     await validateAgentPdfMode({ agentKey: selectedAgentKey, pdfMode: selectedPdfMode });
   };
 
-  const renderExportControls = (onDownload: () => void | Promise<void>) => (
+  const canDownloadQuality = (qualityId: string, report?: DeliverableQualityReport) => {
+    if (!report) return false;
+    if (report.status === 'blocked') return false;
+    if (report.status === 'approved_with_warnings') return Boolean(confirmedQualityWarnings[qualityId]);
+    return true;
+  };
+
+  const renderExportControls = (
+    onDownload: () => void | Promise<void>,
+    contextLabel?: string,
+    quality?: { id: string; report?: DeliverableQualityReport },
+  ) => (
     <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
       <span>Formato</span>
       <select
@@ -982,12 +1080,88 @@ const NexuIA = () => {
           <option key={mode.value} value={mode.value}>{mode.label}</option>
         ))}
       </select>
-      <Button type="button" variant="outline" className="rounded-full" onClick={() => void onDownload()} disabled={isExportingResult}>
+      <Button
+        type="button"
+        variant="outline"
+        className="rounded-full"
+        onClick={() => void onDownload()}
+        disabled={isExportingResult || (quality ? !canDownloadQuality(quality.id, quality.report) : false)}
+      >
         <Download className="mr-2 h-4 w-4" />
-        {isExportingResult ? 'Preparando...' : `Descargar ${selectedExportFormatLabel}`}
+        {isExportingResult ? 'Preparando...' : `Descargar ${selectedExportFormatLabel}${contextLabel ? ` ${contextLabel}` : ''}`}
       </Button>
     </div>
   );
+
+  const renderDeliverableQualityReview = (qualityId: string, report?: DeliverableQualityReport) => {
+    if (!report) return null;
+    const tone = report.status === 'approved'
+      ? 'border-success/20 bg-success/10'
+      : report.status === 'approved_with_warnings'
+        ? 'border-amber-200 bg-amber-50'
+        : 'border-destructive/20 bg-destructive/10';
+    const label = report.status === 'approved'
+      ? 'Aprobado'
+      : report.status === 'approved_with_warnings'
+        ? 'Aprobado con advertencias'
+        : 'Requiere informacion adicional';
+
+    return (
+      <div data-export-hidden="true" className={`rounded-2xl border p-4 text-sm ${tone}`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 font-semibold text-foreground">
+              {report.status === 'blocked' ? <TriangleAlert className="h-4 w-4 text-destructive" /> : <ShieldCheck className="h-4 w-4 text-primary" />}
+              <span>Revision del entregable</span>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">{report.userMessage}</p>
+          </div>
+          <Badge variant="outline" className="bg-white/80">
+            {label} · {report.score}/100
+          </Badge>
+        </div>
+
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          <div className="rounded-xl bg-white/80 p-3">
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">Datos detectados</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {report.detectedData.length ? report.detectedData.join(', ') : 'Contenido ejecutivo disponible'}
+            </p>
+          </div>
+          <div className="rounded-xl bg-white/80 p-3">
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">Faltantes criticos</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {report.missingFields.critical.length ? report.missingFields.critical.join(', ') : 'Sin faltantes criticos detectados'}
+            </p>
+          </div>
+          <div className="rounded-xl bg-white/80 p-3">
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground/70">Sugerencias</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              {report.suggestions.length ? report.suggestions.slice(0, 3).join(' | ') : 'No se requieren datos adicionales'}
+            </p>
+          </div>
+        </div>
+
+        {report.warnings.length ? (
+          <p className="mt-3 rounded-xl bg-white/80 p-3 text-xs leading-5 text-muted-foreground">
+            {report.warnings.slice(0, 2).join(' ')}
+          </p>
+        ) : null}
+
+        {report.status === 'approved_with_warnings' ? (
+          <label className="mt-3 flex items-start gap-2 rounded-xl bg-white/80 p-3 text-xs leading-5 text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={Boolean(confirmedQualityWarnings[qualityId])}
+              onChange={(event) => setConfirmedQualityWarnings((current) => ({ ...current, [qualityId]: event.target.checked }))}
+              className="mt-0.5"
+            />
+            <span>Entiendo que el archivo se generara con la informacion disponible y que puede no alcanzar la maxima calidad posible por falta de datos complementarios.</span>
+          </label>
+        ) : null}
+      </div>
+    );
+  };
 
   const addTermsFiles = (selectedFiles: File[]) => {
     if (!selectedFiles.length) return;
@@ -1215,6 +1389,8 @@ const NexuIA = () => {
       },
       {
         onSuccess: (result) => {
+          setTermsEditedResult(result as unknown as Record<string, unknown>);
+          setTermsPendingReview(null);
           if (selectedAgent) {
             logAgentUsage(selectedAgent.id, 'Elaboración de términos de referencia', result as unknown as Record<string, unknown>);
           }
@@ -1234,20 +1410,37 @@ const NexuIA = () => {
     );
   };
 
-  const handleExportResult = async (input: { title: string; result: Record<string, unknown>; fileName: string; operationName: string; captureElementId?: string }) => {
+  const handleExportResult = async (input: {
+    title: string;
+    result: Record<string, unknown>;
+    fileName: string;
+    operationName: string;
+    captureElementId?: string;
+    termsScope?: TermsExportScope;
+    qualityId: string;
+    qualityReport: DeliverableQualityReport;
+  }) => {
     try {
+      if (input.qualityReport.status === 'blocked') {
+        throw new Error(input.qualityReport.userMessage);
+      }
+      if (input.qualityReport.status === 'approved_with_warnings' && !confirmedQualityWarnings[input.qualityId]) {
+        throw new Error('Confirma que deseas continuar con la informacion disponible antes de descargar.');
+      }
       setIsExportingResult(true);
       await ensureExportModeAllowed();
       await downloadAgentResult({
         title: input.title,
         agentName: selectedAgent?.name,
         userName: user?.fullName,
-        result: input.result,
+        result: input.qualityReport.sanitizedContent,
         fileName: input.fileName,
         format: selectedExportFormat,
+        agentKey: selectedAgentKey,
         pdfMode: selectedPdfMode,
         pdfOptions: pdfOptionsQuery.data,
         captureElementId: selectedExportFormat === 'pdf' ? input.captureElementId : undefined,
+        termsScope: input.termsScope,
       });
       if (selectedAgent) {
         logAgentUsage(selectedAgent.id, `${input.operationName} ${selectedExportFormat.toUpperCase()}`, input.result, selectedExportFormat === 'pdf');
@@ -1350,15 +1543,116 @@ const NexuIA = () => {
     'Disclaimer': result.disclaimer,
   });
 
-  const handleDownloadTermsResult = async () => {
-    if (!termsGenerateMutation.data) return;
-    await handleExportResult({
-      title: 'Término de referencia',
-      result: termsGenerateMutation.data as unknown as Record<string, unknown>,
-      fileName: 'termino-referencia-nodus-ia',
-      operationName: 'Descarga término de referencia',
-      captureElementId: 'terms-of-reference-export-view',
+  const resolveTermsDownloadScope = (activeTab: string): TermsExportScope => {
+    if (['documento', 'matriz', 'calidad'].includes(activeTab)) {
+      return { documentCode: 'TDR-01', documentTitle: 'Terminos de Referencia', sections: ['tdr', 'matrizRiesgos', 'calidad'] };
+    }
+    if (activeTab === 'licitacion') return { documentCode: 'BC-01', documentTitle: 'Bases del Concurso', sections: ['bases'] };
+    if (activeTab === 'correo') return { documentCode: 'INV-03', documentTitle: 'Invitacion', sections: ['invitacion'] };
+    if (activeTab === 'cronograma') return { documentCode: 'CRO-04', documentTitle: 'Cronograma del Proceso', sections: ['cronograma'] };
+    return { documentCode: 'PEN-05', documentTitle: 'Pendientes y Recomendaciones', sections: ['pendientes', 'recomendaciones'] };
+  };
+
+  const termsExportContextLabel = resolveTermsDownloadScope(termsActiveTab).documentCode;
+
+  const collectTermsPendingItems = (result: Record<string, unknown>, scope: TermsExportScope) => {
+    const document = textValue((result.generated_document as Record<string, unknown>) ?? {});
+    const bases = textValue(result.tender_bases);
+    const invitation = textValue(result.supplier_invitation_email);
+    const schedule = textValue(result.process_schedule);
+    const pending = textValue([result.missing_information, result.buyer_recommendations, result.recommended_questions]);
+    const scopedText = [
+      scope.sections.includes('tdr') || scope.sections.includes('matrizRiesgos') || scope.sections.includes('calidad') ? document : '',
+      scope.sections.includes('bases') ? bases : '',
+      scope.sections.includes('invitacion') ? invitation : '',
+      scope.sections.includes('cronograma') ? schedule : '',
+      scope.sections.includes('pendientes') ? pending : '',
+    ].join(' ');
+    const matches = Array.from(new Set(scopedText.match(/\[(COMPLETAR|SUGERIDO)[^\]]*\][^,;.\n"}]*/gi) ?? []));
+    return matches.map((token) => {
+      const type = /completar/i.test(token) ? 'COMPLETAR' as const : 'SUGERIDO' as const;
+      const clean = token.replace(/^\[(?:COMPLETAR|SUGERIDO)(?:\s*[-:]\s*confirmar)?\s*:?\s*/i, '').replace(/\]$/, '').trim();
+      return {
+        token,
+        type,
+        replacement: type === 'SUGERIDO' ? clean.replace(/^\]/, '').trim() : '',
+        document: scope.documentCode,
+      };
     });
+  };
+
+  const replaceTermsTokens = (value: unknown, replacements: Record<string, string>): unknown => {
+    if (typeof value === 'string') {
+      return Object.entries(replacements).reduce((text, [token, replacement]) => text.split(token).join(replacement || token), value);
+    }
+    if (Array.isArray(value)) return value.map((item) => replaceTermsTokens(item, replacements));
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, item]) => [key, replaceTermsTokens(item, replacements)]));
+    }
+    return value;
+  };
+
+  const exportTermsWithScope = async (scope: TermsExportScope, forceWarnings = false) => {
+    if (!termsResult || !termsQualityReport) return;
+    const result = termsResult as unknown as Record<string, unknown>;
+    const pendingItems = collectTermsPendingItems(result, scope);
+    if (!forceWarnings && pendingItems.length) {
+      setTermsPendingReview({ scope, items: pendingItems });
+      return;
+    }
+    if (forceWarnings) setTermsPendingReview(null);
+    await handleExportResult({
+      title: `${scope.documentCode} ${scope.documentTitle}`,
+      result,
+      fileName: scope.documentCode,
+      operationName: `Descarga ${scope.documentCode}`,
+      termsScope: { ...scope, hasPendingWarnings: forceWarnings && pendingItems.some((item) => item.type === 'COMPLETAR') },
+      qualityId: 'terms',
+      qualityReport: termsQualityReport,
+    });
+  };
+
+  const updateTermsPendingReplacement = (token: string, replacement: string) => {
+    setTermsPendingReview((current) => current
+      ? { ...current, items: current.items.map((item) => item.token === token ? { ...item, replacement } : item) }
+      : current);
+  };
+
+  const applyTermsPendingAndDownload = async () => {
+    if (!termsPendingReview || !termsResult) return;
+    const missingRequired = termsPendingReview.items.filter((item) => item.type === 'COMPLETAR' && !item.replacement.trim());
+    if (missingRequired.length) {
+      toast({
+        title: 'Completa los datos pendientes.',
+        description: 'Para usar esta opción, completa los campos marcados como obligatorios o descarga con advertencias.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const replacements = Object.fromEntries(
+      termsPendingReview.items
+        .filter((item) => item.replacement.trim())
+        .map((item) => [item.token, item.replacement.trim()]),
+    );
+    const updated = replaceTermsTokens(termsResult as unknown as Record<string, unknown>, replacements) as Record<string, unknown>;
+    setTermsEditedResult(updated);
+    const scope = termsPendingReview.scope;
+    const updatedQualityReport = auditDeliverableBeforeDownload({ agentKey: 'terms_of_reference', result: updated });
+    setTermsPendingReview(null);
+    await handleExportResult({
+      title: `${scope.documentCode} ${scope.documentTitle}`,
+      result: updated,
+      fileName: scope.documentCode,
+      operationName: `Descarga ${scope.documentCode}`,
+      termsScope: scope,
+      qualityId: 'terms',
+      qualityReport: updatedQualityReport,
+    });
+  };
+
+  const handleDownloadTermsResult = async () => {
+    if (!termsResult) return;
+    await exportTermsWithScope(resolveTermsDownloadScope(termsActiveTab));
   };
 
   const updateTcoGeneral = (field: keyof typeof tcoGeneral, value: string) => {
@@ -1464,45 +1758,53 @@ const NexuIA = () => {
   };
 
   const handleDownloadTcoPdf = async () => {
-    if (!tcoAnalysisMutation.data) return;
+    if (!tcoAnalysisMutation.data || !tcoQualityReport) return;
     await handleExportResult({
       title: 'Análisis de Costo Total / TCO',
       result: tcoAnalysisMutation.data as unknown as Record<string, unknown>,
       fileName: 'analisis-tco-nodus-ia',
       operationName: 'Descarga análisis TCO',
       captureElementId: 'tco-analysis-export-view',
+      qualityId: 'tco',
+      qualityReport: tcoQualityReport,
     });
   };
 
   const handleDownloadDashboardPdf = async () => {
-    if (!dashboardCreatorMutation.data) return;
+    if (!dashboardCreatorMutation.data || !dashboardQualityReport) return;
     await handleExportResult({
       title: dashboardCreatorMutation.data.dashboard_title || 'Dashboard generado',
       result: dashboardCreatorMutation.data as unknown as Record<string, unknown>,
       fileName: 'dashboard-nodus-ia',
       operationName: 'Descarga dashboard',
       captureElementId: 'dashboard-creator-export-view',
+      qualityId: 'dashboard',
+      qualityReport: dashboardQualityReport,
     });
   };
 
   const handleDownloadProposalPdf = async () => {
-    if (!proposalComparisonResult) return;
+    if (!proposalComparisonResult || !proposalQualityReport) return;
     await handleExportResult({
       title: 'Comparativos de propuestas de proveedores',
       result: proposalComparisonResult as unknown as Record<string, unknown>,
       fileName: 'comparativo-propuestas-nodus-ia',
       operationName: 'Descarga comparativo de propuestas',
       captureElementId: 'proposal-comparison-export-view',
+      qualityId: 'proposal',
+      qualityReport: proposalQualityReport,
     });
   };
 
   const handleDownloadRunPdf = async () => {
-    if (!runMutation.data) return;
+    if (!runMutation.data || !runQualityReport) return;
     await handleExportResult({
       title: selectedAgent?.name ?? 'Resultado Nodus IA',
       result: runMutation.data.execution.outputData,
       fileName: 'resultado-nodus-ia',
       operationName: 'Descarga resultado agente',
+      qualityId: 'generic-run',
+      qualityReport: runQualityReport,
     });
   };
 
@@ -1528,8 +1830,14 @@ const NexuIA = () => {
   };
 
   const proposalComparisonResult = proposalComparisonMutation.data;
+  const proposalQualityReport = proposalComparisonResult
+    ? auditDeliverableBeforeDownload({ agentKey: 'proposal_comparison', result: proposalComparisonResult })
+    : undefined;
   const termsFormSchema = termsFormSchemaMutation.data;
-  const termsResult = termsGenerateMutation.data;
+  const termsResult = (termsEditedResult ?? termsGenerateMutation.data) as typeof termsGenerateMutation.data;
+  const termsQualityReport = termsResult
+    ? auditDeliverableBeforeDownload({ agentKey: 'terms_of_reference', result: termsResult })
+    : undefined;
   const termsGeneratedDocuments = termsResult?.generated_documents?.length
     ? termsResult.generated_documents
     : ['TDR', 'Bases del Concurso', 'Invitacion a postores', 'Cronograma'];
@@ -1539,7 +1847,13 @@ const NexuIA = () => {
   const showTermsInvitation = hasTermsDocument('invitacion') || hasTermsDocument('invitación');
   const showTermsSchedule = hasTermsDocument('cronograma');
   const termsDefaultTab = showTermsTdr ? 'documento' : showTermsBases ? 'licitacion' : showTermsInvitation ? 'correo' : showTermsSchedule ? 'cronograma' : 'matriz';
+  useEffect(() => {
+    if (termsResult) setTermsActiveTab(termsDefaultTab);
+  }, [termsResult?.title, termsDefaultTab]);
   const tcoResult = tcoAnalysisMutation.data;
+  const tcoQualityReport = tcoResult
+    ? auditDeliverableBeforeDownload({ agentKey: 'tco_analysis', result: tcoResult })
+    : undefined;
   const tcoPresentation = tcoResult ? normalizeTcoForPresentation(tcoResult) : undefined;
   const tcoRecommendation = tcoResult?.strategic_recommendation;
   const tcoExecutiveCards = tcoPresentation?.kpis ?? [];
@@ -1548,6 +1862,12 @@ const NexuIA = () => {
   const tcoWinningFinancial = tcoPresentation?.financialModel.find((item) => textValue(item.alternative, '') === textValue(tcoScoreWinner?.alternative ?? tcoRecommendation?.final_recommended_option ?? tcoResult?.executive_summary.best_alternative, ''));
   const tcoConfidence = tcoPresentation?.scorecard.confidenceLevel || tcoResult?.extracted_data_quality?.confidence_level || 'No especificado';
   const dashboardResult = dashboardCreatorMutation.data;
+  const dashboardQualityReport = dashboardResult
+    ? auditDeliverableBeforeDownload({ agentKey: 'dashboard_creator', result: dashboardResult })
+    : undefined;
+  const runQualityReport = runMutation.data?.execution.agentId === selectedAgent?.id
+    ? auditDeliverableBeforeDownload({ agentKey: selectedAgentKey, result: runMutation.data.execution.outputData })
+    : undefined;
   const dashboardProgressPercent = dashboardProgressStep === 0 && dashboardUploadPercent > 0
     ? Math.max(8, Math.min(18, (dashboardUploadPercent / 100) * 18))
     : ((dashboardProgressStep + 1) / dashboardProgressStages.length) * 100;
@@ -1559,7 +1879,7 @@ const NexuIA = () => {
         ? proposalProgressStep
         : 0;
   const proposalProgressPercent = Math.round((proposalProgressCompletedSteps / proposalProgressStages.length) * 100);
-  const termsSections = termsFormSchema?.form_sections ?? [];
+  const termsSections = termsFormSchema ? [...termsFormSchema.form_sections, ...termsContractingExtraSections] : [];
   const termsTotalSteps = termsFormSchema ? termsSections.length + 2 : 1;
   const termsProgressPercent = termsFormSchema
     ? Math.round(((termsCurrentStep + 1) / termsTotalSteps) * 100)
@@ -3070,9 +3390,10 @@ const NexuIA = () => {
 
                   {runMutation.data?.execution.agentId === selectedAgent.id ? (
                     <div className="rounded-[24px] border border-success/15 bg-success/15 p-4">
+                      {renderDeliverableQualityReview('generic-run', runQualityReport)}
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <p className="text-sm font-medium text-success-foreground">Resultado mas reciente</p>
-                        {renderExportControls(handleDownloadRunPdf)}
+                        {renderExportControls(handleDownloadRunPdf, undefined, { id: 'generic-run', report: runQualityReport })}
                       </div>
                       <p className="mt-2 text-sm text-success-foreground">
                         {String(runMutation.data.execution.outputData.summary ?? 'Ejecucion completada')}
@@ -3087,6 +3408,7 @@ const NexuIA = () => {
 
                   {isTermsReference && termsResult ? (
                     <div id="terms-of-reference-export-view" className="space-y-5 rounded-[8px] border border-primary/15 bg-white p-4 shadow-sm">
+                      {renderDeliverableQualityReview('terms', termsQualityReport)}
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>
@@ -3094,7 +3416,7 @@ const NexuIA = () => {
                             {termsResult.executive_summary}
                           </p>
                         </div>
-                        <div data-export-hidden="true">{renderExportControls(handleDownloadTermsResult)}</div>
+                        <div data-export-hidden="true">{renderExportControls(handleDownloadTermsResult, termsExportContextLabel, { id: 'terms', report: termsQualityReport })}</div>
                       </div>
 
                       <div className="grid gap-3 lg:grid-cols-4">
@@ -3166,7 +3488,7 @@ const NexuIA = () => {
                         </div>
                       </div>
 
-                      <Tabs defaultValue={termsDefaultTab} className="rounded-2xl border border-primary/15 bg-white p-4">
+                      <Tabs value={termsActiveTab} onValueChange={setTermsActiveTab} className="rounded-2xl border border-primary/15 bg-white p-4">
                         <TabsList className="flex h-auto flex-wrap justify-start rounded-xl bg-primary/5 p-1">
                           {showTermsTdr ? <TabsTrigger value="documento">TDR</TabsTrigger> : null}
                           <TabsTrigger value="matriz">Matriz y riesgos</TabsTrigger>
@@ -3452,6 +3774,60 @@ const NexuIA = () => {
                         </TabsContent>
                       </Tabs>
 
+                      {termsPendingReview ? (
+                        <div data-export-hidden="true" className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-amber-950">Datos por completar antes de descargar</p>
+                              <p className="mt-1 text-xs leading-5 text-amber-800">
+                                Detectamos información pendiente en {termsPendingReview.scope.documentCode}. Puedes completarla ahora o continuar con advertencias.
+                              </p>
+                            </div>
+                            <Button type="button" variant="outline" className="rounded-full border-amber-300 bg-white" onClick={() => setTermsPendingReview(null)}>
+                              Cerrar
+                            </Button>
+                          </div>
+                          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                            {termsPendingReview.items.map((item) => (
+                              <div key={item.token} className="rounded-xl border border-amber-200 bg-white p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
+                                    {item.type === 'COMPLETAR' ? 'Dato por completar' : 'Dato sugerido por confirmar'}
+                                  </p>
+                                  <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">{item.document}</span>
+                                </div>
+                                <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.token}</p>
+                                <Textarea
+                                  value={item.replacement}
+                                  onChange={(event) => updateTermsPendingReplacement(item.token, event.target.value)}
+                                  placeholder={item.type === 'COMPLETAR' ? 'Completa el dato pendiente' : 'Acepta, edita o deja la sugerencia'}
+                                  className="mt-3 min-h-[72px] rounded-xl border-amber-200"
+                                />
+                                {item.type === 'SUGERIDO' ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="mt-2 h-7 rounded-full px-2 text-xs text-primary hover:bg-primary/10"
+                                    onClick={() => updateTermsPendingReplacement(item.token, item.token.replace(/^\[SUGERIDO[^\]]*\]\s*/i, '').trim())}
+                                  >
+                                    Aceptar sugerencia
+                                  </Button>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                          <div className="mt-4 flex flex-wrap justify-end gap-2">
+                            <Button type="button" variant="outline" className="rounded-full bg-white" onClick={() => void exportTermsWithScope(termsPendingReview.scope, true)}>
+                              Descargar con advertencias
+                            </Button>
+                            <Button type="button" className="rounded-full" onClick={() => void applyTermsPendingAndDownload()}>
+                              Completar datos y descargar
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+
                       {termsResult.supporting_documents_summary.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">
                           <p className="text-sm font-medium text-foreground">Documentos de apoyo leídos</p>
@@ -3474,13 +3850,17 @@ const NexuIA = () => {
                   {isTermsReference && termsResult ? renderAgentFeedbackPanel() : null}
 
                   {isDashboardCreator && dashboardResult ? (
-                    <DashboardReportView result={dashboardResult} actions={renderExportControls(handleDownloadDashboardPdf)} />
+                    <div className="space-y-4">
+                      {renderDeliverableQualityReview('dashboard', dashboardQualityReport)}
+                      <DashboardReportView result={dashboardResult} actions={renderExportControls(handleDownloadDashboardPdf, undefined, { id: 'dashboard', report: dashboardQualityReport })} />
+                    </div>
                   ) : null}
 
                   {isDashboardCreator && dashboardResult ? renderAgentFeedbackPanel() : null}
 
                   {isTcoAnalysis && tcoResult ? (
                     <div id="tco-analysis-export-view" className="space-y-5 rounded-[24px] border border-[#0D1B2A]/10 bg-[#ECEFF1]/40 p-4">
+                      {renderDeliverableQualityReview('tco', tcoQualityReport)}
                       <div className="rounded-2xl bg-[#0D1B2A] p-5 text-white shadow-sm">
                         <div className="flex flex-wrap items-start justify-between gap-4">
                           <div className="max-w-4xl">
@@ -3494,7 +3874,7 @@ const NexuIA = () => {
                               <span>Confianza: {tcoConfidence}</span>
                             </div>
                           </div>
-                          <div data-export-hidden="true">{renderExportControls(handleDownloadTcoPdf)}</div>
+                          <div data-export-hidden="true">{renderExportControls(handleDownloadTcoPdf, undefined, { id: 'tco', report: tcoQualityReport })}</div>
                         </div>
                       </div>
 
@@ -3947,6 +4327,7 @@ const NexuIA = () => {
 
                   {isQuoteComparator && proposalComparisonResult ? (
                     <div id="proposal-comparison-export-view" className="space-y-4 rounded-[24px] border border-primary/15 bg-primary/5 p-4">
+                      {renderDeliverableQualityReview('proposal', proposalQualityReport)}
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <p className="text-sm font-medium text-foreground">Resumen ejecutivo</p>
@@ -3954,7 +4335,7 @@ const NexuIA = () => {
                             {proposalComparisonResult.executive_summary}
                           </p>
                         </div>
-                        {renderExportControls(handleDownloadProposalPdf)}
+                        {renderExportControls(handleDownloadProposalPdf, undefined, { id: 'proposal', report: proposalQualityReport })}
                       </div>
                       <div className="rounded-2xl border border-primary/15 bg-white p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
