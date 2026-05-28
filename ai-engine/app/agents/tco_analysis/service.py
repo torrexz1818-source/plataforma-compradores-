@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import mimetypes
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -278,6 +279,19 @@ def _value_or_status(value: Any, context: str = "") -> float | str:
 
 def _alternative_names(result: dict[str, Any]) -> list[str]:
     names: list[str] = []
+    matrix = result.get("tco_dashboard_matrix") if isinstance(result.get("tco_dashboard_matrix"), dict) else {}
+    alias_to_label: dict[str, str] = {}
+    for item in _as_list(matrix.get("alternatives") if isinstance(matrix, dict) else []):
+        if not isinstance(item, dict):
+            continue
+        label = _as_text(item.get("label") or item.get("name") or item.get("provider"), "")
+        if not label:
+            continue
+        names.append(label)
+        for alias in [item.get("id"), item.get("label"), item.get("name"), item.get("provider")]:
+            alias_text = _as_text(alias, "")
+            if alias_text:
+                alias_to_label[_normalized_label(alias_text)] = label
     for collection, key in [
         ("tco_totals", "alternative"),
         ("ranking", "alternative"),
@@ -291,14 +305,46 @@ def _alternative_names(result: dict[str, Any]) -> list[str]:
                     names.append(name)
     for row in _as_list(result.get("tco_matrix")):
         if isinstance(row, dict) and isinstance(row.get("values"), dict):
-            names.extend(str(key) for key in row["values"].keys() if str(key).strip())
-    matrix = result.get("tco_dashboard_matrix") if isinstance(result.get("tco_dashboard_matrix"), dict) else {}
-    for item in _as_list(matrix.get("alternatives") if isinstance(matrix, dict) else []):
-        if isinstance(item, dict):
-            name = _as_text(item.get("label") or item.get("name") or item.get("provider"), "")
-            if name:
-                names.append(name)
-    return list(dict.fromkeys(names))
+            for key in row["values"].keys():
+                key_text = str(key).strip()
+                if not key_text:
+                    continue
+                names.append(alias_to_label.get(_normalized_label(key_text), key_text))
+    return _canonical_alternative_names(names)
+
+
+def _normalized_label(value: Any) -> str:
+    text = _as_text(value, "").lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return " ".join(text.split())
+
+
+def _is_internal_alternative_label(value: Any) -> bool:
+    normalized = _normalized_label(value)
+    return bool(re.fullmatch(r"a\d+|alt\s*\d+|internalid|id interno|rows|sections|values", normalized))
+
+
+def _canonical_alternative_names(names: list[str]) -> list[str]:
+    clean = [_as_text(name, "") for name in names if _as_text(name, "")]
+    canonical: list[str] = []
+    for name in clean:
+        if _is_internal_alternative_label(name):
+            continue
+        normalized = _normalized_label(name)
+        longer = sorted(
+            [
+                candidate
+                for candidate in clean
+                if candidate != name
+                and not _is_internal_alternative_label(candidate)
+                and normalized
+                and normalized in _normalized_label(candidate)
+            ],
+            key=len,
+            reverse=True,
+        )
+        canonical.append(longer[0] if longer else name)
+    return list(dict.fromkeys(canonical))
 
 
 def _financial_category(component: str) -> str | None:
@@ -804,12 +850,14 @@ def sanitize_base_parameters(result: dict[str, Any]) -> dict[str, Any]:
     notes = [_as_text(value) for value in _as_list(params.get("notes"))]
     if not notes:
         notes = ["Parametros base normalizados desde el contexto, documentos o resultado estructurado del agente."]
+    inferred_horizon = _infer_horizon_years(result.get("evaluation_horizon"))
+    horizon_years = inferred_horizon if inferred_horizon != "Dato faltante" else params.get("horizon_years")
 
     return {
         "analysis_type": _as_text(params.get("analysis_type") or result.get("analysis_type"), "Dato faltante"),
         "product_or_service": _as_text(params.get("product_or_service") or result.get("item_name"), "Dato faltante"),
         "currency": _as_text(params.get("currency") or result.get("currency"), "Dato faltante"),
-        "horizon_years": _value_or_status(params.get("horizon_years") or _infer_horizon_years(result.get("evaluation_horizon"))),
+        "horizon_years": _value_or_status(horizon_years),
         "quantity": _value_or_status(params.get("quantity") or next((item.get("quantity") for item in _as_list(result.get("data_used")) if isinstance(item, dict) and item.get("quantity")), None)),
         "unit_of_comparison": _as_text(params.get("unit_of_comparison") or result.get("comparison_unit"), "Dato faltante"),
         "annual_usage": _value_or_status(params.get("annual_usage")),
@@ -895,6 +943,19 @@ def build_financial_model(result: dict[str, Any]) -> list[dict[str, Any]]:
                 model[category] = _safe_add(_as_number(model[category]), value)
             else:
                 model[category] = _safe_add(_as_number(model[category]), value)
+
+        for assumption in _as_list(result.get("benchmark_assumptions")):
+            if not isinstance(assumption, dict):
+                continue
+            applies_to = _as_text(assumption.get("applies_to"), "General")
+            if applies_to not in {"General", alternative}:
+                continue
+            category = _financial_category(_as_text(assumption.get("field"), ""))
+            value = _as_number(assumption.get("value"))
+            if not category or category in {"net_tco", "annualized_tco", "unit_tco", "usage_tco"} or value is None:
+                continue
+            model[category] = _safe_add(_as_number(model[category]), value)
+            warnings.append(f"Se uso benchmark declarado para {_as_text(assumption.get('field'))}; validar con proveedor.")
 
         total = totals.get(alternative, {})
         if total:
@@ -1265,7 +1326,21 @@ def sanitize_scorecard(result: dict[str, Any]) -> dict[str, Any]:
                 "confidence_level": _normalize_spanish_confidence(item.get("confidence_level")),
             }
         )
-    totals = sorted(totals, key=lambda item: item["rank"])
+    net_tco_by_alt = {
+        _as_text(item.get("alternative"), ""): _as_number(item.get("net_tco"))
+        for item in _as_list(result.get("financial_model"))
+        if isinstance(item, dict)
+    }
+    totals = sorted(
+        totals,
+        key=lambda item: (
+            -float(item["total_score"]),
+            net_tco_by_alt.get(item["alternative"]) if net_tco_by_alt.get(item["alternative"]) is not None else float("inf"),
+            -_confidence_rank(item["confidence_level"]),
+        ),
+    )
+    for index, item in enumerate(totals, start=1):
+        item["rank"] = index
     decision = existing.get("decision_summary") if isinstance(existing.get("decision_summary"), dict) else {}
     fallback = build_scorecard({**result, "scorecard": {}})
     fallback_decision = fallback["decision_summary"]
@@ -1302,6 +1377,45 @@ def reinforce_recommendation_from_scorecard(result: dict[str, Any]) -> None:
         if not current or current in {"No especificado", "No determinado"}:
             recommendation[target] = decision.get(source)
     result["strategic_recommendation"] = recommendation
+
+
+def sync_ranking_from_scorecard(result: dict[str, Any]) -> None:
+    scorecard = result.get("scorecard") if isinstance(result.get("scorecard"), dict) else {}
+    totals = _as_list(scorecard.get("totals"))
+    if not totals:
+        result["ranking"] = sorted(
+            _as_list(result.get("ranking")),
+            key=lambda item: -(_as_number(item.get("score")) or 0) if isinstance(item, dict) else 0,
+        )
+        for index, item in enumerate(result["ranking"], start=1):
+            if isinstance(item, dict):
+                item["position"] = index
+        return
+
+    total_tco_by_alt = {
+        _as_text(item.get("alternative"), ""): _as_number(item.get("net_tco"))
+        for item in _as_list(result.get("financial_model"))
+        if isinstance(item, dict)
+    }
+    result["ranking"] = [
+        {
+            "position": index,
+            "alternative": _as_text(item.get("alternative")),
+            "ranking_type": "Scorecard multicriterio",
+            "total_tco": total_tco_by_alt.get(_as_text(item.get("alternative"), "")),
+            "score": _as_number(item.get("total_score")),
+            "score_label": _as_text(item.get("level"), _score_level(_as_number(item.get("total_score")))),
+            "score_breakdown": {},
+            "source_basis": ["scorecard", "financial_model", "transparency_table"],
+            "reason": (
+                f"Fortaleza principal: {_as_text(item.get('main_strength'), 'No determinado')}. "
+                f"Debilidad principal: {_as_text(item.get('main_weakness'), 'No determinado')}. "
+                f"Confianza: {_as_text(item.get('confidence_level'), 'baja')}."
+            ),
+        }
+        for index, item in enumerate(totals, start=1)
+        if isinstance(item, dict)
+    ]
 
 
 def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -1471,11 +1585,18 @@ def sanitize_tco_result(result: dict[str, Any]) -> dict[str, Any]:
         result["questions_for_user_or_suppliers"] = DEFAULT_SUPPLIER_QUESTIONS
 
     result["base_parameters"] = sanitize_base_parameters(result)
+    if isinstance(result.get("tco_dashboard_matrix"), dict):
+        horizon_years = result["base_parameters"].get("horizon_years")
+        if _as_number(horizon_years) is not None:
+            result["tco_dashboard_matrix"]["horizon"] = f"{horizon_years} anos"
+        elif _as_text(horizon_years, ""):
+            result["tco_dashboard_matrix"]["horizon"] = _as_text(horizon_years)
     result["benchmark_assumptions"] = sanitize_benchmark_assumptions(result)
     result["financial_model"] = build_financial_model(result)
     result["transparency_table"] = build_transparency_table(result)
     result["scorecard"] = sanitize_scorecard(result)
     reinforce_recommendation_from_scorecard(result)
+    sync_ranking_from_scorecard(result)
 
     if usage:
         result["tokens_input"] = usage.get("tokens_input")

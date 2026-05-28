@@ -140,6 +140,10 @@ Modelo financiero profesional:
   o TCO por unidad producida solo cuando exista base suficiente.
 - Si no hay base suficiente para TCO completo, entrega un TCO preliminar y explica
   exactamente que datos faltan para cerrarlo.
+- No dejes TCO neto, TCO anualizado o TCO unitario vacio. Si existen benchmarks
+  razonables declarados, calcula un TCO preliminar y marca el valor como estimado.
+  Si no existe benchmark razonable, usa "No calculable con datos actuales" e indica
+  exactamente que dato falta.
 - En base_parameters incluye horizonte, cantidad, unidad de comparacion, moneda,
   vida util, uso anual, km/anio, usuarios, tipo de cambio, impuestos, tasa de descuento
   o financiamiento solo si aparecen o si se declaran como SUPUESTO/BENCHMARK.
@@ -157,6 +161,15 @@ Tablas comparativas:
 - Si hay varias alternativas, incluye tabla de costos TCO, tabla comparativa de
   alternativas, tabla de riesgos, tabla de ranking/calificacion y tabla de supuestos
   o datos faltantes.
+- Usa un solo nombre completo por alternativa. No dupliques columnas como
+  "Mitsubishi" y "Mitsubishi L200"; conserva el nombre completo mas especifico.
+- No uses IDs internos ni metadatos como columnas visibles: A1, A2, A3, rows,
+  sections, values, source tecnico, internalId, tipo de dato o rutas de archivo.
+- En tablas principales usa solo columnas de negocio. Para matriz TCO: Componente,
+  alternativas y Nota/fuente simple. Para scorecard: Criterio, Peso, alternativas
+  y Evidencia breve. Para transparencia: Dato, Valor, Confianza y Observacion.
+- Si necesitas mostrar fuente, usa etiquetas simples: Documento, Usuario,
+  Calculado, Estimado, Benchmark, Faltante o No aplica.
 - La matriz TCO no debe limitarse a una sola fila de total si existen componentes
   disponibles. Debe desagregar cada componente encontrado o calculable como fila
   independiente: precio base, inversion inicial, flete/logistica, instalacion,
@@ -226,6 +239,11 @@ Calificacion y ranking:
 - Incluye score_label con escala: Excelente (90-100), Muy buena (80-89), Buena
   (70-79), Aceptable con reservas (60-69), Riesgosa / requiere revision (<60).
 - Explica por que una alternativa queda primera, segunda o tercera.
+- Ordena siempre scorecard.totals y ranking por score total descendente. Si hay
+  empate, desempata por menor TCO neto, menor riesgo y mayor confianza. No permitas
+  que una alternativa con mayor score aparezca debajo de otra con menor score.
+- Manten el mismo horizonte en base_parameters, tco_dashboard_matrix, financial_model,
+  ranking y recomendacion. Si el usuario indico horizonte, ese horizonte manda.
 
 Ponderaciones base dinamicas para scorecard:
 - Flota vehicular: inversion inicial 20%, TCO neto total 25%, consumo/operacion 15%,
