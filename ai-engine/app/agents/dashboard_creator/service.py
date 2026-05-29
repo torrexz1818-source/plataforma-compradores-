@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,8 @@ from app.config import get_settings
 from app.document_processing.file_detector import validate_allowed_file
 from app.utils.google_pubsub_notifier import publish_dashboard_completed_event
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
+
+logger = logging.getLogger(__name__)
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -51,6 +54,46 @@ def _dashboard_completed_payload(result: DashboardResult, files_count: int) -> d
         "generatedAt": generated_at,
         "filesCount": files_count,
         "downloadFormats": ["pdf", "excel", "pptx"],
+    }
+
+
+def _safe_dashboard_profile_log(profiled: dict[str, Any]) -> dict[str, Any]:
+    profile = profiled.get("profile", {}) if isinstance(profiled.get("profile"), dict) else {}
+    source_files = []
+    for item in profiled.get("source_files", []):
+        if not isinstance(item, dict):
+            continue
+        sheet_profiles = []
+        for sheet in _as_list(item.get("sheet_profiles"))[:12]:
+            if not isinstance(sheet, dict):
+                continue
+            sheet_profiles.append(
+                {
+                    "sheetName": sheet.get("sheetName"),
+                    "rowsDetected": sheet.get("rowsDetected"),
+                    "columnsCount": sheet.get("columnsCount"),
+                }
+            )
+        source_files.append(
+            {
+                "fileName": item.get("file_name"),
+                "fileType": item.get("detected_type"),
+                "fileSize": item.get("size_bytes"),
+                "sheetsDetected": item.get("sheets"),
+                "sheetProfiles": sheet_profiles,
+                "tablesDetected": item.get("tables_detected"),
+            }
+        )
+    return {
+        "filesProcessed": profile.get("files_processed"),
+        "rowsDetected": profile.get("rows_detected"),
+        "columnsDetected": profile.get("columns_detected"),
+        "candidateFieldKeys": sorted(list((profile.get("candidateFields") or {}).keys())),
+        "warnings": _as_list(profile.get("data_quality_warnings"))[:12],
+        "sourceFiles": source_files,
+        "kpis": len(_as_list(profiled.get("kpis"))),
+        "charts": len(_as_list(profiled.get("charts"))),
+        "tables": len(_as_list(profiled.get("tables"))),
     }
 
 
@@ -413,6 +456,7 @@ async def generate_dashboard(
             "uploaded_files": [upload.filename or path.name for path, upload in zip(temp_paths, files)],
         }
         profiled = profile_files([(path, upload.filename or path.name) for path, upload in zip(temp_paths, files)], user_context=user_context)
+        logger.info("dashboard_creator.profiled %s", _safe_dashboard_profile_log(profiled))
         basic_summary, basic_insights, basic_recommendations, _ = build_basic_insights(profiled)
 
         executive_summary = basic_summary
@@ -443,6 +487,13 @@ async def generate_dashboard(
 
         if should_use_llm:
             try:
+                logger.info(
+                    "dashboard_creator.claude.request agent=%s files=%s rows=%s columns=%s",
+                    "dashboard_creator_planner",
+                    len(files),
+                    profiled.get("profile", {}).get("rows_detected"),
+                    profiled.get("profile", {}).get("columns_detected"),
+                )
                 planner_result = await generate_agent_response(
                     agentType="dashboard_creator_planner",
                     systemPrompt=SYSTEM_PROMPT,
@@ -468,6 +519,18 @@ async def generate_dashboard(
                         [{"title": "Validacion de dashboardPlan", "description": warning, "type": "data_quality"} for warning in plan_warnings],
                     )
 
+                logger.info(
+                    "dashboard_creator.claude.response agent=%s hasPlan=%s",
+                    "dashboard_creator_planner",
+                    dashboard_plan is not None,
+                )
+                logger.info(
+                    "dashboard_creator.claude.request agent=%s files=%s rows=%s columns=%s",
+                    "dashboard_creator_insights",
+                    len(files),
+                    profiled.get("profile", {}).get("rows_detected"),
+                    profiled.get("profile", {}).get("columns_detected"),
+                )
                 llm_result = await generate_agent_response(
                     agentType="dashboard_creator_insights",
                     systemPrompt=SYSTEM_PROMPT,
@@ -502,6 +565,11 @@ async def generate_dashboard(
                             "qualityWarnings",
                         ],
                     },
+                )
+                logger.info(
+                    "dashboard_creator.claude.response agent=%s keys=%s",
+                    "dashboard_creator_insights",
+                    sorted([str(key) for key in llm_result.keys()])[:24],
                 )
                 llm_result.pop("_usage", None)
                 llm_result.pop("_model", None)
@@ -555,7 +623,12 @@ async def generate_dashboard(
                         if explanation:
                             chart["insight"] = str(explanation)
                 llm_used = True
-            except HTTPException:
+            except HTTPException as exc:
+                logger.warning(
+                    "dashboard_creator.claude.failed status=%s detail=%s",
+                    exc.status_code,
+                    exc.detail,
+                )
                 recommendations.append("El analisis se genero con los datos estructurados disponibles; puede ampliarse si se cargan documentos mas completos.")
 
         anti_invention_warnings = _validate_dashboard_outputs(profiled, missing_information)
@@ -589,6 +662,14 @@ async def generate_dashboard(
             model_name=settings.anthropic_model if llm_used else None,
             latency_ms=int((time.perf_counter() - started_at) * 1000),
         )
+        logger.info(
+            "dashboard_creator.result.built kpis=%s charts=%s tables=%s llmUsed=%s readiness=%s",
+            len(_as_list(result.get("kpis"))),
+            len(_as_list(result.get("charts"))),
+            len(_as_list(result.get("tables"))),
+            llm_used,
+            (result.get("downloadReadiness") or {}).get("status") if isinstance(result.get("downloadReadiness"), dict) else None,
+        )
         result = validate_dashboard_result_payload(result)
         dashboard_result = DashboardResult.model_validate(result)
         publish_dashboard_completed_event(_dashboard_completed_payload(dashboard_result, len(files)))
@@ -596,6 +677,7 @@ async def generate_dashboard(
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception("dashboard_creator.failed stage=unexpected")
         raise HTTPException(status_code=502, detail="No se pudo generar el dashboard.") from exc
     finally:
         if settings.delete_temp_files:

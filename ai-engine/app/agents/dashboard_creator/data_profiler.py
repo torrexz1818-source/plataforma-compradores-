@@ -727,7 +727,13 @@ def _requested_currency(user_context: dict[str, Any] | None) -> str | None:
 def _requested_years(user_context: dict[str, Any] | None) -> list[int]:
     import re
 
-    years = [int(match) for match in re.findall(r"\b(20\d{2}|19\d{2})\b", _user_text(user_context))]
+    if not user_context:
+        return []
+    searchable = " ".join(
+        str(user_context.get(key) or "")
+        for key in ("period", "objective_instructions", "additional_context", "data_type", "visualization_focus")
+    ).lower()
+    years = [int(match) for match in re.findall(r"\b(20\d{2}|19\d{2})\b", searchable)]
     return sorted(set(years))
 
 
@@ -753,9 +759,15 @@ def _apply_user_filters(frame: pd.DataFrame, candidates: dict[str, list[str]], u
     date_col = _candidate_col(candidates, "fecha", "fecha_prometida", "fecha_real")
     if years and date_col and date_col in filtered:
         parsed = _valid_dates(filtered[date_col], date_col)
+        if not parsed.notna().any():
+            notes.append("No se aplico filtro de periodo porque la columna de fecha no fue suficientemente confiable.")
+            return filtered, notes
         before = len(filtered)
-        filtered = filtered[parsed.dt.year.isin(years).fillna(False)].copy()
-        if before != len(filtered):
+        candidate = filtered[parsed.dt.year.isin(years).fillna(False)].copy()
+        if candidate.empty:
+            notes.append(f"No se aplico filtro de periodo ({', '.join(map(str, years))}) porque dejaba el dataset sin registros.")
+        elif before != len(candidate):
+            filtered = candidate
             notes.append(f"Se filtro el periodo solicitado ({', '.join(map(str, years))}): {len(filtered)} de {before} registros.")
     return filtered, notes
 
