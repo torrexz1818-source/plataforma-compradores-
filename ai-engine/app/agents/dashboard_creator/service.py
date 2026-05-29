@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import time
+import asyncio
 import logging
+import time
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +11,7 @@ from fastapi import HTTPException, UploadFile
 from app.agents.dashboard_creator.dashboard_builder import build_dashboard_result
 from app.agents.dashboard_creator.data_profiler import profile_files
 from app.agents.dashboard_creator.insight_generator import build_basic_insights
-from app.agents.dashboard_creator.prompts import SYSTEM_PROMPT, build_insight_prompt, build_planner_prompt
+from app.agents.dashboard_creator.prompts import SYSTEM_PROMPT, build_insight_prompt
 from app.agents.dashboard_creator.quality_validator import validate_dashboard_request, validate_dashboard_result_payload
 from app.agents.dashboard_creator.schemas import DashboardResult
 from app.ai.llm_client import generate_agent_response
@@ -20,6 +21,8 @@ from app.utils.google_pubsub_notifier import publish_dashboard_completed_event
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
 
 logger = logging.getLogger(__name__)
+DASHBOARD_CLAUDE_TIMEOUT_SECONDS = 18
+LLM_ENRICHMENT_UNAVAILABLE_WARNING = "El dashboard se genero con analisis estructurado; los insights avanzados no estuvieron disponibles."
 
 
 def _as_list(value: Any) -> list[Any]:
@@ -95,6 +98,38 @@ def _safe_dashboard_profile_log(profiled: dict[str, Any]) -> dict[str, Any]:
         "charts": len(_as_list(profiled.get("charts"))),
         "tables": len(_as_list(profiled.get("tables"))),
     }
+
+
+def _is_structured_dashboard_ready(profiled: dict[str, Any]) -> bool:
+    profile = profiled.get("profile", {}) if isinstance(profiled.get("profile"), dict) else {}
+    source_files = _as_list(profiled.get("source_files"))
+    has_structured_source = any(
+        isinstance(item, dict)
+        and item.get("detected_type") in {"xlsx", "csv"}
+        and (item.get("tables_detected") or 0) > 0
+        for item in source_files
+    )
+    has_rows = int(profile.get("rows_detected") or 0) > 0
+    has_columns = int(profile.get("columns_detected") or 0) > 0
+    has_useful_fields = any(
+        _as_list(profile.get(key))
+        for key in ("numeric_columns", "date_columns", "category_columns")
+    )
+    has_outputs = bool(_as_list(profiled.get("kpis"))) and (
+        bool(_as_list(profiled.get("charts"))) or bool(_as_list(profiled.get("tables")))
+    )
+    return has_structured_source and has_rows and has_columns and has_useful_fields and has_outputs
+
+
+def _has_special_dashboard_instructions(additional_context: str | None) -> bool:
+    return bool(str(additional_context or "").strip())
+
+
+def _append_quality_warning(profiled: dict[str, Any], warning: str) -> None:
+    profile = profiled.get("profile")
+    if not isinstance(profile, dict):
+        return
+    profile["data_quality_warnings"] = _merge_unique(_as_list(profile.get("data_quality_warnings")), [warning])
 
 
 def _merge_dashboard_items(base: list[dict[str, Any]], additions: list[dict[str, Any]], key: str | None = None, limit: int = 12) -> list[dict[str, Any]]:
@@ -482,89 +517,73 @@ async def generate_dashboard(
 
         has_document_sources = any(item.get("detected_type") not in {"xlsx", "csv"} for item in profiled.get("source_files", []))
         has_low_structure = profiled.get("data_understanding", {}).get("structure_level") in {"low", "medium"}
-        has_user_instructions = any(str(user_context.get(key) or "").strip() for key in ("objective_instructions", "additional_context", "period", "data_type", "visualization_focus", "audience"))
-        should_use_llm = use_llm_insights or has_document_sources or has_low_structure or has_user_instructions
+        structured_dashboard_ready = _is_structured_dashboard_ready(profiled)
+        has_special_instructions = _has_special_dashboard_instructions(additional_context)
+        should_use_llm = bool(use_llm_insights) and (
+            has_document_sources
+            or has_low_structure
+            or has_special_instructions
+            or not structured_dashboard_ready
+        )
+
+        logger.info(
+            "dashboard_creator.deterministic.ready ready=%s kpis=%s charts=%s tables=%s rows=%s columns=%s",
+            structured_dashboard_ready,
+            len(_as_list(profiled.get("kpis"))),
+            len(_as_list(profiled.get("charts"))),
+            len(_as_list(profiled.get("tables"))),
+            profiled.get("profile", {}).get("rows_detected"),
+            profiled.get("profile", {}).get("columns_detected"),
+        )
 
         if should_use_llm:
             try:
                 logger.info(
-                    "dashboard_creator.claude.request agent=%s files=%s rows=%s columns=%s",
-                    "dashboard_creator_planner",
-                    len(files),
-                    profiled.get("profile", {}).get("rows_detected"),
-                    profiled.get("profile", {}).get("columns_detected"),
-                )
-                planner_result = await generate_agent_response(
-                    agentType="dashboard_creator_planner",
-                    systemPrompt=SYSTEM_PROMPT,
-                    userPrompt=build_planner_prompt(
-                        title=title,
-                        objective=objective,
-                        audience=audience,
-                        period=period,
-                        data_type=data_type,
-                        visualization_focus=visualization_focus,
-                        additional_context=additional_context,
-                        profiled=profiled,
-                    ),
-                    documentPayload=profiled.get("document_summaries"),
-                    outputContract={"required": ["dashboard_plan"]},
-                )
-                dashboard_plan = _normalize_dashboard_plan(planner_result.get("dashboard_plan"))
-                dashboard_plan, plan_warnings = _validate_dashboard_plan(profiled, dashboard_plan)
-                if plan_warnings:
-                    profiled["profile"]["data_quality_warnings"] = _merge_unique(profiled["profile"].get("data_quality_warnings", []), plan_warnings)
-                    observations = _merge_unique(
-                        observations,
-                        [{"title": "Validacion de dashboardPlan", "description": warning, "type": "data_quality"} for warning in plan_warnings],
-                    )
-
-                logger.info(
-                    "dashboard_creator.claude.response agent=%s hasPlan=%s",
-                    "dashboard_creator_planner",
-                    dashboard_plan is not None,
-                )
-                logger.info(
-                    "dashboard_creator.claude.request agent=%s files=%s rows=%s columns=%s",
+                    "dashboard_creator.claude.request agent=%s files=%s rows=%s columns=%s timeoutSeconds=%s",
                     "dashboard_creator_insights",
                     len(files),
                     profiled.get("profile", {}).get("rows_detected"),
                     profiled.get("profile", {}).get("columns_detected"),
+                    DASHBOARD_CLAUDE_TIMEOUT_SECONDS,
                 )
-                llm_result = await generate_agent_response(
-                    agentType="dashboard_creator_insights",
-                    systemPrompt=SYSTEM_PROMPT,
-                    userPrompt=build_insight_prompt(
-                        title=title,
-                        objective=objective,
-                        audience=audience,
-                        period=period,
-                        data_type=data_type,
-                        visualization_focus=visualization_focus,
-                        additional_context=additional_context,
-                        profiled=profiled,
+                llm_result = await asyncio.wait_for(
+                    generate_agent_response(
+                        agentType="dashboard_creator_insights",
+                        systemPrompt=SYSTEM_PROMPT,
+                        userPrompt=build_insight_prompt(
+                            title=title,
+                            objective=objective,
+                            audience=audience,
+                            period=period,
+                            data_type=data_type,
+                            visualization_focus=visualization_focus,
+                            additional_context=additional_context,
+                            profiled=profiled,
+                        ),
+                        documentPayload=profiled.get("document_summaries"),
+                        outputContract={
+                            "required": [
+                                "executive_summary",
+                                "kpis",
+                                "charts",
+                                "tables",
+                                "insights",
+                                "recommendations",
+                                "missing_information",
+                            ],
+                            "quality": [
+                                "dashboard_plan",
+                                "executiveSummary",
+                                "findings",
+                                "risks",
+                                "missingCriticalData",
+                                "evidenceReferences",
+                                "downloadReadiness",
+                                "qualityWarnings",
+                            ],
+                        },
                     ),
-                    documentPayload=profiled.get("document_summaries"),
-                    outputContract={
-                        "required": [
-                            "executive_summary",
-                            "kpis",
-                            "charts",
-                            "tables",
-                            "insights",
-                            "recommendations",
-                            "missing_information",
-                        ],
-                        "quality": [
-                            "executiveSummary",
-                            "findings",
-                            "risks",
-                            "missingCriticalData",
-                            "evidenceReferences",
-                            "downloadReadiness",
-                            "qualityWarnings",
-                        ],
-                    },
+                    timeout=DASHBOARD_CLAUDE_TIMEOUT_SECONDS,
                 )
                 logger.info(
                     "dashboard_creator.claude.response agent=%s keys=%s",
@@ -575,11 +594,14 @@ async def generate_dashboard(
                 llm_result.pop("_model", None)
                 llm_result.pop("_warnings", None)
                 executive_summary = str(llm_result.get("executive_summary") or executive_summary)
-                if not dashboard_plan:
-                    dashboard_plan = _normalize_dashboard_plan(llm_result.get("dashboard_plan"))
-                    dashboard_plan, plan_warnings = _validate_dashboard_plan(profiled, dashboard_plan)
-                    if plan_warnings:
-                        profiled["profile"]["data_quality_warnings"] = _merge_unique(profiled["profile"].get("data_quality_warnings", []), plan_warnings)
+                dashboard_plan = _normalize_dashboard_plan(llm_result.get("dashboard_plan"))
+                dashboard_plan, plan_warnings = _validate_dashboard_plan(profiled, dashboard_plan)
+                if plan_warnings:
+                    profiled["profile"]["data_quality_warnings"] = _merge_unique(profiled["profile"].get("data_quality_warnings", []), plan_warnings)
+                    observations = _merge_unique(
+                        observations,
+                        [{"title": "Validacion de dashboardPlan", "description": warning, "type": "data_quality"} for warning in plan_warnings],
+                    )
                 if llm_result.get("confidence_level") in {"low", "medium", "high"}:
                     profiled["confidence_level"] = llm_result["confidence_level"]
 
@@ -623,13 +645,38 @@ async def generate_dashboard(
                         if explanation:
                             chart["insight"] = str(explanation)
                 llm_used = True
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "dashboard_creator.claude.timeout timeoutSeconds=%s deterministicReady=%s",
+                    DASHBOARD_CLAUDE_TIMEOUT_SECONDS,
+                    structured_dashboard_ready,
+                )
+                _append_quality_warning(profiled, LLM_ENRICHMENT_UNAVAILABLE_WARNING)
+                observations = _merge_unique(
+                    observations,
+                    [{"title": "Insights avanzados no disponibles", "description": LLM_ENRICHMENT_UNAVAILABLE_WARNING, "type": "data_quality"}],
+                )
             except HTTPException as exc:
                 logger.warning(
                     "dashboard_creator.claude.failed status=%s detail=%s",
                     exc.status_code,
                     exc.detail,
                 )
-                recommendations.append("El analisis se genero con los datos estructurados disponibles; puede ampliarse si se cargan documentos mas completos.")
+                _append_quality_warning(profiled, LLM_ENRICHMENT_UNAVAILABLE_WARNING)
+                recommendations.append(LLM_ENRICHMENT_UNAVAILABLE_WARNING)
+            except Exception as exc:
+                logger.warning("dashboard_creator.claude.failed error=%s", exc.__class__.__name__)
+                _append_quality_warning(profiled, LLM_ENRICHMENT_UNAVAILABLE_WARNING)
+                recommendations.append(LLM_ENRICHMENT_UNAVAILABLE_WARNING)
+        else:
+            logger.info(
+                "dashboard_creator.claude.skipped useLlmInsights=%s deterministicReady=%s hasDocumentSources=%s hasLowStructure=%s hasSpecialInstructions=%s",
+                use_llm_insights,
+                structured_dashboard_ready,
+                has_document_sources,
+                has_low_structure,
+                has_special_instructions,
+            )
 
         anti_invention_warnings = _validate_dashboard_outputs(profiled, missing_information)
         if anti_invention_warnings:
