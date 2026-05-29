@@ -1,6 +1,6 @@
 import re
 
-MAX_TEXT_LENGTH = 50000
+MAX_TEXT_LENGTH = 180000
 
 
 def clean_text(text: str) -> str:
@@ -14,5 +14,5 @@ def clean_text(text: str) -> str:
 
     return (
         normalized[:MAX_TEXT_LENGTH]
-        + "\n\n[Texto truncado por longitud. Se conservaron montos, fechas, condiciones y notas visibles en el contenido inicial.]"
+        + "\n\n[Contenido recortado por seguridad. Usa el paquete estructurado para trazabilidad de bloques enviados.]"
     )

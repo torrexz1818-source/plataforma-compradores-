@@ -178,6 +178,8 @@ export type TcoAnalysisResult = {
   cost_output?: number | null;
   cost_total?: number | null;
   latency_ms?: number | null;
+  document_traceability?: Array<Record<string, unknown>>;
+  downloadReadiness?: Record<string, unknown> | null;
   disclaimer: string;
 };
 

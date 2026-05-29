@@ -19,10 +19,11 @@ from app.ai.json_utils import parse_json_response
 from app.config import get_settings
 from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type, validate_allowed_file
+from app.document_processing.structured_document import build_public_document_warning, build_structured_document_payload
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
 
-MAX_DOCUMENT_CONTEXT_CHARS = 12000
-MAX_TOTAL_DOCUMENT_CONTEXT_CHARS = 60000
+MAX_DOCUMENT_CONTEXT_CHARS = 20000
+MAX_TOTAL_DOCUMENT_CONTEXT_CHARS = 90000
 IMAGE_FILE_TYPES = {"jpg", "jpeg", "png"}
 PRELIMINARY_MISSING_INFO_NOTE = (
     "Con la informacion disponible se puede realizar este analisis preliminar. "
@@ -529,7 +530,7 @@ def compact_text_for_tco(text: str) -> tuple[str, list[str]]:
     limitations: list[str] = []
 
     if len(text) > len(compact):
-        limitations.append("Se envio al LLM un contexto documental priorizado por terminos relevantes para TCO.")
+        limitations.append("Se uso un contexto documental priorizado por terminos relevantes para TCO.")
     if len(compact) > MAX_DOCUMENT_CONTEXT_CHARS:
         compact = compact[:MAX_DOCUMENT_CONTEXT_CHARS]
         limitations.append("El contexto documental fue truncado para proteger rendimiento y privacidad.")
@@ -538,20 +539,66 @@ def compact_text_for_tco(text: str) -> tuple[str, list[str]]:
 
 
 def build_document_summary(path: Path, filename: str) -> dict[str, Any]:
-    file_type = detect_file_type(filename)
     try:
-        text, detected_file_type, warnings = read_document_text(path, filename)
-        file_type = detected_file_type or file_type
+        trace = build_structured_document_payload(path, filename, char_budget=MAX_DOCUMENT_CONTEXT_CHARS)
     except Exception:
-        text = ""
-        warnings = ["No se pudo extraer texto del archivo; se enviaron metadatos y, si aplica, la imagen al LLM."]
+        trace = {
+            "fileName": filename,
+            "fileType": detect_file_type(filename),
+            "fileSize": path.stat().st_size if path.exists() else 0,
+            "extractionStatus": "failed",
+            "totalCharactersExtracted": 0,
+            "totalCharactersSentToModel": 0,
+            "wasTruncated": False,
+            "truncationReason": None,
+            "pagesDetected": None,
+            "sheetsDetected": [],
+            "columnsDetected": [],
+            "rowsDetected": 0,
+            "evidenceBlocks": [],
+            "tables": [],
+            "warnings": ["No se pudo extraer texto del archivo; se enviaron metadatos y, si aplica, la imagen al analisis."],
+            "publicWarnings": ["La lectura del archivo fue parcial; conviene validar el documento fuente."],
+        }
 
-    compact, limitations = compact_text_for_tco(text)
+    findings = [
+        f"{block.get('source')} | {block.get('section')}: {str(block.get('content', ''))[:1600]}"
+        for block in trace.get("evidenceBlocks", [])[:18]
+    ]
+    limitations = [*trace.get("warnings", []), *build_public_document_warning(trace)]
     return {
         "file_name": filename,
-        "detected_type": file_type,
-        "relevant_findings": [compact] if compact else [],
-        "limitations": [*warnings, *limitations],
+        "detected_type": trace.get("fileType") or detect_file_type(filename),
+        "file_size": trace.get("fileSize"),
+        "extraction_status": trace.get("extractionStatus"),
+        "total_characters_extracted": trace.get("totalCharactersExtracted"),
+        "total_characters_sent_to_model": trace.get("totalCharactersSentToModel"),
+        "was_truncated": trace.get("wasTruncated"),
+        "truncation_reason": trace.get("truncationReason"),
+        "pages_detected": trace.get("pagesDetected"),
+        "sheets_detected": trace.get("sheetsDetected"),
+        "columns_detected": trace.get("columnsDetected"),
+        "rows_detected": trace.get("rowsDetected"),
+        "relevant_findings": findings,
+        "tables": trace.get("tables", []),
+        "evidence_blocks": trace.get("evidenceBlocks", []),
+        "limitations": limitations,
+        "alternative_extraction_contract": {
+            "supplier_or_alternative": "extraer si existe",
+            "initial_cost": "costo inicial o precio base",
+            "operation": "costos de operacion si existen",
+            "maintenance": "costos de mantenimiento si existen",
+            "implementation": "implementacion o instalacion si existe",
+            "logistics": "flete, transporte, aduanas o seguros si existen",
+            "support": "soporte, SLA o postventa si existe",
+            "licenses": "licencias o suscripciones si existen",
+            "risks": "riesgos y penalidades",
+            "exclusions": "exclusiones o no incluidos",
+            "horizon": "horizonte del analisis",
+            "commercial_terms": "forma de pago, vigencia, garantia",
+            "currency": "moneda",
+            "source": "archivo, pagina, hoja, tabla o bloque",
+        },
     }
 
 
@@ -576,7 +623,7 @@ def trim_total_document_context(documents: list[dict[str, Any]]) -> list[dict[st
         if not findings and next_document.get("relevant_findings"):
             next_document["limitations"] = [
                 *_as_list(next_document.get("limitations")),
-                "El contexto textual total fue truncado para mantener el analisis dentro del limite del modelo.",
+                "El contexto textual total fue truncado para mantener el analisis dentro del limite operativo.",
             ]
         next_document["relevant_findings"] = findings
         trimmed.append(next_document)
@@ -634,7 +681,7 @@ def build_image_content_parts(paths: list[Path], files: list[UploadFile]) -> lis
 async def analyze_tco_with_openai(user_prompt: str, image_parts: list[dict[str, Any]]) -> dict[str, Any]:
     settings = get_settings()
     if not settings.openai_api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY no esta configurada en el AI Engine.")
+        raise HTTPException(status_code=500, detail="El servicio de analisis no esta configurado.")
 
     user_content: str | list[dict[str, Any]] = user_prompt
     if image_parts:
@@ -651,13 +698,13 @@ async def analyze_tco_with_openai(user_prompt: str, image_parts: list[dict[str, 
             response_format={"type": "json_object"},
         )
     except OpenAIError as exc:
-        raise HTTPException(status_code=502, detail="OpenAI no pudo procesar el analisis TCO en este momento.") from exc
+        raise HTTPException(status_code=502, detail="No se pudo procesar el analisis TCO en este momento.") from exc
 
     content = response.choices[0].message.content or ""
     try:
         result = parse_json_response(content)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="OpenAI devolvio una respuesta TCO que no es JSON valido.") from exc
+        raise HTTPException(status_code=502, detail="El analisis TCO no devolvio una respuesta valida.") from exc
 
     usage = getattr(response, "usage", None)
     if usage:
@@ -692,10 +739,10 @@ def build_fallback_result(
             "best_alternative": best,
             "best_alternative_score": 60,
             "best_alternative_score_label": "Regular",
-            "why_it_wins": "Fallback tecnico construido con la informacion disponible. OpenAI no completo el analisis, por lo que no existe una recomendacion analitica final.",
+            "why_it_wins": "Resultado preliminar construido con la informacion disponible; no existe una recomendacion analitica final.",
             "estimated_saving_or_overcost": "No determinado",
-            "main_risk": "Analisis no completado por indisponibilidad del modelo o error temporal.",
-            "final_recommendation": "No adjudicar con este fallback. Reintentar el analisis y pedir informacion faltante antes de decidir.",
+            "main_risk": "Analisis no completado por indisponibilidad temporal del servicio.",
+            "final_recommendation": "No adjudicar con este resultado preliminar. Reintentar el analisis y pedir informacion faltante antes de decidir.",
         },
         "data_used": [],
         "tco_matrix": [
@@ -723,7 +770,7 @@ def build_fallback_result(
                     "weighted_formula": "35% TCO/costo, 25% riesgo, 20% garantia/soporte, 10% disponibilidad/lead time, 10% confianza de informacion",
                 },
                 "source_basis": ["Analisis preliminar sin montos numericos completos."],
-                "reason": "Ranking fallback no concluyente. No hay interpretacion avanzada ni suficientes datos numericos para ordenar por menor TCO.",
+                "reason": "Ranking preliminar no concluyente. No hay interpretacion avanzada ni suficientes datos numericos para ordenar por menor TCO.",
             }
         ] if detected else [],
         "interpretation": {
@@ -743,7 +790,7 @@ def build_fallback_result(
             "lowest_risk_option": "No determinado",
             "balanced_option": "No determinado",
             "final_recommended_option": "No determinado",
-            "recommendation_rationale": "No se completo el analisis con OpenAI; este fallback no debe usarse como recomendacion final.",
+            "recommendation_rationale": "No se completo el analisis; este resultado preliminar no debe usarse como recomendacion final.",
             "negotiation_points": ["Solicitar desglose de costos ocultos, garantia, soporte y lead time."],
             "next_steps": ["Completar costos faltantes y validar condiciones comerciales."],
         },
@@ -756,11 +803,11 @@ def build_fallback_result(
             "detected_alternatives_count": len(detected),
             "documents_processed": len(documents),
             "confidence_level": "low",
-            "warnings": ["OpenAI no estuvo disponible; se genero un fallback tecnico basico que no reemplaza el analisis TCO completo."]
+            "warnings": ["El servicio no estuvo disponible; se genero un resultado preliminar que no reemplaza el analisis TCO completo."]
             if documents
             else [],
         },
-        "calculation_warnings": ["No se ejecuto calculo rigido previo; el flujo TCO es LLM-first."],
+        "calculation_warnings": ["No se ejecuto calculo financiero previo; el resultado requiere validacion antes de decidir."],
         "disclaimer": "Este analisis TCO es una recomendacion asistida por IA y debe ser validado por el comprador antes de tomar una decision final.",
     }
 
@@ -975,7 +1022,7 @@ def build_financial_model(result: dict[str, Any]) -> list[dict[str, Any]]:
                 subtotal = sum(value or 0 for value in available_values)
                 residual = _as_number(model["residual_value"]) or 0
                 model["net_tco"] = subtotal - residual
-                warnings.append("TCO neto calculado por Python desde componentes del resultado estructurado; no cambia la recomendacion del agente.")
+                warnings.append("TCO neto calculado desde componentes del resultado estructurado; no cambia la recomendacion del agente.")
             else:
                 model["net_tco"] = "No calculable con datos actuales"
                 warnings.append("Faltan costos numericos suficientes para calcular TCO neto.")
@@ -1642,8 +1689,8 @@ async def analyze_tco(
             detail="Ingresa contexto, instrucciones, datos escritos o sube documentos para generar el analisis TCO preliminar.",
         )
 
-    if len(files) > 8:
-        raise HTTPException(status_code=400, detail="Puedes subir como maximo 8 archivos por analisis TCO.")
+    if len(files) > settings.max_files_tco:
+        raise HTTPException(status_code=400, detail=f"Puedes subir como maximo {settings.max_files_tco} archivos por analisis TCO.")
 
     temp_paths: list[Path] = []
     documents: list[dict[str, Any]] = []
@@ -1662,7 +1709,7 @@ async def analyze_tco(
                     "file_name": "datos escritos por el usuario",
                     "detected_type": "json",
                     "relevant_findings": [json.dumps(fallback_alternatives, ensure_ascii=False, default=str)],
-                    "limitations": ["Datos manuales usados solo como fallback interno, no como formulario obligatorio."],
+                    "limitations": ["Datos manuales usados solo como respaldo del analisis, no como formulario obligatorio."],
                 }
             )
 
@@ -1720,6 +1767,7 @@ async def analyze_tco(
         raw_result["supporting_documents_summary"] = [
             SupportingDocumentSummary.model_validate(item).model_dump() for item in documents_for_prompt
         ]
+        raw_result["document_traceability"] = documents_for_prompt
         raw_result["detected_alternatives"] = raw_result.get("detected_alternatives") or build_detected_alternatives_from_documents(documents_for_prompt)
         quality = raw_result.get("extracted_data_quality") or {}
         quality["detected_alternatives_count"] = quality.get("detected_alternatives_count") or len(raw_result.get("detected_alternatives", []))
@@ -1731,6 +1779,19 @@ async def analyze_tco(
                 *quality.get("warnings", []),
                 "Analisis preliminar: se detecto una o ninguna alternativa. Para comparar TCO, agrega mas propuestas o cotizaciones.",
             ]
+            raw_result["calculation_warnings"] = [
+                *_as_list(raw_result.get("calculation_warnings")),
+                "No hay al menos dos alternativas comparables con evidencia suficiente.",
+            ]
+            raw_result["downloadReadiness"] = {
+                "status": "blocked",
+                "reason": "Se requieren al menos dos alternativas comparables para un entregable TCO concluyente.",
+            }
+        else:
+            raw_result["downloadReadiness"] = {
+                "status": "ready_with_validation" if quality.get("warnings") else "ready",
+                "reason": "El analisis tiene alternativas comparables; validar advertencias antes de decidir.",
+            }
         raw_result["extracted_data_quality"] = quality
         raw_result.setdefault(
             "disclaimer",

@@ -394,7 +394,7 @@ async def generate_dashboard(
 ) -> DashboardResult:
     started_at = time.perf_counter()
     settings = get_settings()
-    validate_dashboard_request(title, objective, files)
+    validate_dashboard_request(title, objective, files, settings.max_files_dashboard)
 
     temp_paths: list[Path] = []
     try:

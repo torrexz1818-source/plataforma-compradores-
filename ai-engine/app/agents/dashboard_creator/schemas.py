@@ -216,6 +216,7 @@ class DashboardResult(BaseModel):
     missing_information: list[str] = Field(default_factory=list)
     document_summaries: list[DashboardDocumentSummary] = Field(default_factory=list)
     source_files: list[dict[str, Any]] = Field(default_factory=list)
+    document_traceability: list[dict[str, Any]] = Field(default_factory=list)
     suggested_filters: list[str] = Field(default_factory=list)
     layout_suggestion: list[LayoutSuggestion] = Field(default_factory=list)
     metadata: DashboardMetadata | None = None
@@ -227,6 +228,7 @@ class DashboardResult(BaseModel):
     qualityWarnings: list[str] = Field(default_factory=list)
     visualConfig: VisualConfig = Field(default_factory=VisualConfig)
     pdf_available: bool = True
+    downloadReadiness: dict[str, Any] | None = None
     model_provider: str | None = None
     model_name: str | None = None
     tokens_input: int | None = None

@@ -19,6 +19,16 @@ class Settings(BaseModel):
         default_factory=lambda: int(os.getenv("MAX_FILES_PER_ANALYSIS", "5"))
     )
     max_file_size_mb: int = Field(default_factory=lambda: int(os.getenv("MAX_FILE_SIZE_MB", "10")))
+    max_files_terms: int = Field(default_factory=lambda: int(os.getenv("MAX_FILES_TERMS", "8")))
+    max_files_tco: int = Field(default_factory=lambda: int(os.getenv("MAX_FILES_TCO", "8")))
+    max_files_dashboard: int = Field(default_factory=lambda: int(os.getenv("MAX_FILES_DASHBOARD", "8")))
+    document_model_char_budget: int = Field(
+        default_factory=lambda: int(os.getenv("DOCUMENT_MODEL_CHAR_BUDGET", "32000"))
+    )
+    total_document_model_char_budget: int = Field(
+        default_factory=lambda: int(os.getenv("TOTAL_DOCUMENT_MODEL_CHAR_BUDGET", "90000"))
+    )
+    table_sample_rows: int = Field(default_factory=lambda: int(os.getenv("TABLE_SAMPLE_ROWS", "30")))
     delete_temp_files: bool = Field(
         default_factory=lambda: os.getenv("DELETE_TEMP_FILES", "true").lower() == "true"
     )

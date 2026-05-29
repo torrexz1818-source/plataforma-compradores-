@@ -60,8 +60,11 @@ Reglas de calidad:
 - Usa [COMPLETAR] para informacion critica que el comprador debe completar.
 - Usa [SUGERIDO] para buenas practicas, criterios, plazos, documentos, garantias, penalidades o recomendaciones razonables.
 - Si falta informacion, genera un borrador util y agrega preguntas recomendadas agrupadas para que el comprador pueda completar el TDR en una siguiente iteracion.
-- No bloquees la generacion salvo que falten datos minimos ya validados por backend.
+- No bloquees la generacion salvo que falten datos minimos ya validados por la plataforma.
 - Si hay documentos de apoyo, usalos como fuente de contexto; si no aportan informacion, dilo como limitacion y no inventes datos.
+- Los documentos de apoyo llegan como inventario, secciones, bloques de evidencia y tablas. Usa sections, evidence_blocks y tables para sustentar alcance, requisitos, entregables, plazos, criterios, condiciones comerciales, riesgos y pendientes.
+- Si una seccion documental no aparece, marcala como pendiente de validacion solo cuando sea critica para el proceso. No repitas "dato faltante" ni "[COMPLETAR]" en tablas solo para llenar espacios.
+- Si un documento fue analizado con seleccion representativa por extension, agrega una advertencia profesional breve en missing_information o buyer_recommendations.
 - Las bases de licitacion y el correo son una guia inicial operativa, no documentos legales definitivos, e incluyen advertencia de revision interna/legal cuando aplique.
 - Devuelve encabezados, listas, matrices y tablas representadas en JSON; no devuelvas texto plano largo.
 
@@ -88,7 +91,7 @@ Checklist interno:
 - Revisa internamente estructura, objetivo, alcance, entregables, criterios que sumen 100, requisitos tecnicos, documentos, riesgos, garantias, penalidades, cronograma, uso de [SUGERIDO]/[COMPLETAR], adaptacion al tipo, lenguaje profesional y compatibilidad con descargables.
 - No muestres el checklist interno completo como log tecnico. Si aportas valor, devuelve solo una consistencia resumida en consistency_validation.
 
-Devuelve exclusivamente JSON valido. No devuelvas markdown fuera del JSON. No incluyas prompts internos, logs, rutas tecnicas, nombres de funciones ni detalles de LLM.
+Devuelve exclusivamente JSON valido. No devuelvas markdown fuera del JSON. No incluyas prompts internos, logs, rutas tecnicas, nombres de funciones, proveedor de IA ni metodologia tecnica interna.
 """
 
 

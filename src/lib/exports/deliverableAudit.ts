@@ -36,6 +36,84 @@ function collectSanitizeStats(payload: ExportPayload) {
   });
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function placeholderCount(value: unknown) {
+  const text = JSON.stringify(value ?? '').toLowerCase();
+  return (text.match(/dato faltante|no especificado|\[completar|pendiente|null/g) ?? []).length;
+}
+
+function collectSourceQualityIssues(agentId: string, source: unknown) {
+  const data = asRecord(source);
+  const criticalIssues: string[] = [];
+  const warnings: string[] = [];
+  const suggestions: string[] = [];
+  const readiness = asRecord(data.downloadReadiness);
+  const traceability = asArray(data.document_traceability).map(asRecord);
+  const traceWarnings = traceability.flatMap((item) => asArray(item.publicWarnings ?? item.limitations ?? item.warnings));
+  const truncatedWithoutContext = traceability.some((item) => item.wasTruncated && !asArray(item.warnings).length && !asArray(item.publicWarnings).length);
+  const missingCount = placeholderCount(source);
+
+  if (readiness.status === 'blocked') {
+    criticalIssues.push(String(readiness.reason || 'Falta informacion critica para generar un entregable confiable.'));
+  } else if (readiness.status === 'ready_with_validation') {
+    warnings.push(String(readiness.reason || 'El entregable requiere validacion de advertencias antes de decidir.'));
+  }
+
+  if (truncatedWithoutContext) {
+    warnings.push('Hay archivos recortados sin una advertencia documental clara.');
+  }
+  if (traceWarnings.length) {
+    warnings.push('El analisis incluye advertencias de lectura o muestreo documental.');
+  }
+  if (missingCount >= 20) {
+    criticalIssues.push('El resultado contiene demasiados campos sin informacion para generar un entregable profesional.');
+  } else if (missingCount >= 8) {
+    warnings.push('Hay varios campos sin informacion; conviene completar datos antes de descargar.');
+  }
+
+  if (agentId.includes('tco')) {
+    const alternatives = asArray(data.detected_alternatives).length || asArray(asRecord(data.scorecard).totals).length || asArray(data.ranking).length;
+    if (alternatives < 2) criticalIssues.push('TCO sin al menos dos alternativas comparables con evidencia.');
+  }
+
+  if (agentId.includes('proposal')) {
+    const suppliers = asArray(data.suppliers).map(asRecord);
+    if (suppliers.length < 2) criticalIssues.push('Comparativo sin al menos dos proveedores comparables.');
+    const hasEvidence = suppliers.some((supplier) => asArray(supplier.source_evidence).length || supplier.source_file);
+    if (traceability.length && !hasEvidence) warnings.push('El comparativo no incluye evidencia minima por proveedor.');
+  }
+
+  if (agentId.includes('dashboard')) {
+    const profile = asRecord(data.data_profile ?? data.dataProfile);
+    const rowsDetected = Number(profile.rows_detected ?? 0);
+    const sampleRows = asArray(profile.rowSamples).length;
+    if (rowsDetected > 300 && sampleRows > 0 && sampleRows < 5) {
+      warnings.push('El dashboard parece basarse en una muestra insuficiente para el volumen de datos.');
+    }
+    if (!asArray(data.kpis).length || (!asArray(data.charts).length && !asArray(data.tables).length)) {
+      criticalIssues.push('Dashboard sin KPIs y visualizaciones o tablas suficientes.');
+    }
+  }
+
+  if (agentId.includes('terms')) {
+    const document = asRecord(data.generated_document);
+    if (!document.objective || !document.scope) criticalIssues.push('TDR con objetivo o alcance critico incompleto.');
+    if (!asArray(document.final_deliverables).length) warnings.push('TDR sin entregables claros para proveedores.');
+    if (!asArray(document.evaluation_matrix).length && !asArray(document.evaluation_criteria).length) {
+      warnings.push('TDR sin criterios de evaluacion suficientes.');
+    }
+  }
+
+  return { criticalIssues, warnings, suggestions };
+}
+
 export function auditDeliverableBeforeDownload(input: ExportPayload | {
   agentKey?: string;
   result: unknown;
@@ -55,6 +133,10 @@ export function auditDeliverableBeforeDownload(input: ExportPayload | {
   };
   const sanitizedPayload = sanitizePayload(rawPayload);
   const baseIssues = collectPayloadQualityIssues(sanitizedPayload);
+  const sourceIssues = collectSourceQualityIssues(
+    sanitizedPayload.agentId,
+    isExportPayload(input) ? input : input.result,
+  );
   const criticalIssues = [...baseIssues.criticalIssues];
   const warnings = [...baseIssues.warnings];
 
@@ -67,10 +149,12 @@ export function auditDeliverableBeforeDownload(input: ExportPayload | {
   if (stats.placeholdersRemoved >= 4) {
     warnings.push('Hay varios campos sin informacion; se resumiran como consideraciones y no se repetiran en tablas.');
   }
+  criticalIssues.push(...sourceIssues.criticalIssues);
+  warnings.push(...sourceIssues.warnings);
 
   const uniqueCritical = [...new Set(criticalIssues)].slice(0, 8);
   const uniqueWarnings = [...new Set(warnings)].slice(0, 8);
-  const suggestions = [...new Set(baseIssues.suggestions)].slice(0, 8);
+  const suggestions = [...new Set([...baseIssues.suggestions, ...sourceIssues.suggestions])].slice(0, 8);
   const status = uniqueCritical.length
     ? 'blocked'
     : uniqueWarnings.length || suggestions.length

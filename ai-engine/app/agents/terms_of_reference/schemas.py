@@ -1,6 +1,6 @@
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class FormSchemaRequest(BaseModel):
@@ -149,6 +149,8 @@ class ProcessScheduleItem(BaseModel):
 
 
 class TermsOfReferenceResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     title: str
     requirement_type: str
     category: str
@@ -176,6 +178,8 @@ class TermsOfReferenceResult(BaseModel):
     supplier_invitation_email: SupplierInvitationEmail = Field(default_factory=SupplierInvitationEmail)
     process_schedule: list[ProcessScheduleItem] = Field(default_factory=list)
     tender_process: list[str] = Field(default_factory=list)
+    document_traceability: list[dict[str, Any]] = Field(default_factory=list)
+    downloadReadiness: dict[str, Any] | None = None
     disclaimer: str = "Este documento fue generado con asistencia de IA y debe ser revisado por el comprador antes de enviarse a proveedores."
 
 

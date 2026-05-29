@@ -7,8 +7,8 @@ from typing import Any
 import pandas as pd
 
 from app.agents.dashboard_creator.chart_recommender import recommend_chart_type
-from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type
+from app.document_processing.structured_document import build_structured_document_payload
 
 AMOUNT_HINTS = ("monto", "importe", "total", "precio", "gasto", "valor", "subtotal", "pagado", "ahorro", "amount", "price", "cost")
 AMOUNT_PRIORITY_HINTS = (
@@ -201,9 +201,7 @@ def _read_table(path: Path, file_type: str, user_context: dict[str, Any] | None 
             prepared.append((_sheet_rank(str(sheet_name), user_context), str(sheet_name), cleaned))
         if not prepared:
             return None
-        has_priority = any(rank <= len(BUSINESS_SHEET_PRIORITY) for rank, _, _ in prepared)
-        selected = [item for item in prepared if item[0] <= len(BUSINESS_SHEET_PRIORITY)] if has_priority else prepared
-        selected = sorted(selected, key=lambda item: (item[0], item[1].lower()))
+        selected = sorted(prepared, key=lambda item: (item[0], item[1].lower()))
         return pd.concat([frame for _, _, frame in selected], ignore_index=True, sort=False)
     return None
 
@@ -215,6 +213,28 @@ def _excel_sheet_names(path: Path, file_type: str) -> list[str]:
         return [str(sheet) for sheet in pd.ExcelFile(path).sheet_names]
     except Exception:
         return []
+
+
+def _excel_sheet_profiles(path: Path, file_type: str) -> list[dict[str, Any]]:
+    if file_type != "xlsx":
+        return []
+    try:
+        workbook = pd.read_excel(path, sheet_name=None, header=None)
+    except Exception:
+        return []
+    profiles: list[dict[str, Any]] = []
+    for sheet_name, frame in workbook.items():
+        cleaned = _clean_frame(frame.copy())
+        columns = [str(column) for column in cleaned.columns if not str(column).startswith("__")]
+        profiles.append(
+            {
+                "sheetName": str(sheet_name),
+                "rowsDetected": int(len(cleaned.index)),
+                "columnsDetected": columns[:80],
+                "columnsCount": len(columns),
+            }
+        )
+    return profiles
 
 
 def _header_score(row: pd.Series) -> int:
@@ -1036,12 +1056,30 @@ def _detect_document_title(text: str) -> str | None:
     return None
 
 
+def _sample_rows_for_prompt(frame: pd.DataFrame, max_rows: int = 80) -> tuple[pd.DataFrame, str]:
+    if len(frame.index) <= max_rows:
+        return frame.copy(), "complete_table"
+    head_count = max(max_rows // 3, 1)
+    tail_count = max(max_rows // 3, 1)
+    middle_count = max(max_rows - head_count - tail_count, 1)
+    middle_start = max((len(frame.index) // 2) - (middle_count // 2), 0)
+    sampled = pd.concat(
+        [
+            frame.head(head_count),
+            frame.iloc[middle_start : middle_start + middle_count],
+            frame.tail(tail_count),
+        ],
+        ignore_index=True,
+    )
+    return sampled, "head_middle_tail_sample"
+
+
 def _tabular_excerpt(frame: pd.DataFrame, max_rows: int = 80) -> str:
     visible_columns = [column for column in frame.columns if not str(column).startswith("__")]
     if not visible_columns:
         return ""
-    compact = frame[visible_columns].head(max_rows).copy()
-    return compact.to_csv(index=False)[:9000]
+    compact, strategy = _sample_rows_for_prompt(frame[visible_columns], max_rows)
+    return f"Muestra usada: {strategy}; filas totales: {len(frame.index)}\n" + compact.to_csv(index=False)[:9000]
 
 
 def _detect_analysis_type(columns: list[str], document_summaries: list[dict[str, Any]], requested_type: str | None = None) -> str:
@@ -1180,6 +1218,7 @@ def profile_files(files: list[tuple[Path, str]], user_context: dict[str, Any] | 
                 "detected_type": file_type,
                 "size_bytes": path.stat().st_size if path.exists() else None,
                 "sheets": _excel_sheet_names(path, file_type),
+                "sheet_profiles": _excel_sheet_profiles(path, file_type),
                 "tables_detected": 0,
             }
         )
@@ -1216,8 +1255,10 @@ def profile_files(files: list[tuple[Path, str]], user_context: dict[str, Any] | 
             date_columns.extend(d_cols)
             category_columns.extend(c_cols)
         else:
-            text, detected_type, file_warnings = read_document_text(path, filename)
-            compact = text[:2500]
+            trace = build_structured_document_payload(path, filename, char_budget=8000)
+            detected_type = str(trace.get("fileType") or file_type)
+            file_warnings = [str(item) for item in trace.get("warnings", [])]
+            compact = "\n\n".join(str(block.get("content", "")) for block in trace.get("evidenceBlocks", [])[:8])[:3500]
             findings = _text_relevance(compact)
             detected_title = _detect_document_title(compact)
             if detected_title and not suggested_title:
@@ -1228,9 +1269,10 @@ def profile_files(files: list[tuple[Path, str]], user_context: dict[str, Any] | 
                     "detected_type": detected_type,
                     "text_preview": None,
                     "detected_title": detected_title,
-                    "llm_excerpt": compact[:1200],
+                    "llm_excerpt": compact[:1800],
                     "relevant_findings": findings,
-                    "limitations": file_warnings + ["Fuente secundaria: texto extraido, no dataset tabular completo."],
+                    "traceability": trace,
+                    "limitations": file_warnings + ["Fuente secundaria: texto documental, no dataset tabular completo."],
                 }
             )
             warnings.extend(file_warnings)

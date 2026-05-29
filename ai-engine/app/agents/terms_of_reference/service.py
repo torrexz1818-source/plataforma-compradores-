@@ -561,16 +561,16 @@ def _enhance_result(result: TermsOfReferenceResult) -> TermsOfReferenceResult:
     if not result.document_request:
         result.document_request = request_name
     if not result.process_code:
-        result.process_code = "[COMPLETAR: codigo del proceso]"
+        result.process_code = "Por definir por el comprador"
     if not result.contracting_entity:
         result.contracting_entity = {}
     result.contracting_entity = {
-        "business_name": result.contracting_entity.get("business_name") or "[COMPLETAR: razon social de la entidad convocante]",
-        "tax_id": result.contracting_entity.get("tax_id") or "[COMPLETAR: RUC o identificacion tributaria]",
-        "address": result.contracting_entity.get("address") or "[COMPLETAR: direccion]",
-        "institutional_contact": result.contracting_entity.get("institutional_contact") or "[COMPLETAR: correo o web institucional]",
-        "process_owner": result.contracting_entity.get("process_owner") or "[COMPLETAR: responsable del proceso]",
-        "requesting_area": result.contracting_entity.get("requesting_area") or "[COMPLETAR: area solicitante]",
+        "business_name": result.contracting_entity.get("business_name") or "Por definir por el comprador",
+        "tax_id": result.contracting_entity.get("tax_id") or "Por definir por el comprador",
+        "address": result.contracting_entity.get("address") or "Por definir por el comprador",
+        "institutional_contact": result.contracting_entity.get("institutional_contact") or "Por definir por el comprador",
+        "process_owner": result.contracting_entity.get("process_owner") or "Por definir por el comprador",
+        "requesting_area": result.contracting_entity.get("requesting_area") or "Por definir por el comprador",
     }
     if not result.invited_bidders:
         result.invited_bidders = [
@@ -581,10 +581,10 @@ def _enhance_result(result: TermsOfReferenceResult) -> TermsOfReferenceResult:
                 "email": "{correo}",
             },
             {
-                "contact_name": "[COMPLETAR: ingresar empresas invitadas]",
-                "business_name": "[COMPLETAR: razon social]",
-                "role": "[COMPLETAR: cargo]",
-                "email": "[COMPLETAR: correo]",
+                "contact_name": "Proveedor por definir",
+                "business_name": "Empresa por definir",
+                "role": "Contacto comercial",
+                "email": "Correo por definir",
             },
         ]
     if not result.process_schedule:
@@ -605,12 +605,12 @@ def _enhance_result(result: TermsOfReferenceResult) -> TermsOfReferenceResult:
         f"{item['criterion']} - {item['subcriterion']} ({item['score']} puntos)"
         for item in document.evaluation_matrix
     ]
-    if not any("[SUGERIDO]" in item or "[COMPLETAR]" in item for item in [*document.commercial_conditions, *document.suggested_schedule, *result.missing_information]):
-        result.missing_information.append("[COMPLETAR] Validar presupuesto referencial, responsables, fechas exactas y restricciones especificas antes de publicar el TDR.")
+    if not any("validar" in item.lower() or "suger" in item.lower() for item in [*document.commercial_conditions, *document.suggested_schedule, *result.missing_information]):
+        result.missing_information.append("Validar presupuesto referencial, responsables, fechas exactas y restricciones especificas antes de publicar el TDR.")
 
     if not document.applicable_standards:
         document.applicable_standards = [
-            "[COMPLETAR] Normas tecnicas, estandares internos, politicas de seguridad o marco aplicable al requerimiento."
+            "Normas tecnicas, estandares internos, politicas de seguridad o marco aplicable: validar segun el requerimiento."
         ]
     if not document.execution_conditions:
         document.execution_conditions = [
@@ -685,21 +685,21 @@ def _enhance_result(result: TermsOfReferenceResult) -> TermsOfReferenceResult:
                 "type": "Tecnico",
                 "expected_evidence": "Declaracion de cumplimiento y propuesta tecnica.",
                 "mandatory": "Obligatorio",
-                "status": "Por validar" if document.objective and document.scope else "[COMPLETAR]",
+                "status": "Por validar",
             },
             {
                 "requirement": "Especificaciones tecnicas cubiertas",
                 "type": "Tecnico",
                 "expected_evidence": "Ficha tecnica, memoria descriptiva, catalogo o detalle de solucion.",
                 "mandatory": "Obligatorio",
-                "status": "Por validar" if document.technical_characteristics else "[COMPLETAR]",
+                "status": "Por validar",
             },
             {
                 "requirement": "Entregables comprometidos",
                 "type": "Operativo",
                 "expected_evidence": "Listado de entregables, formato de conformidad y plazo.",
                 "mandatory": "Obligatorio",
-                "status": "Por validar" if document.final_deliverables else "[COMPLETAR]",
+                "status": "Por validar",
             },
             {
                 "requirement": "Requisitos de seguridad y acceso",
@@ -818,8 +818,8 @@ async def generate_terms_of_reference(
     if missing:
         raise HTTPException(status_code=400, detail=f"Completa los campos obligatorios: {', '.join(missing)}.")
 
-    if len(files) > TERMS_MAX_FILES:
-        raise HTTPException(status_code=400, detail=f"Puedes subir como maximo {TERMS_MAX_FILES} archivos de apoyo.")
+    if len(files) > settings.max_files_terms:
+        raise HTTPException(status_code=400, detail=f"Puedes subir como maximo {settings.max_files_terms} archivos de apoyo.")
 
     temp_paths: list[Path] = []
     document_context: list[dict[str, Any]] = []
@@ -873,7 +873,7 @@ async def generate_terms_of_reference(
             "tdr_type": tdr_type,
             "document_request": document_request,
             "generated_documents": generated_documents,
-            "process_code": str(parsed_dynamic.get("process_code") or parsed_dynamic.get("codigo_proceso") or "").strip() or "[COMPLETAR: codigo del proceso]",
+            "process_code": str(parsed_dynamic.get("process_code") or parsed_dynamic.get("codigo_proceso") or "").strip() or "Por definir por el comprador",
             "contracting_entity": {
                 "business_name": str(parsed_dynamic.get("business_name") or parsed_dynamic.get("razon_social") or "").strip(),
                 "tax_id": str(parsed_dynamic.get("tax_id") or parsed_dynamic.get("ruc") or "").strip(),
@@ -905,6 +905,11 @@ async def generate_terms_of_reference(
             raw = _fallback_document(payload, document_summaries)
 
         raw.setdefault("supporting_documents_summary", document_summaries)
+        raw["document_traceability"] = document_context
+        raw["downloadReadiness"] = {
+            "status": "ready_with_validation" if document_summaries else "ready",
+            "reason": "Validar advertencias de documentos de apoyo antes de enviar a proveedores." if document_summaries else "Documento generado con campos del formulario.",
+        }
         raw.setdefault("disclaimer", "Este documento fue generado con asistencia de IA y debe ser revisado por el comprador antes de enviarse a proveedores.")
 
         result = TermsOfReferenceResult.model_validate(raw)

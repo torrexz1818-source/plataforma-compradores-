@@ -112,6 +112,8 @@ export type DashboardResult = {
     limitations: string[];
   }>;
   source_files: Array<{ file_name: string; detected_type: string }>;
+  document_traceability?: Array<Record<string, unknown>>;
+  downloadReadiness?: Record<string, unknown> | null;
   suggested_filters: string[];
   layout_suggestion: Array<Record<string, unknown>>;
   pdf_available: boolean;

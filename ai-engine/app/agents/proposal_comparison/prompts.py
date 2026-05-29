@@ -74,8 +74,15 @@ Regla critica de calificacion:
 - La observacion del criterio debe mencionar explicitamente que el puntaje bajo se debe a informacion no declarada, incompleta o no verificable.
 - No inventes garantia, certificaciones, plazos, soporte, precio, alcance ni experiencia.
 
-Propuestas extraidas:
+Paquete documental estructurado disponible para el analisis:
 {documents}
+
+Reglas de evidencia:
+- Trata cada fileName como una propuesta o fuente documental.
+- Usa evidenceBlocks y tables para sustentar proveedor, precio, moneda, plazo, alcance, condiciones comerciales, exclusiones, riesgos, fortalezas y debilidades.
+- Si wasTruncated es true, considera las advertencias como limitacion de calidad y no inventes datos de partes no enviadas.
+- Cada proveedor debe quedar vinculado a su archivo fuente y a evidencia minima del documento.
+- Si no puedes identificar al menos dos proveedores o propuestas comparables, devuelve suppliers/ranking incompletos para que el sistema bloquee y pida informacion adicional.
 
 Devuelve un JSON con esta estructura exacta:
 {{
@@ -143,6 +150,8 @@ Devuelve un JSON con esta estructura exacta:
   "suppliers": [
     {{
       "supplier_name": "string",
+      "source_file": "string",
+      "source_evidence": ["bloque, pagina, hoja o tabla usada"],
       "ruc": "string|null",
       "contact": "string|null",
       "email": "string|null",

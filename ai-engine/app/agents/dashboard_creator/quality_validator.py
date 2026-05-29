@@ -6,15 +6,15 @@ ALLOWED_KPI_SOURCES = {"python", "backend", "calculated", "llm_structured_from_d
 ALLOWED_CHART_TYPES = {"bar", "horizontal_bar", "line", "area", "pie", "donut", "stacked_bar", "table", "kpi", "matrix", "alert"}
 
 
-def validate_dashboard_request(title: str, objective: str, files: list[UploadFile]) -> None:
+def validate_dashboard_request(title: str, objective: str, files: list[UploadFile], max_files: int = 8) -> None:
     if not title.strip():
         raise HTTPException(status_code=400, detail="El nombre del dashboard es obligatorio.")
     if not objective.strip():
         raise HTTPException(status_code=400, detail="El objetivo del dashboard es obligatorio.")
     if not files:
         raise HTTPException(status_code=400, detail="Sube al menos un archivo de datos para crear el dashboard.")
-    if len(files) > 8:
-        raise HTTPException(status_code=400, detail="Puedes subir como maximo 8 archivos para crear el dashboard.")
+    if len(files) > max_files:
+        raise HTTPException(status_code=400, detail=f"Puedes subir como maximo {max_files} archivos para crear el dashboard.")
 
 
 def _as_list(value):

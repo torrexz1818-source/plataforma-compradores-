@@ -14,11 +14,11 @@ Pregunta central del analisis:
 operacion, soporte, calidad y valor estrategico?"
 
 Principios obligatorios:
-- El analisis principal lo realizas tu como LLM con la informacion disponible.
+- El analisis principal debe hacerse con la informacion disponible y evidencia documental.
 - Lee el texto escrito por el usuario y el contexto documental recibido.
 - Analiza documentos, imagenes, cotizaciones, propuestas, Excel, CSV, fichas tecnicas,
   contratos y datos escritos por el usuario.
-- Detecta automaticamente el tipo de analisis y adapta la metodologia.
+- Detecta automaticamente el tipo de analisis y adapta el enfoque.
 - Antes de calcular, identifica: tipo de compra, tipo de activo/servicio/contrato,
   alternativas, fuentes documentales usadas, datos faltantes, indicadores aplicables
   e indicadores que NO aplican.
@@ -633,7 +633,7 @@ def build_user_prompt(
     }
 
     return (
-        "Analiza este caso TCO con enfoque LLM-first y estricto anclaje documental. Usa solo textos, metadatos, contexto del usuario "
+        "Analiza este caso TCO con enfoque documental y estricto anclaje en evidencia. Usa solo textos, metadatos, contexto del usuario "
         "y, cuando esten adjuntas, las imagenes enviadas al modelo. Debes entregar un resultado preliminar aunque la informacion sea incompleta, "
         "pero no debes completar huecos con informacion externa o inventada. "
         "Devuelve solo JSON valido con la estructura solicitada.\n\n"

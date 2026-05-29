@@ -90,7 +90,7 @@ const labelMap: Record<string, string> = {
   source_files: 'Archivos procesados',
   document_summaries: 'Resumen de documentos procesados',
   supporting_documents_summary: 'Resumen de documentos procesados',
-  extracted_data_quality: 'Calidad de extraccion',
+  extracted_data_quality: 'Calidad documental',
   data_used: 'Datos usados',
   kpis: 'KPIs principales',
   charts: 'Graficos',
@@ -5052,12 +5052,9 @@ export async function downloadAgentResultPdf(input: PdfInput) {
 
 export async function downloadAgentResult(input: AgentExportInput) {
   const exportFormat = mapAgentExportFormat(input.format);
-  const initialPayload = exportFormat
-    ? buildExportPayload(input.agentKey, input.result, { termsScope: input.termsScope })
-    : undefined;
   const qualityReport = auditDeliverableBeforeDownload({
     agentKey: input.agentKey,
-    result: initialPayload ?? input.result,
+    result: input.result,
     options: { termsScope: input.termsScope },
   });
   assertDeliverableCanDownload(qualityReport);

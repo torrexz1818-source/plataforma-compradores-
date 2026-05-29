@@ -22,7 +22,7 @@ import { AuthenticatedGuard } from '../../common/auth/authenticated.guard';
 import { AgentsService, AgentStatus } from './agents.service';
 
 const agentUploadMaxFileSize =
-  Number.parseInt(process.env.AGENT_UPLOAD_MAX_FILE_SIZE_BYTES?.trim() || '', 10) || 50 * 1024 * 1024;
+  Number.parseInt(process.env.AGENT_UPLOAD_MAX_FILE_SIZE_BYTES?.trim() || '', 10) || 10 * 1024 * 1024;
 
 type UploadedAgentFile = {
   fieldname: string;

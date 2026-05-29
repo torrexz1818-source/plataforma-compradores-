@@ -12,6 +12,8 @@ export type ProposalComparisonRankingItem = {
 
 export type ProposalComparisonSupplier = {
   supplier_name: string;
+  source_file?: string | null;
+  source_evidence?: string[];
   ruc: string | null;
   contact: string | null;
   email: string | null;
@@ -98,6 +100,8 @@ export type ProposalComparisonResult = {
   missing_information: string[];
   questions_for_suppliers: string[];
   final_recommendation: string;
+  document_traceability?: Array<Record<string, unknown>>;
+  downloadReadiness?: Record<string, unknown> | null;
   disclaimer: string;
 };
 

@@ -14,6 +14,25 @@ BUYER_NODUS_VISUAL_CONFIG = {
 
 def _summary_block(executive_summary: str, profiled: dict[str, Any], missing_information: list[str]) -> dict[str, Any]:
     kpis = [str(item.get("title")) for item in profiled.get("kpis", []) if isinstance(item, dict) and item.get("title")]
+    document_traceability = [
+        item.get("traceability")
+        for item in profiled.get("document_summaries", [])
+        if isinstance(item, dict) and item.get("traceability")
+    ]
+    sample_warnings = [
+        warning
+        for warning in profile.get("data_quality_warnings", [])
+        if "muestra" in str(warning).lower() or "sample" in str(warning).lower()
+    ]
+    readiness_status = "ready"
+    readiness_reason = "Dashboard construido con indicadores y visualizaciones disponibles."
+    if not profiled.get("kpis") or not (charts or tables):
+        readiness_status = "blocked"
+        readiness_reason = "Se requieren KPIs, graficos o tablas con datos suficientes para descargar un dashboard util."
+    elif sample_warnings:
+        readiness_status = "ready_with_validation"
+        readiness_reason = "El dashboard usa muestras o lectura parcial; validar advertencias antes de decidir."
+
     return {
         "information_found": executive_summary,
         "analysis_built": "Reporte ejecutivo generado a partir de los archivos cargados, con indicadores calculados segun la informacion disponible.",
@@ -148,6 +167,7 @@ def build_dashboard_result(
         "data_profile": profile,
         "dataProfile": profile,
         "dashboardPlan": dashboard_plan,
+        "document_traceability": document_traceability,
         "kpis": profiled.get("kpis", []),
         "charts": charts,
         "tables": tables,
@@ -164,6 +184,10 @@ def build_dashboard_result(
         "layout_suggestion": layout,
         "visualConfig": BUYER_NODUS_VISUAL_CONFIG,
         "pdf_available": True,
+        "downloadReadiness": {
+            "status": readiness_status,
+            "reason": readiness_reason,
+        },
         "model_provider": model_provider,
         "model_name": model_name,
         "latency_ms": latency_ms,

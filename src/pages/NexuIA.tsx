@@ -937,14 +937,34 @@ const NexuIA = () => {
 
   const handleComparisonFilesChange = (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
+    const maxFiles = 5;
+    const maxFileSizeMb = 10;
     const hasUnsupportedFile = files.some((file) => {
       const extension = file.name.split('.').pop()?.toLowerCase();
-      return !extension || !['pdf', 'xlsx', 'csv', 'png', 'jpg', 'jpeg'].includes(extension);
+      return !extension || !['pdf', 'docx', 'xlsx', 'csv', 'png', 'jpg', 'jpeg'].includes(extension);
     });
     if (hasUnsupportedFile) {
       toast({
         title: 'Formato no soportado para este agente.',
-        description: 'El archivo no pudo procesarse. Verifica el formato o vuelve a cargarlo.',
+        description: 'Formatos permitidos: PDF, DOCX, XLSX, CSV, JPG, JPEG y PNG.',
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
+    if (files.length > maxFiles) {
+      toast({
+        title: `Puedes subir como máximo ${maxFiles} archivos.`,
+        description: 'Reduce la cantidad de propuestas para este comparativo.',
+        variant: 'destructive',
+      });
+      event.target.value = '';
+      return;
+    }
+    if (files.some((file) => file.size > maxFileSizeMb * 1024 * 1024)) {
+      toast({
+        title: 'Un archivo supera el tamaño permitido.',
+        description: `Cada archivo debe pesar ${maxFileSizeMb} MB como máximo.`,
         variant: 'destructive',
       });
       event.target.value = '';
@@ -2929,7 +2949,7 @@ const NexuIA = () => {
                                 <input
                                   type="file"
                                   multiple
-                                  accept=".pdf,.xlsx,.csv,.png,.jpg,.jpeg"
+                                  accept=".pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg"
                                   onChange={handleComparisonFilesChange}
                                   className="hidden"
                                 />
@@ -4229,7 +4249,7 @@ const NexuIA = () => {
                           </div>
                           {tcoResult.extracted_data_quality?.warnings?.length ? (
                             <div className="mt-3 rounded-2xl border border-primary/15 bg-white p-4">
-                              <p className="text-sm font-medium text-foreground">Advertencias de extracción</p>
+                              <p className="text-sm font-medium text-foreground">Advertencias de calidad documental</p>
                               <div className="mt-2">{renderValueList(tcoResult.extracted_data_quality.warnings)}</div>
                             </div>
                           ) : null}

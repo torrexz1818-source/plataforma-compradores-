@@ -7,14 +7,52 @@ from app.agents.proposal_comparison.schemas import ExtractedDocument, ProposalCo
 from app.agents.proposal_comparison.scoring import normalize_ranking
 from app.ai.llm_client import analyze_with_openai
 from app.config import get_settings
-from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type, validate_allowed_file
+from app.document_processing.structured_document import build_public_document_warning, build_structured_document_payload, evidence_text
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
 
 
 def extract_text_from_file(path: Path, filename: str) -> ExtractedDocument:
-    text, file_type, warnings = read_document_text(path, filename)
+    trace = build_structured_document_payload(path, filename)
+    text = evidence_text(trace)
+    file_type = str(trace.get("fileType") or detect_file_type(filename))
+    warnings = [*trace.get("warnings", []), *build_public_document_warning(trace)]
     return ExtractedDocument(filename=filename, file_type=file_type, text=text, warnings=warnings)
+
+
+def build_proposal_document_context(path: Path, filename: str) -> dict:
+    trace = build_structured_document_payload(path, filename)
+    return {
+        "fileName": trace["fileName"],
+        "fileType": trace["fileType"],
+        "fileSize": trace["fileSize"],
+        "extractionStatus": trace["extractionStatus"],
+        "totalCharactersExtracted": trace["totalCharactersExtracted"],
+        "totalCharactersSentToModel": trace["totalCharactersSentToModel"],
+        "wasTruncated": trace["wasTruncated"],
+        "truncationReason": trace["truncationReason"],
+        "pagesDetected": trace["pagesDetected"],
+        "sheetsDetected": trace["sheetsDetected"],
+        "columnsDetected": trace["columnsDetected"],
+        "rowsDetected": trace["rowsDetected"],
+        "warnings": trace["warnings"],
+        "publicWarnings": trace["publicWarnings"],
+        "minimumEvidenceRequired": {
+            "supplierName": "extraer si existe",
+            "priceOrAmount": "extraer si existe",
+            "currency": "extraer si existe",
+            "deliveryTerm": "extraer si existe",
+            "scope": "extraer si existe",
+            "commercialTerms": "extraer si existe",
+            "exclusions": "extraer si existe",
+            "risks": "extraer si existe",
+            "strengths": "extraer si existe",
+            "weaknesses": "extraer si existe",
+            "sourceEvidence": "citar bloque, pagina, hoja o tabla usada",
+        },
+        "evidenceBlocks": trace["evidenceBlocks"],
+        "tables": trace["tables"],
+    }
 
 
 async def analyze_proposals(
@@ -56,23 +94,14 @@ async def analyze_proposals(
             },
         )
 
-        extracted_documents = [
-            extract_text_from_file(path, upload.filename or path.name)
-            for path, upload in zip(temp_paths, files)
-        ]
-
         documents_for_prompt = [
-            {
-                "filename": doc.filename,
-                "file_type": doc.file_type,
-                "warnings": doc.warnings,
-                "text": doc.text,
-            }
-            for doc in extracted_documents
+            build_proposal_document_context(path, upload.filename or path.name)
+            for path, upload in zip(temp_paths, files)
         ]
 
         prompt = build_user_prompt(title, service, objective, criteria, documents_for_prompt)
         raw_result = await analyze_with_openai(prompt)
+        raw_result["document_traceability"] = documents_for_prompt
         normalized_result = normalize_ranking(raw_result)
 
         if len(normalized_result.get("suppliers", [])) < 2:
@@ -90,6 +119,13 @@ async def analyze_proposals(
         normalized_result.setdefault("analysis_title", title or "Comparativo de propuestas de proveedores")
         normalized_result.setdefault("service", service)
         normalized_result.setdefault("objective", objective or "No especificado")
+        normalized_result["document_traceability"] = documents_for_prompt
+        normalized_result["downloadReadiness"] = {
+            "status": "ready" if len(normalized_result.get("suppliers", [])) >= 2 else "blocked",
+            "reason": "Comparativo con al menos dos proveedores identificados."
+            if len(normalized_result.get("suppliers", [])) >= 2
+            else "Se requieren al menos dos proveedores comparables con evidencia documental.",
+        }
         normalized_result.setdefault(
             "disclaimer",
             "Este análisis es una recomendación asistida por IA y debe ser validado por el comprador antes de tomar una decisión final.",

@@ -1,8 +1,12 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SupplierResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     supplier_name: str = "No especificado"
+    source_file: str | None = None
+    source_evidence: list[str] = Field(default_factory=list)
     ruc: str | None = None
     contact: str | None = None
     email: str | None = None
@@ -90,6 +94,8 @@ class ExecutiveComparisonRow(BaseModel):
 
 
 class ProposalComparisonResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     analysis_title: str
     service: str
     objective: str | None = None
@@ -110,6 +116,8 @@ class ProposalComparisonResult(BaseModel):
     missing_information: list[str] = Field(default_factory=list)
     questions_for_suppliers: list[str] = Field(default_factory=list)
     final_recommendation: str
+    document_traceability: list[dict] = Field(default_factory=list)
+    downloadReadiness: dict | None = None
     disclaimer: str = (
         "Este análisis es una recomendación asistida por IA y debe ser validado por el comprador "
         "antes de tomar una decisión final."

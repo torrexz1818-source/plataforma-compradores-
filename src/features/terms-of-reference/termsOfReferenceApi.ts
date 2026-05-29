@@ -163,6 +163,8 @@ export type TermsResult = {
     observations?: string;
   }>;
   tender_process?: string[];
+  document_traceability?: Array<Record<string, unknown>>;
+  downloadReadiness?: Record<string, unknown> | null;
   disclaimer: string;
 };
 
