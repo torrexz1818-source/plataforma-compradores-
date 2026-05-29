@@ -112,15 +112,20 @@ export function filterModuleNavItems(items: ModuleNavItem[], settings: ModuleAct
     .filter(Boolean) as ModuleNavItem[];
 }
 
+export const moduleActivationQueryPolicy = {
+  staleTime: 5 * 60_000,
+  gcTime: 30 * 60_000,
+  refetchOnMount: false,
+  refetchOnWindowFocus: false,
+  refetchInterval: false,
+} as const;
+
 export function useMyModuleActivations() {
   const { user } = useAuth();
   return useQuery({
     queryKey: ['module-activations', 'mine', user?.role],
     queryFn: getMyModuleActivations,
     enabled: Boolean(user?.role),
-    staleTime: 0,
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: 'always',
-    refetchInterval: 5_000,
+    ...moduleActivationQueryPolicy,
   });
 }

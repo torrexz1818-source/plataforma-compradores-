@@ -73,6 +73,33 @@ type RequestOptions = RequestInit & {
   auth?: boolean;
 };
 
+export class ApiRequestError extends Error {
+  status?: number;
+  statusText?: string;
+  errorCode?: string;
+  traceId?: string;
+  runId?: string;
+  responseBody?: unknown;
+
+  constructor(message: string, options: {
+    status?: number;
+    statusText?: string;
+    errorCode?: string;
+    traceId?: string;
+    runId?: string;
+    responseBody?: unknown;
+  } = {}) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = options.status;
+    this.statusText = options.statusText;
+    this.errorCode = options.errorCode;
+    this.traceId = options.traceId;
+    this.runId = options.runId;
+    this.responseBody = options.responseBody;
+  }
+}
+
 type ListResponse<T> = {
   items: T[];
 };
@@ -373,7 +400,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     const fallbackResponse = await tryFallbackFetch(path, requestOptions);
     if (!fallbackResponse) {
       if (typeof window !== 'undefined') {
-        throw new Error(getConnectionErrorMessage());
+        throw new ApiRequestError(getConnectionErrorMessage());
       }
 
       throw primaryError;
@@ -392,20 +419,50 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) {
     let message = 'No se pudo completar la solicitud';
+    let responseBody: unknown;
+    let errorCode: string | undefined;
+    let traceId: string | undefined;
+    let runId: string | undefined;
 
     try {
-      const data = (await response.json()) as { message?: string | string[] };
+      const data = (await response.json()) as {
+        message?: string | string[];
+        detail?: string | string[];
+        error?: string;
+        errorCode?: string;
+        code?: string;
+        traceId?: string;
+        runId?: string;
+        agentRunId?: string;
+      };
+      responseBody = data;
 
       if (Array.isArray(data.message)) {
         message = data.message.join(', ');
       } else if (data.message) {
         message = data.message;
+      } else if (Array.isArray(data.detail)) {
+        message = data.detail.join(', ');
+      } else if (data.detail) {
+        message = data.detail;
+      } else if (data.error) {
+        message = data.error;
       }
+      errorCode = data.errorCode || data.code;
+      traceId = data.traceId;
+      runId = data.runId || data.agentRunId;
     } catch {
       message = response.statusText || message;
     }
 
-    throw new Error(message);
+    throw new ApiRequestError(message, {
+      status: response.status,
+      statusText: response.statusText,
+      errorCode,
+      traceId,
+      runId,
+      responseBody,
+    });
   }
 
   if (response.status === 204) {

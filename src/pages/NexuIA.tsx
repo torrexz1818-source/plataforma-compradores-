@@ -71,6 +71,7 @@ import { DashboardReportView } from '@/features/dashboard-creator/components/Das
 import { useTcoAnalysis } from '@/features/tco-analysis/useTcoAnalysis';
 import { normalizeTcoForPresentation } from '@/features/tco-analysis/tcoPresentation';
 import { downloadAgentResult, type AgentExportFormat, type TermsExportScope } from '@/lib/agentPdf';
+import { AgentRunError } from '@/lib/agentRunApi';
 import {
   auditDeliverableBeforeDownload,
   type DeliverableQualityReport,
@@ -386,6 +387,128 @@ function getTermsErrorMessage(error: unknown) {
   return 'No se pudieron generar los documentos. Revisa los datos ingresados o intenta nuevamente.';
 }
 
+function traceSuffix(error: unknown) {
+  if (!(error instanceof AgentRunError)) return '';
+  const parts = [error.traceId ? `Trace ID: ${error.traceId}` : '', error.runId ? `Run ID: ${error.runId}` : ''].filter(Boolean);
+  return parts.length ? ` (${parts.join(' · ')})` : '';
+}
+
+function getTcoErrorInfo(error: unknown) {
+  const rawMessage = error instanceof Error ? error.message : '';
+  const trace = traceSuffix(error);
+
+  if (error instanceof AgentRunError) {
+    if (error.type === 'insufficient_data' || error.type === 'quality_gate_blocked' || error.type === 'user_permission_required') {
+      return {
+        title: 'El TCO requiere más información',
+        description: `Detectamos que la información disponible no alcanza para construir un TCO confiable. Puedes agregar contexto, cambiar documento o reintentar con más datos.${trace}`,
+        recoverableWithQualityGate: true,
+      };
+    }
+    if (error.type === 'file_validation_error') {
+      return {
+        title: 'El archivo no pudo leerse correctamente',
+        description: `Revisa el formato, vuelve a cargar el documento o sube una versión legible.${trace}`,
+        recoverableWithQualityGate: true,
+      };
+    }
+    if (error.type === 'ai_engine_error' || error.type === 'network_error') {
+      return {
+        title: 'El motor de análisis no respondió',
+        description: `El motor de análisis no respondió correctamente. Intenta nuevamente en unos minutos.${trace}`,
+        recoverableWithQualityGate: false,
+      };
+    }
+    if (error.type === 'backend_error') {
+      return {
+        title: 'Problema del servidor',
+        description: `No se pudo completar el análisis por un problema del servidor. Intenta nuevamente o revisa el estado del servicio.${trace}`,
+        recoverableWithQualityGate: false,
+      };
+    }
+    if (error.type === 'module_not_active' || error.type === 'unauthorized') {
+      return {
+        title: 'Agente no disponible para tu sesión',
+        description: `Este agente no está habilitado para tu usuario o sesión.${trace}`,
+        recoverableWithQualityGate: false,
+      };
+    }
+  }
+
+  if (/timeout|tiempo|time|motor|engine/i.test(rawMessage)) {
+    return {
+      title: 'El motor de análisis no respondió',
+      description: 'El motor de análisis no respondió correctamente. Intenta nuevamente en unos minutos.',
+      recoverableWithQualityGate: false,
+    };
+  }
+
+  return {
+    title: 'No se pudo completar el análisis TCO',
+    description: rawMessage || 'No se pudo completar el análisis. Intenta nuevamente o revisa el estado del servicio.',
+    recoverableWithQualityGate: false,
+  };
+}
+
+function buildTcoRecoveryQualityReport(input: {
+  error: unknown;
+  title: string;
+  itemName: string;
+  analysisType: string;
+  evaluationHorizon: string;
+  comparisonUnit: string;
+  currency: string;
+  objective?: string;
+  hasFiles: boolean;
+}) {
+  const info = getTcoErrorInfo(input.error);
+  return auditDeliverableBeforeDownload({
+    agentKey: 'tco_analysis',
+    result: {
+      analysis_title: input.title || 'Analisis de Costo Total / TCO',
+      item_name: input.itemName,
+      analysis_type: input.analysisType,
+      evaluation_horizon: input.evaluationHorizon,
+      comparison_unit: input.comparisonUnit,
+      currency: input.currency,
+      executive_summary: {
+        final_recommendation: 'No se genero una recomendacion financiera porque faltan datos minimos confiables.',
+        main_risk: 'Riesgo de generar un TCO falso o enganoso.',
+      },
+      data_used: [],
+      tco_matrix: [],
+      tco_totals: [],
+      financial_model: [],
+      ranking: [],
+      risk_analysis: [],
+      interpretation: {},
+      sensitivity_analysis: {},
+      strategic_recommendation: {
+        recommended_action: 'Agregar costos, alternativas, condiciones comerciales, horizonte y supuestos antes de generar el TCO.',
+      },
+      missing_information: [
+        info.description,
+        input.hasFiles ? 'Validar que el archivo tenga costos y alternativas comparables.' : 'Agregar documentos o datos minimos de costos.',
+      ],
+      questions_for_user_or_suppliers: [
+        'Cuales son las alternativas o proveedores comparables?',
+        'Cuales son los costos iniciales, operativos, mantenimiento e implementacion?',
+      ],
+      assumptions_and_limits: [
+        'No se realizaron calculos financieros porque la informacion minima no fue suficiente.',
+      ],
+      supporting_documents_summary: [],
+      calculation_warnings: [info.description],
+      downloadReadiness: {
+        status: 'blocked',
+        reason: info.description,
+      },
+      disclaimer: 'No se genero un TCO descargable porque faltan datos minimos confiables.',
+    },
+    options: { userInstructions: input.objective },
+  });
+}
+
 const NexuIA = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -479,6 +602,7 @@ const NexuIA = () => {
   });
   const [tcoFiles, setTcoFiles] = useState<File[]>([]);
   const [tcoProgressStep, setTcoProgressStep] = useState(0);
+  const [tcoRecoveryQualityReport, setTcoRecoveryQualityReport] = useState<DeliverableQualityReport | undefined>();
   const tcoProgressStages = useMemo(
     () => [
       { label: 'Leyendo archivos', message: 'Leyendo archivos...' },
@@ -602,6 +726,7 @@ const NexuIA = () => {
     });
     setTcoFiles([]);
     setTcoProgressStep(0);
+    setTcoRecoveryQualityReport(undefined);
     setFeedbackComment('');
     setFeedbackCorrection('');
     setSelectedPdfMode('standard_branded');
@@ -1331,6 +1456,28 @@ const NexuIA = () => {
           activeStep,
           isSuccess: true,
           report,
+          label: step.label,
+        });
+        return (
+          <div key={step.label} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${progressStepClass(status)}`}>
+            {renderProgressStepIcon(status)}
+            <span>{step.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderFailedProgressSummary = (
+    stages: Array<{ label: string; message: string }>,
+    activeStep: number,
+  ) => (
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {stages.map((step, index) => {
+        const status = progressStepStatus({
+          index,
+          activeStep,
+          isError: true,
           label: step.label,
         });
         return (
@@ -2164,6 +2311,15 @@ const NexuIA = () => {
     if (!selectedAgent) {
       return;
     }
+    if (!isAgentActive) {
+      toast({
+        title: 'Agente no disponible',
+        description: 'Este agente no está habilitado para tu usuario o sesión.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setTcoRecoveryQualityReport(undefined);
 
     const requiredGeneral = [
       tcoGeneral.title,
@@ -2199,8 +2355,20 @@ const NexuIA = () => {
         maxFiles: 8,
       });
       if (fileQuality.status === 'blocked') {
+        const error = new AgentRunError(fileQuality.userMessage, { type: 'file_validation_error' });
+        setTcoRecoveryQualityReport(buildTcoRecoveryQualityReport({
+          error,
+          title: tcoGeneral.title.trim(),
+          itemName: tcoGeneral.itemName.trim(),
+          analysisType: tcoGeneral.analysisType,
+          evaluationHorizon: tcoGeneral.evaluationHorizon,
+          comparisonUnit: tcoGeneral.comparisonUnit,
+          currency: tcoGeneral.currency,
+          objective: tcoGeneral.objective,
+          hasFiles: true,
+        }));
         toast({
-          title: 'No se pueden procesar los archivos',
+          title: 'El archivo no pudo leerse correctamente',
           description: fileQuality.criticalIssues.join(' ') || fileQuality.userMessage,
           variant: 'destructive',
         });
@@ -2229,6 +2397,7 @@ const NexuIA = () => {
       },
       {
         onSuccess: (result) => {
+          setTcoRecoveryQualityReport(undefined);
           logAgentUsage(
             selectedAgent.id,
             'Análisis de Costo Total / TCO',
@@ -2241,9 +2410,23 @@ const NexuIA = () => {
           });
         },
         onError: (error) => {
+          const info = getTcoErrorInfo(error);
+          if (info.recoverableWithQualityGate) {
+            setTcoRecoveryQualityReport(buildTcoRecoveryQualityReport({
+              error,
+              title: tcoGeneral.title.trim(),
+              itemName: tcoGeneral.itemName.trim(),
+              analysisType: tcoGeneral.analysisType,
+              evaluationHorizon: tcoGeneral.evaluationHorizon,
+              comparisonUnit: tcoGeneral.comparisonUnit,
+              currency: tcoGeneral.currency,
+              objective: tcoGeneral.objective,
+              hasFiles: Boolean(tcoFiles.length),
+            }));
+          }
           toast({
-            title: 'No se pudo generar el análisis TCO.',
-            description: error instanceof Error ? error.message : 'No se pudo conectar con el motor de IA.',
+            title: info.title,
+            description: info.description,
             variant: 'destructive',
           });
         },
@@ -2348,7 +2531,8 @@ const NexuIA = () => {
   const tcoResult = tcoAnalysisMutation.data;
   const tcoQualityReport = tcoResult
     ? auditDeliverableBeforeDownload({ agentKey: 'tco_analysis', result: tcoResult, options: getQualityOptions('tco') })
-    : undefined;
+    : tcoRecoveryQualityReport;
+  const tcoErrorInfo = tcoAnalysisMutation.error ? getTcoErrorInfo(tcoAnalysisMutation.error) : undefined;
   const tcoPresentation = tcoResult ? normalizeTcoForPresentation(tcoResult) : undefined;
   const tcoRecommendation = tcoResult?.strategic_recommendation;
   const tcoExecutiveCards = tcoPresentation?.kpis ?? [];
@@ -3924,12 +4108,54 @@ const NexuIA = () => {
                     <div className="space-y-3 rounded-2xl border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive">
                       <div className="flex items-center gap-2 font-medium">
                         <TriangleAlert className="h-4 w-4" />
-                        <span>No se pudo completar el análisis TCO.</span>
+                        <span>{tcoErrorInfo?.title ?? 'No se pudo completar el análisis TCO'}</span>
                       </div>
                       <Progress value={Math.max(((tcoProgressStep + 1) / tcoProgressStages.length) * 100, 12)} className="h-2 bg-destructive/10" />
                       <p className="text-xs leading-5 text-destructive/80">
-                        Revisa los archivos cargados o intenta nuevamente. Si el problema continúa, valida que los documentos sean legibles.
+                        {tcoErrorInfo?.description ?? 'No se pudo completar el análisis. Intenta nuevamente o revisa el estado del servicio.'}
                       </p>
+                      {tcoRecoveryQualityReport ? (
+                        <div className="rounded-2xl bg-white/80 p-3 text-foreground">
+                          {renderDeliverableQualityReview('tco', tcoRecoveryQualityReport)}
+                        </div>
+                      ) : null}
+                      {tcoRecoveryQualityReport
+                        ? renderQualityProgressSummary(tcoProgressStages, tcoRecoveryQualityReport, tcoProgressStages.length - 1)
+                        : renderFailedProgressSummary(tcoProgressStages, tcoProgressStep)}
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" className="rounded-full bg-white" onClick={handleAnalyzeTco} disabled={tcoAnalysisMutation.isPending}>
+                          Reintentar procesamiento
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" className="rounded-full bg-white" onClick={() => document.getElementById('agent-inputs-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                          Cambiar documento o agregar contexto
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {isTcoAnalysis && !tcoAnalysisMutation.isError && !tcoResult && tcoRecoveryQualityReport ? (
+                    <div className={`space-y-3 rounded-2xl border p-4 text-sm ${qualityResultBannerClass(tcoRecoveryQualityReport)}`}>
+                      <div className="flex items-center gap-2 font-medium">
+                        {renderQualityResultIcon(tcoRecoveryQualityReport)}
+                        <span>{qualityResultTitle(tcoRecoveryQualityReport, {
+                          ready: 'Analisis TCO listo',
+                          permission: 'TCO requiere decision antes de continuar',
+                          blocked: 'TCO bloqueado por calidad insuficiente',
+                        })}</span>
+                      </div>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {tcoRecoveryQualityReport.userMessage}
+                      </p>
+                      {renderDeliverableQualityReview('tco', tcoRecoveryQualityReport)}
+                      {renderQualityProgressSummary(tcoProgressStages, tcoRecoveryQualityReport, tcoProgressStages.length - 1)}
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" size="sm" variant="outline" className="rounded-full bg-white" onClick={handleAnalyzeTco} disabled={tcoAnalysisMutation.isPending}>
+                          Reintentar procesamiento
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" className="rounded-full bg-white" onClick={() => document.getElementById('agent-inputs-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                          Cambiar documento o agregar contexto
+                        </Button>
+                      </div>
                     </div>
                   ) : null}
 

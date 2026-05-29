@@ -1,4 +1,4 @@
-import { runAiAgent } from '@/lib/agentRunApi';
+import { AgentRunError, runAiAgent } from '@/lib/agentRunApi';
 
 export type TcoAlternativeInput = {
   supplier_name: string;
@@ -200,10 +200,10 @@ export type AnalyzeTcoPayload = {
 
 function getFriendlyErrorMessage(message: string) {
   if (message.toLowerCase().includes('failed to fetch')) {
-    return 'No se pudo conectar con el AI Engine.';
+    return 'El motor de analisis no respondio correctamente. Intenta nuevamente en unos minutos.';
   }
 
-  return message || 'No se pudo generar el análisis TCO.';
+  return message || 'No se pudo generar el analisis TCO.';
 }
 
 export async function analyzeTco(payload: AnalyzeTcoPayload): Promise<TcoAnalysisResult> {
@@ -232,6 +232,7 @@ export async function analyzeTco(payload: AnalyzeTcoPayload): Promise<TcoAnalysi
   try {
     return await runAiAgent<TcoAnalysisResult>(formData);
   } catch (error) {
-    throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));
+    if (error instanceof AgentRunError) throw error;
+    throw new AgentRunError(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));
   }
 }
