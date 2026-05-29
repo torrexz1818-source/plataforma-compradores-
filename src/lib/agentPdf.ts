@@ -11,6 +11,16 @@ import {
   assertDeliverableCanDownload,
   auditDeliverableBeforeDownload,
 } from '@/lib/deliverableQuality';
+import {
+  blockLabel,
+  buildExportPayload,
+  buyerNodusExportTheme,
+  cleanExportBlocks,
+  isExportPayload,
+  type ExportBlock,
+  type ExportFormat,
+  type ExportPayload,
+} from '@/lib/exports';
 
 const DASHBOARD_CREATOR_DISCLAIMER =
   'Este dashboard de compras fue generado con asistencia de IA a partir de los archivos cargados por el usuario. La información, indicadores y recomendaciones deben ser revisados y validados por el comprador antes de tomar decisiones finales.';
@@ -4025,7 +4035,222 @@ async function downloadAgentResultPptx(input: AgentExportInput) {
   await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
 }
 
+function mapAgentExportFormat(format: AgentExportFormat): ExportFormat | undefined {
+  if (format === 'pdf') return 'pdf';
+  if (format === 'xlsx') return 'excel';
+  if (format === 'pptx') return 'ppt';
+  return undefined;
+}
+
+function exportBlockRows(block: ExportBlock): Array<Record<string, unknown>> {
+  const data = block.data;
+  const record = asRecord(data);
+  if (Array.isArray(record.columns) && Array.isArray(record.rows)) {
+    const columns = asArray(record.columns).map((column) => asText(column, '')).filter(Boolean);
+    return asArray(record.rows).map(asRecord).map((row) => columns.reduce<Record<string, unknown>>((acc, column) => {
+      acc[column] = row[column] ?? '';
+      return acc;
+    }, {}));
+  }
+  if (Array.isArray(data)) {
+    if (data.every((item) => {
+      const itemRecord = asRecord(item);
+      return Array.isArray(itemRecord.columns) && Array.isArray(itemRecord.rows);
+    })) {
+      return data.flatMap((item) => {
+        const table = asRecord(item);
+        return exportBlockRows({ ...block, data: table }).map((row) => ({
+          Tabla: table.title ?? block.title,
+          ...row,
+        }));
+      });
+    }
+    if (data.every((item) => item && typeof item === 'object' && !Array.isArray(item))) return data.map(asRecord);
+    return data.map((item, index) => ({ N: index + 1, Detalle: asText(item, '') })).filter((row) => row.Detalle);
+  }
+  if (data && typeof data === 'object') return rowsFromValue(data);
+  const detail = asText(data, '');
+  return detail ? [{ Detalle: detail }] : [];
+}
+
+function exportTableBlocks(block: ExportBlock): Array<{ title: string; rows: Array<Record<string, unknown>> }> {
+  const data = block.data;
+  if (Array.isArray(data)) {
+    const tableBlocks = data
+      .map(asRecord)
+      .filter((item) => Array.isArray(item.columns) && Array.isArray(item.rows))
+      .map((item) => ({
+        title: asText(item.title, block.title || blockLabel(block.type)),
+        rows: exportBlockRows({ ...block, data: item }),
+      }))
+      .filter((item) => item.rows.length);
+    if (tableBlocks.length) return tableBlocks;
+  }
+  const rows = exportBlockRows(block);
+  return rows.length ? [{ title: block.title || blockLabel(block.type), rows }] : [];
+}
+
+function addExportPayloadTable(ctx: PdfContext, title: string, rows: Array<Record<string, unknown>>, maxRows = 10) {
+  const keys = Object.keys(rows[0] ?? {}).slice(0, 6);
+  if (!keys.length) return;
+  ensureBlock(ctx, 30);
+  addText(ctx, title, { size: 9.5, bold: true, color: '#0f172a' });
+  addTable(
+    ctx,
+    keys,
+    rows.slice(0, maxRows).map((row) => keys.map((key) => row[key])),
+    keys.map(() => ctx.maxWidth / keys.length),
+  );
+}
+
+function addExportPayloadPdf(input: PdfInput, payload: ExportPayload, format: ExportFormat = 'pdf') {
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, format) };
+  const ctx = createContext({ ...input, title: cleanPayload.title });
+  ctx.primaryColor = buyerNodusExportTheme.colors.navy;
+  addHeader(ctx, { ...input, title: cleanPayload.title }, cleanPayload.subtitle);
+
+  cleanPayload.blocks.forEach((block) => {
+    const title = block.title || blockLabel(block.type);
+    if (block.type === 'summary' || block.type === 'decision' || block.type === 'recommendation') {
+      addCard(ctx, title, formatValue(block.data).slice(0, 8), block.type === 'decision' || block.type === 'recommendation' ? 'green' : 'blue');
+      return;
+    }
+    if (block.type === 'alert' || block.type === 'risk') {
+      addCard(ctx, title, formatValue(block.data).slice(0, 8), 'amber');
+      return;
+    }
+    if (block.type === 'kpi') {
+      const kpis = asArray(block.data).map(asRecord);
+      if (kpis.length) addDashboardKpiCards(ctx, kpis);
+      exportTableBlocks(block).forEach((table) => addExportPayloadTable(ctx, table.title, table.rows, 8));
+      return;
+    }
+    if (block.type === 'chart') {
+      const charts = asArray(block.data).map(asRecord);
+      if (charts.length) {
+        addSection(ctx, title, 44);
+        charts.slice(0, 5).forEach((chart) => addDashboardChartVisual(ctx, chart));
+        return;
+      }
+    }
+
+    exportTableBlocks(block).forEach((table) => addExportPayloadTable(ctx, table.title, table.rows));
+  });
+
+  addFooter(ctx);
+  ctx.doc.save(input.fileName ?? getDefaultFileName(input, 'pdf'));
+}
+
+async function downloadExportPayloadXlsx(input: AgentExportInput, payload: ExportPayload) {
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.utils.book_new();
+  const used = new Set<string>();
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, 'excel') };
+
+  const dashboardRows = [
+    { Seccion: 'Titulo', Detalle: cleanPayload.title },
+    ...(cleanPayload.subtitle ? [{ Seccion: 'Subtitulo', Detalle: cleanPayload.subtitle }] : []),
+    ...cleanPayload.blocks
+      .filter((block) => ['summary', 'decision', 'recommendation', 'alert'].includes(block.type))
+      .flatMap((block) => exportBlockRows(block).slice(0, 6).map((row) => ({
+        Seccion: block.title || blockLabel(block.type),
+        Detalle: Object.values(row).map((value) => asText(value, '')).filter(Boolean).join(' | '),
+      }))),
+  ].filter((row) => row.Detalle);
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(dashboardRows), normalizeSheetName('Dashboard', used));
+
+  cleanPayload.blocks.forEach((block) => {
+    exportTableBlocks(block).forEach((table) => {
+      if (!table.rows.length) return;
+      const sheet = XLSX.utils.json_to_sheet(table.rows);
+      const columns = Object.keys(table.rows[0] ?? {});
+      sheet['!cols'] = columns.map((column) => ({ wch: Math.min(Math.max(column.length + 6, 16), 48) }));
+      if (columns.length && table.rows.length) {
+        sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: columns.length - 1, r: table.rows.length } }) };
+      }
+      XLSX.utils.book_append_sheet(workbook, sheet, normalizeSheetName(table.title, used));
+    });
+  });
+
+  XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+}
+
+async function downloadExportPayloadPptx(input: AgentExportInput, payload: ExportPayload) {
+  const pptxgen = (await import('pptxgenjs')).default;
+  const pptx = new pptxgen();
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, 'ppt') };
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'Buyer Nodus';
+  pptx.subject = input.agentName || cleanPayload.title;
+  pptx.title = cleanPayload.title;
+  pptx.company = getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Buyer Nodus';
+  pptx.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'es-PE' };
+
+  let slide = pptx.addSlide();
+  slide.background = { color: 'FFFFFF' };
+  slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'BUYER NODUS', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: '09008B' });
+  slide.addText(cleanPayload.title, { x: 0.55, y: 1.0, w: 11.9, h: 0.9, fontSize: 29, bold: true, color: '09008B', fit: 'shrink' });
+  if (cleanPayload.subtitle) slide.addText(cleanPayload.subtitle, { x: 0.6, y: 2.15, w: 11.7, h: 0.5, fontSize: 13, color: '334155', fit: 'shrink' });
+  addPptFooter(slide, input);
+
+  cleanPayload.blocks.forEach((block) => {
+    const title = block.title || blockLabel(block.type);
+    if (block.type === 'kpi') {
+      const kpis = asArray(block.data).map(asRecord);
+      if (!kpis.length) return;
+      slide = pptx.addSlide();
+      addPptTitle(slide, title, block.description);
+      addPptKpiCards(slide, kpis.slice(0, 6));
+      addPptFooter(slide, input);
+      return;
+    }
+    if (block.type === 'chart') {
+      asArray(block.data).map(asRecord).slice(0, 3).forEach((chart) => {
+        slide = pptx.addSlide();
+        addPptTitle(slide, asText(chart.title, title), asText(chart.description || block.description, ''));
+        addPptChartVisual(slide, chart, { x: 0.75, y: 1.45, w: 7.7, h: 4.7 });
+        slide.addText(asText(chart.insight, ''), { x: 8.75, y: 1.55, w: 3.7, h: 1.2, fontSize: 12, color: '334155', fit: 'shrink' });
+        addPptFooter(slide, input);
+      });
+      return;
+    }
+
+    const tables = exportTableBlocks(block);
+    if (tables.length && !['summary', 'decision', 'recommendation', 'risk', 'alert', 'insight'].includes(block.type)) {
+      tables.slice(0, 2).forEach((table) => {
+        slide = pptx.addSlide();
+        addPptTitle(slide, table.title, block.description);
+        addPptRows(slide, table.rows, { maxRows: Math.min(table.rows.length, 8) });
+        addPptFooter(slide, input);
+      });
+      return;
+    }
+
+    const rows = exportBlockRows(block);
+    if (!rows.length) return;
+    slide = pptx.addSlide();
+    addPptTitle(slide, title, block.description);
+    slide.addText(rows.slice(0, 8).map((row) => Object.values(row).map((value) => asText(value, '')).filter(Boolean).join(': ')).join('\n'), {
+      x: 0.65,
+      y: 1.35,
+      w: 11.8,
+      h: 5.3,
+      fontSize: block.type === 'decision' ? 16 : 12,
+      color: block.type === 'alert' || block.type === 'risk' ? '92400E' : '334155',
+      fit: 'shrink',
+      breakLine: false,
+    });
+    addPptFooter(slide, input);
+  });
+
+  await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
+}
+
 export async function downloadAgentResultPdf(input: PdfInput) {
+  if (isExportPayload(input.result)) {
+    addExportPayloadPdf(input, input.result);
+    return;
+  }
   if (isTermsOfReferenceResult(input.result)) {
     addTermsOfReferencePdf(input);
     return;
@@ -4050,11 +4275,41 @@ export async function downloadAgentResultPdf(input: PdfInput) {
 }
 
 export async function downloadAgentResult(input: AgentExportInput) {
+  const exportFormat = mapAgentExportFormat(input.format);
+  const initialPayload = exportFormat
+    ? buildExportPayload(input.agentKey, input.result, { termsScope: input.termsScope })
+    : undefined;
   const qualityReport = auditDeliverableBeforeDownload({
     agentKey: input.agentKey,
-    result: input.result,
+    result: initialPayload ?? input.result,
+    options: { termsScope: input.termsScope },
   });
   assertDeliverableCanDownload(qualityReport);
+  if (exportFormat) {
+    const payload = {
+      ...qualityReport.sanitizedPayload,
+      blocks: cleanExportBlocks(qualityReport.sanitizedPayload.blocks, exportFormat),
+    };
+    const formatQualityReport = auditDeliverableBeforeDownload({
+      agentKey: input.agentKey,
+      result: payload,
+      options: { termsScope: input.termsScope },
+    });
+    assertDeliverableCanDownload(formatQualityReport);
+    const formatPayload = formatQualityReport.sanitizedPayload;
+    if (input.format === 'pdf') {
+      addExportPayloadPdf({ ...input, result: formatPayload, fileName: getDefaultFileName(input, 'pdf') }, formatPayload, exportFormat);
+      return;
+    }
+    if (input.format === 'pptx') {
+      await downloadExportPayloadPptx({ ...input, result: formatPayload }, formatPayload);
+      return;
+    }
+    if (input.format === 'xlsx') {
+      await downloadExportPayloadXlsx({ ...input, result: formatPayload }, formatPayload);
+      return;
+    }
+  }
   const auditedInput: AgentExportInput = {
     ...input,
     result: qualityReport.sanitizedContent,

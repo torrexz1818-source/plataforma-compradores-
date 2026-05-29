@@ -1435,7 +1435,7 @@ const NexuIA = () => {
         title: input.title,
         agentName: selectedAgent?.name,
         userName: user?.fullName,
-        result: input.qualityReport.sanitizedContent,
+        result: input.qualityReport.sanitizedPayload,
         fileName: input.fileName,
         format: selectedExportFormat,
         agentKey: selectedAgentKey,
