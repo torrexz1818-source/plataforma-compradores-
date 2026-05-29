@@ -1,5 +1,7 @@
 import { AgentsService } from './agents.service';
 import { UserRole } from '../users/domain/user-role.enum';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 const activeAgent = {
   id: 'agent-terms-reference',
@@ -25,12 +27,16 @@ const activeAgent = {
   updatedAt: new Date(),
 };
 
-function createService() {
+function createService(options?: {
+  agentsUpdateOne?: jest.Mock;
+  agentsFindOne?: jest.Mock;
+  executionsInsertOne?: jest.Mock;
+}) {
   const insertedExecutions: Record<string, unknown>[] = [];
   const agentsCollection = {
-    updateOne: jest.fn().mockResolvedValue({}),
+    updateOne: options?.agentsUpdateOne ?? jest.fn().mockResolvedValue({}),
     deleteMany: jest.fn().mockResolvedValue({}),
-    findOne: jest.fn().mockResolvedValue(activeAgent),
+    findOne: options?.agentsFindOne ?? jest.fn().mockResolvedValue(activeAgent),
     find: jest.fn(() => ({
       sort: jest.fn(() => ({
         toArray: jest.fn().mockResolvedValue([activeAgent]),
@@ -44,7 +50,7 @@ function createService() {
     })),
   };
   const executionsCollection = {
-    insertOne: jest.fn(async (document: Record<string, unknown>) => {
+    insertOne: options?.executionsInsertOne ?? jest.fn(async (document: Record<string, unknown>) => {
       insertedExecutions.push(document);
       return {};
     }),
@@ -91,6 +97,7 @@ function createService() {
 
   return {
     service: new AgentsService(databaseService as never, usersService as never),
+    agentsCollection,
     insertedExecutions,
   };
 }
@@ -206,5 +213,143 @@ describe('AgentsService AI engine proxy', () => {
       message: 'AI_ENGINE_URL debe ser una URL absoluta https/http accesible desde el backend.',
       traceId: 'trace-invalid-url',
     });
+  });
+
+  it('upserts the agent catalog without duplicate Mongo update paths', async () => {
+    process.env.NODE_ENV = 'production';
+    const { service, agentsCollection } = createService();
+
+    await service.listAgents({ includeHidden: true });
+
+    expect(agentsCollection.updateOne).toHaveBeenCalled();
+    for (const call of agentsCollection.updateOne.mock.calls) {
+      const update = call[1] as { $set?: Record<string, unknown>; $setOnInsert?: Record<string, unknown> };
+      const setKeys = Object.keys(update.$set ?? {});
+      const setOnInsertKeys = Object.keys(update.$setOnInsert ?? {});
+      const duplicates = setKeys.filter((key) => setOnInsertKeys.includes(key));
+
+      expect(duplicates).toEqual([]);
+      expect(update.$set?.name).toBeDefined();
+      expect(update.$setOnInsert?.name).toBeUndefined();
+    }
+  });
+
+  it('continues runAgent with the static catalog when catalog sync has a non-critical Mongo conflict', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.NODE_ENV = 'production';
+    process.env.AI_ENGINE_URL = 'https://ai.example.test';
+    const catalogConflict = new Error("Updating the path 'name' would create a conflict at 'name'");
+    const { service } = createService({
+      agentsUpdateOne: jest.fn().mockRejectedValue(catalogConflict),
+      agentsFindOne: jest.fn().mockRejectedValue(catalogConflict),
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(JSON.stringify({
+        dashboard_title: 'Dashboard de compras',
+        executive_summary: 'Resumen generado con datos estructurados.',
+        model_name: 'deterministic-dashboard',
+      })),
+    } as unknown as Response);
+
+    const response = await service.runAgent({
+      agentId: 'dashboard_creator',
+      userId: 'user-buyer-1',
+      inputData: {},
+      aiOperation: 'generate',
+      formFields: {
+        agentId: 'dashboard_creator',
+        operation: 'generate',
+        title: 'Dashboard',
+        objective: 'Analizar compras',
+        use_llm_insights: 'false',
+      },
+      files: [],
+      requestMeta: { traceId: 'trace-catalog-conflict', country: 'CN' },
+    });
+
+    expect(response.ok).toBe(true);
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://ai.example.test/agents/dashboard-creator/generate',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(response.execution.outputData).toMatchObject({
+      dashboard_title: 'Dashboard de compras',
+    });
+  });
+
+  it('returns a successful agent result when execution persistence fails after an AI Engine OK response', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.NODE_ENV = 'production';
+    process.env.AI_ENGINE_URL = 'https://ai.example.test';
+    const { service } = createService({
+      executionsInsertOne: jest.fn().mockRejectedValue(new Error('Mongo write unavailable')),
+    });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(JSON.stringify({
+        dashboard_title: 'Dashboard de compras',
+        executive_summary: 'Resumen generado con datos estructurados.',
+        model_name: 'deterministic-dashboard',
+      })),
+    } as unknown as Response);
+
+    const response = await service.runAgent({
+      agentId: 'dashboard_creator',
+      userId: 'user-buyer-1',
+      inputData: {},
+      aiOperation: 'generate',
+      formFields: {
+        agentId: 'dashboard_creator',
+        operation: 'generate',
+        title: 'Dashboard',
+        objective: 'Analizar compras',
+        use_llm_insights: 'false',
+      },
+      files: [],
+      requestMeta: { traceId: 'trace-persist-failed', country: 'CN' },
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.execution.outputData).toMatchObject({
+      dashboard_title: 'Dashboard de compras',
+    });
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('AGENT_EXECUTION_PERSIST_FAILED'));
+  });
+
+  it('sanitizes sensitive values from AI run logs', () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { service } = createService();
+    const unsafeToken = ['Bearer', 'secret-token-123'].join(' ');
+
+    (
+      service as unknown as {
+        logAiEvent: (event: Record<string, unknown>) => void;
+      }
+    ).logAiEvent({
+      endpoint: '/agents/run',
+      traceId: 'trace-safe-log',
+      provider: 'anthropic',
+      stage: 'ai_engine_response',
+      statusCode: 503,
+      message: `Request failed with ${unsafeToken}`,
+    });
+
+    const logged = String(errorSpy.mock.calls[0]?.[0] ?? '');
+    expect(logged).not.toContain(unsafeToken);
+    expect(logged).toContain('Bearer [redacted]');
+  });
+
+  it('does not reference the removed legacy provider in the backend agent runtime', () => {
+    const source = readFileSync(join(__dirname, 'agents.service.ts'), 'utf8').toLowerCase();
+    const removedProvider = ['o', 'p', 'e', 'n', 'a', 'i'].join('');
+    const removedKey = ['open', 'ai', '_api_key'].join('');
+
+    expect(source).not.toContain(removedProvider);
+    expect(source).not.toContain(removedKey);
   });
 });

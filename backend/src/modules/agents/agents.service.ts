@@ -155,12 +155,27 @@ type AgentRunFailureStage =
   | 'ai_provider_response'
   | 'timeout';
 
+type AgentRunLogStage =
+  | AgentRunFailureStage
+  | 'ensure_catalog'
+  | 'find_agent'
+  | 'build_form_data'
+  | 'ai_engine_request'
+  | 'ai_engine_response'
+  | 'parse_response'
+  | 'persist_execution'
+  | 'return_response';
+
 type AiErrorCode =
   | 'AI_ENGINE_NOT_CONFIGURED'
   | 'AI_ENGINE_INVALID_URL'
   | 'AI_ENGINE_UNREACHABLE'
   | 'AI_ENGINE_TIMEOUT'
   | 'AI_PROVIDER_ERROR'
+  | 'AI_ENGINE_REQUEST_FAILED'
+  | 'AI_ENGINE_BAD_RESPONSE'
+  | 'AGENT_CATALOG_SYNC_FAILED'
+  | 'AGENT_EXECUTION_PERSIST_FAILED'
   | 'AUTH_REQUIRED'
   | 'VALIDATION_ERROR'
   | 'UNKNOWN_AGENT_ERROR';
@@ -698,8 +713,22 @@ export class AgentsService {
     files?: UploadedAgentFile[];
     requestMeta?: { traceId?: string; country?: string };
   }) {
-    await this.ensureAgentCatalog();
-    const [agent, user] = await Promise.all([this.findAgent(input.agentId), this.usersService.requireActiveUser(input.userId)]);
+    const catalogAgent = this.findCatalogAgent(input.agentId);
+    try {
+      await this.ensureAgentCatalog();
+    } catch (error) {
+      if (!catalogAgent) throw error;
+      this.logCatalogSyncError(error, { agentId: input.agentId, traceId: input.requestMeta?.traceId });
+    }
+    const [storedAgent, user] = await Promise.all([
+      this.findAgent(input.agentId).catch((error) => {
+        if (!catalogAgent) throw error;
+        this.logCatalogSyncError(error, { agentId: input.agentId, traceId: input.requestMeta?.traceId, stage: 'find_agent' });
+        return null;
+      }),
+      this.usersService.requireActiveUser(input.userId),
+    ]);
+    const agent = storedAgent ?? catalogAgent;
 
     if (!agent) throw new NotFoundException('Agente no encontrado');
     if (!NODUS_IA_ALLOWED_ROLES.has(user.role)) {
@@ -1010,6 +1039,7 @@ export class AgentsService {
     const operation = input.aiOperation?.trim() || 'run';
     const endpointConfig = AI_ENGINE_ENDPOINTS[`${agentKey}:${operation}`];
     const provider = endpointConfig?.provider ?? this.getPrimaryProvider();
+    const fileLog = this.buildSafeFileLog(input.files ?? []);
 
     if (!endpointConfig) {
       return this.buildFailedAiExecution({
@@ -1033,6 +1063,7 @@ export class AgentsService {
       statusCode: 202,
       agentKey,
       operation,
+      ...fileLog,
     });
 
     const aiEngineBaseUrl = this.getAiEngineBaseUrl();
@@ -1067,12 +1098,54 @@ export class AgentsService {
     const aiEngineUrl = `${aiEngineBaseUrl}${endpointConfig.path}`;
 
     try {
+      this.logAiEvent({
+        endpoint: '/agents/run',
+        traceId,
+        country: input.requestMeta?.country,
+        provider,
+        stage: 'build_form_data',
+        statusCode: 202,
+        latencyMs: Date.now() - startedAt,
+        agentKey,
+        operation,
+        aiEngineUrl,
+        ...fileLog,
+      });
+      const aiEngineRequest = this.buildAiEngineRequest(endpointConfig, input.formFields ?? {}, input.files ?? []);
+      this.logAiEvent({
+        endpoint: endpointConfig.path,
+        traceId,
+        country: input.requestMeta?.country,
+        provider,
+        stage: 'ai_engine_request',
+        statusCode: 202,
+        latencyMs: Date.now() - startedAt,
+        agentKey,
+        operation,
+        aiEngineUrl,
+        ...fileLog,
+      });
       const response = await this.fetchWithTimeout(
         aiEngineUrl,
-        this.buildAiEngineRequest(endpointConfig, input.formFields ?? {}, input.files ?? []),
+        aiEngineRequest,
         this.getAgentTimeoutMs(agentKey),
       );
       const responseText = await response.text();
+      this.logAiEvent({
+        endpoint: endpointConfig.path,
+        traceId,
+        country: input.requestMeta?.country,
+        provider,
+        stage: 'ai_engine_response',
+        statusCode: response.status,
+        latencyMs: Date.now() - startedAt,
+        agentKey,
+        operation,
+        aiEngineUrl,
+        aiEngineStatus: response.status,
+        responseBytes: responseText.length,
+        ...fileLog,
+      });
 
       if (!response.ok) {
         const message = this.extractAiEngineErrorMessage(responseText) || AI_ENGINE_UNAVAILABLE_MESSAGE;
@@ -1090,6 +1163,20 @@ export class AgentsService {
       }
 
       const outputData = this.parseAiEngineResponse(responseText);
+      this.logAiEvent({
+        endpoint: endpointConfig.path,
+        traceId,
+        country: input.requestMeta?.country,
+        provider,
+        stage: 'parse_response',
+        statusCode: response.status,
+        latencyMs: Date.now() - startedAt,
+        agentKey,
+        operation,
+        aiEngineUrl,
+        aiEngineStatus: response.status,
+        responseBytes: responseText.length,
+      });
       const execution = await this.persistAiExecution({
         input,
         traceId,
@@ -1111,6 +1198,17 @@ export class AgentsService {
         agentKey,
         operation,
       });
+      this.logAiEvent({
+        endpoint: '/agents/run',
+        traceId,
+        country: input.requestMeta?.country,
+        provider,
+        stage: 'return_response',
+        statusCode: 200,
+        latencyMs: Date.now() - startedAt,
+        agentKey,
+        operation,
+      });
 
       return {
         ok: true,
@@ -1121,6 +1219,7 @@ export class AgentsService {
       };
     } catch (error) {
       const isTimeout = error instanceof Error && error.name === 'AbortError';
+      const errorCode: AiErrorCode = isTimeout ? 'AI_ENGINE_TIMEOUT' : 'AI_ENGINE_REQUEST_FAILED';
       return this.buildFailedAiExecution({
         input,
         traceId,
@@ -1128,7 +1227,7 @@ export class AgentsService {
         startedAt,
         stage: isTimeout ? 'timeout' : 'backend_to_ai_engine',
         statusCode: 503,
-        errorCode: isTimeout ? 'AI_ENGINE_TIMEOUT' : 'AI_ENGINE_UNREACHABLE',
+        errorCode,
         message: AI_ENGINE_UNAVAILABLE_MESSAGE,
         diagnosticMessage: error instanceof Error ? error.message : String(error),
       });
@@ -1296,7 +1395,31 @@ export class AgentsService {
       updatedAt: now,
     };
 
-    await this.executionsCollection().insertOne(execution);
+    try {
+      await this.executionsCollection().insertOne(execution);
+      this.logAiEvent({
+        endpoint: '/agents/run',
+        traceId: input.traceId,
+        provider: input.provider,
+        stage: 'persist_execution',
+        statusCode: 200,
+        latencyMs: Date.now() - input.startedAt,
+        agentKey: agent.agentKey,
+      });
+    } catch (error) {
+      this.logAiEvent({
+        endpoint: '/agents/run',
+        traceId: input.traceId,
+        provider: input.provider,
+        stage: 'persist_execution',
+        statusCode: 503,
+        latencyMs: Date.now() - input.startedAt,
+        agentKey: agent.agentKey,
+        errorCode: 'AGENT_EXECUTION_PERSIST_FAILED',
+        errorClass: error instanceof Error ? error.name : 'UnknownError',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     return {
       id: execution.id,
       agentRunId: execution.agentRunId,
@@ -1464,18 +1587,53 @@ export class AgentsService {
     return Boolean(process.env[name]?.trim());
   }
 
+  private buildSafeFileLog(files: UploadedAgentFile[]) {
+    return {
+      fileCount: files.length,
+      fileNames: files.map((file) => file.originalname || 'archivo').slice(0, 12),
+      fileSizes: files.map((file) => file.size).slice(0, 12),
+    };
+  }
+
+  private getSafeUrlForLog(url?: string) {
+    if (!url) return undefined;
+
+    try {
+      const parsed = new URL(url);
+      return `${parsed.host}${parsed.pathname}`;
+    } catch {
+      return 'invalid-url';
+    }
+  }
+
+  private sanitizeLogMessage(message?: string) {
+    if (!message) return undefined;
+    return message
+      .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+      .replace(/sk-ant-[A-Za-z0-9._-]+/gi, '[redacted-key]')
+      .replace(/sk-[A-Za-z0-9._-]+/gi, '[redacted-key]')
+      .slice(0, 500);
+  }
+
   private logAiEvent(event: {
     endpoint: string;
     traceId: string;
     country?: string;
     provider: string;
-    stage: AgentRunFailureStage;
+    stage: AgentRunLogStage;
     statusCode: number;
     latencyMs?: number;
     agentKey?: string;
     operation?: string;
     message?: string;
     errorCode?: AiErrorCode | null;
+    fileCount?: number;
+    fileNames?: string[];
+    fileSizes?: number[];
+    aiEngineUrl?: string;
+    aiEngineStatus?: number;
+    responseBytes?: number;
+    errorClass?: string;
   }) {
     const payload = {
       scope: 'nodus_ia',
@@ -1489,7 +1647,14 @@ export class AgentsService {
       agentKey: event.agentKey,
       operation: event.operation,
       errorCode: event.errorCode,
-      message: event.message,
+      message: this.sanitizeLogMessage(event.message),
+      fileCount: event.fileCount,
+      fileNames: event.fileNames,
+      fileSizes: event.fileSizes,
+      aiEngineUrl: this.getSafeUrlForLog(event.aiEngineUrl),
+      aiEngineStatus: event.aiEngineStatus,
+      responseBytes: event.responseBytes,
+      errorClass: event.errorClass,
     };
 
     if (event.statusCode >= 400 || event.stage === 'timeout') {
@@ -1570,32 +1735,38 @@ export class AgentsService {
     const currentAgentKeys = AGENT_CATALOG.map((agent) => agent.agentKey);
 
     await Promise.all(
-      AGENT_CATALOG.map((agent) =>
-        this.agentsCollection().updateOne(
+      AGENT_CATALOG.map((agent) => {
+        const catalogPatch: Omit<AgentRecord, 'createdAt' | 'updatedAt'> = {
+          id: agent.id,
+          agentKey: agent.agentKey,
+          slug: agent.slug,
+          name: agent.name,
+          description: agent.description,
+          longDescription: agent.longDescription,
+          category: agent.category,
+          automationType: agent.automationType,
+          useCase: agent.useCase,
+          functionalities: agent.functionalities,
+          benefits: agent.benefits,
+          inputs: agent.inputs,
+          outputs: agent.outputs,
+          status: agent.status,
+          visibleToBuyer: agent.visibleToBuyer,
+          sortOrder: agent.sortOrder,
+          isActive: agent.isActive,
+          accentColor: agent.accentColor,
+          icon: agent.icon,
+        };
+
+        return this.agentsCollection().updateOne(
           { agentKey: agent.agentKey },
           {
-            $setOnInsert: { ...agent, createdAt: now },
-            $set: {
-              name: agent.name,
-              slug: agent.slug,
-              description: agent.description,
-              longDescription: agent.longDescription,
-              category: agent.category,
-              automationType: agent.automationType,
-              useCase: agent.useCase,
-              functionalities: agent.functionalities,
-              benefits: agent.benefits,
-              inputs: agent.inputs,
-              outputs: agent.outputs,
-              accentColor: agent.accentColor,
-              icon: agent.icon,
-              sortOrder: agent.sortOrder,
-              updatedAt: now,
-            },
+            $setOnInsert: { createdAt: now },
+            $set: { ...catalogPatch, updatedAt: now },
           },
           { upsert: true },
-        ),
-      ),
+        );
+      }),
     );
 
     await this.agentsCollection().deleteMany(
@@ -1606,6 +1777,18 @@ export class AgentsService {
         ],
       }
     );
+  }
+
+  private logCatalogSyncError(error: unknown, context: { agentId?: string; traceId?: string; stage?: string }) {
+    console.error(JSON.stringify({
+      scope: 'nodus_ia_catalog',
+      stage: context.stage ?? 'ensure_catalog',
+      agentId: context.agentId,
+      traceId: context.traceId,
+      errorCode: 'AGENT_CATALOG_SYNC_FAILED',
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      message: this.sanitizeLogMessage(error instanceof Error ? error.message : String(error)),
+    }));
   }
 
   private async ensureModuleActivationDefaults() {
