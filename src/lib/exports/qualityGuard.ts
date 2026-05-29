@@ -48,10 +48,25 @@ export function collectPayloadQualityIssues(payload: ExportPayload) {
   }
 
   if (payload.agentId.includes('tco')) {
-    const blockIds = new Set(payload.blocks.map((block) => block.id));
-    if (!blockIds.has('tco-matrix') && !blockIds.has('tco-financial-model')) criticalIssues.push('Matriz de costos o modelo financiero TCO');
-    if (!blockTypes.has('ranking')) criticalIssues.push('Ranking o comparacion clara de alternativas');
+    const blocksById = new Map(payload.blocks.map((block) => [block.id, block]));
+    const matrixRows = rowCount(blocksById.get('tco-matrix')?.data) || rowCount(blocksById.get('tco-financial-model')?.data);
+    const rankingRows = rowCount(blocksById.get('tco-scorecard')?.data);
+    const payloadText = JSON.stringify(payload).toLowerCase();
+    if (!matrixRows) criticalIssues.push('Matriz de costos o modelo financiero TCO');
+    if (!blockTypes.has('ranking') || rankingRows < 2) {
+      criticalIssues.push('Ranking o comparacion clara de alternativas');
+      criticalIssues.push('Al menos dos alternativas comparables para TCO');
+    }
     if (!blockTypes.has('decision') && !blockTypes.has('recommendation')) warnings.push('Conviene reforzar la recomendacion estrategica.');
+    if (!/(costo|coste|precio|inicial|adquisicion|adquisici[oÃ³]n|total|tco)/i.test(payloadText)) {
+      criticalIssues.push('Costos directos o costo total identificable');
+    }
+    if (!/(horizonte|periodo|mensual|anual|a[nÃ±]o|meses|vigencia)/i.test(payloadText)) {
+      warnings.push('Conviene validar el horizonte de analisis antes de decidir.');
+    }
+    if (!/(mantenimiento|operaci[oÃ³]n|operativo|soporte|implementaci[oÃ³]n|log[iÃ­]stica|transporte|indirecto|oculto)/i.test(payloadText)) {
+      warnings.push('Conviene validar costos indirectos, mantenimiento o costos ocultos.');
+    }
   }
 
   if (payload.agentId.includes('proposal')) {

@@ -4099,6 +4099,10 @@ function isProposalExportPayload(payload: ExportPayload) {
   return payload.agentId === 'proposal_comparison' || payload.agentId.includes('proposal') || payload.agentId.includes('quote');
 }
 
+function isTcoExportPayload(payload: ExportPayload) {
+  return payload.agentId === 'tco_analysis' || payload.agentId.includes('tco');
+}
+
 function exportBlocksByType(payload: ExportPayload, type: ExportBlock['type']) {
   return payload.blocks.filter((block) => block.type === type);
 }
@@ -4206,6 +4210,76 @@ function addProposalPayloadPdf(input: PdfInput, payload: ExportPayload, format: 
   if (risks.length) addCard(ctx, 'Riesgos principales', risks.slice(0, 6).map((row) => row.Detalle), 'amber');
   if (recommendations.length) addCard(ctx, 'Recomendaciones de negociacion', recommendations.slice(0, 6).map((row) => row.Detalle), 'green');
   if (alerts.length) addCard(ctx, 'Informacion requerida para cerrar decision', alerts.slice(0, 5).map((row) => row.Detalle), 'amber');
+  addFooter(ctx);
+  ctx.doc.save(input.fileName ?? getDefaultFileName(input, 'pdf'));
+}
+
+function tcoPayloadKpis(payload: ExportPayload) {
+  return exportBlocksByType(payload, 'kpi')
+    .flatMap((block) => asArray(block.data).map(asRecord))
+    .filter((item) => asText(item.title, '') && asText(item.value, ''));
+}
+
+function tcoPayloadRows(payload: ExportPayload, types: ExportBlock['type'][]) {
+  return payload.blocks
+    .filter((block) => types.includes(block.type))
+    .flatMap((block) => exportBlockRows(block).slice(0, 8).map((row) => ({
+      Seccion: block.title || blockLabel(block.type),
+      Detalle: Object.values(row).map((value) => asText(value, '')).filter(Boolean).join(' | '),
+    })))
+    .filter((row) => row.Detalle);
+}
+
+function tcoPayloadTables(payload: ExportPayload, types: ExportBlock['type'][] = ['matrix', 'table', 'ranking']) {
+  return payload.blocks
+    .filter((block) => types.includes(block.type))
+    .flatMap((block) => exportTableBlocks(block))
+    .filter((table) => table.rows.length);
+}
+
+function tcoFinancialTables(payload: ExportPayload) {
+  return tcoPayloadTables(payload, ['matrix', 'table'])
+    .filter((table) => !/escenario|sensibilidad|datos base/i.test(table.title));
+}
+
+function tcoScenarioTables(payload: ExportPayload) {
+  return tcoPayloadTables(payload, ['table']).filter((table) => /escenario|sensibilidad/i.test(table.title));
+}
+
+function tcoMainDecision(payload: ExportPayload) {
+  const decision = firstExportBlock(payload, 'decision');
+  const rows = decision ? exportBlockRows(decision) : [];
+  return rows[0] ?? {};
+}
+
+function addTcoPayloadPdf(input: PdfInput, payload: ExportPayload, format: ExportFormat = 'pdf') {
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, format) };
+  const ctx = createContext({ ...input, title: cleanPayload.title });
+  ctx.primaryColor = buyerNodusExportTheme.colors.navy;
+  const summary = firstExportBlock(cleanPayload, 'summary');
+  const decision = tcoMainDecision(cleanPayload);
+  const kpis = tcoPayloadKpis(cleanPayload);
+  const matrixTables = tcoFinancialTables(cleanPayload);
+  const rankingTables = tcoPayloadTables(cleanPayload, ['ranking']);
+  const risks = tcoPayloadRows(cleanPayload, ['risk']);
+  const recommendations = tcoPayloadRows(cleanPayload, ['recommendation']);
+  const alerts = tcoPayloadRows(cleanPayload, ['alert']);
+
+  addHeader(ctx, { ...input, title: cleanPayload.title }, cleanPayload.subtitle);
+  if (summary) addCard(ctx, 'Resumen ejecutivo financiero', formatValue(summary.data).slice(0, 6), 'blue');
+  if (Object.keys(decision).length) {
+    const tone = asText(decision.Estado, '').toLowerCase().includes('validacion') ? 'amber' : 'green';
+    addCard(ctx, asText(decision.Decision, 'Decision financiera'), [
+      asText(decision.Sustento, ''),
+      asText(decision.Estado, ''),
+    ].filter(Boolean), tone);
+  }
+  if (kpis.length) addDashboardKpiCards(ctx, kpis);
+  matrixTables.slice(0, 3).forEach((table) => addExportPayloadTable(ctx, table.title, table.rows, 8));
+  rankingTables.slice(0, 1).forEach((table) => addExportPayloadTable(ctx, table.title, table.rows, 6));
+  if (risks.length) addCard(ctx, 'Riesgos financieros', risks.slice(0, 6).map((row) => row.Detalle), 'amber');
+  if (alerts.length) addCard(ctx, 'Costos ocultos e informacion requerida', alerts.slice(0, 6).map((row) => row.Detalle), 'amber');
+  if (recommendations.length) addCard(ctx, 'Recomendaciones financieras', recommendations.slice(0, 6).map((row) => row.Detalle), 'green');
   addFooter(ctx);
   ctx.doc.save(input.fileName ?? getDefaultFileName(input, 'pdf'));
 }
@@ -4455,6 +4529,64 @@ async function downloadProposalExportPayloadXlsx(input: AgentExportInput, payloa
   XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
 }
 
+async function downloadTcoExportPayloadXlsx(input: AgentExportInput, payload: ExportPayload) {
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.utils.book_new();
+  const used = new Set<string>();
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, 'excel') };
+  const summary = firstExportBlock(cleanPayload, 'summary');
+  const decision = tcoMainDecision(cleanPayload);
+  const kpis = tcoPayloadKpis(cleanPayload);
+  const matrices = tcoFinancialTables(cleanPayload);
+  const rankings = tcoPayloadTables(cleanPayload, ['ranking']);
+  const scenarios = tcoScenarioTables(cleanPayload);
+  const risks = tcoPayloadRows(cleanPayload, ['risk']);
+  const recommendations = tcoPayloadRows(cleanPayload, ['recommendation']);
+  const alerts = tcoPayloadRows(cleanPayload, ['alert']);
+
+  appendDashboardAoaSheet(XLSX, workbook, used, '01_Resumen_TCO', [
+    ['BUYER NODUS | Analisis financiero TCO', '', '', '', ''],
+    ['Reporte', cleanPayload.title, 'Fecha', formatDate(), ''],
+    ['Alcance', cleanPayload.subtitle || 'Costo total de propiedad con informacion disponible', '', '', ''],
+    [],
+    ['Decision financiera', '', '', '', ''],
+    ['Decision', asText(decision.Decision, 'Decision no concluyente'), 'Estado', asText(decision.Estado, 'Requiere validacion'), ''],
+    ['Sustento', asText(decision.Sustento, ''), '', '', ''],
+    [],
+    ...(summary ? [['Resumen ejecutivo financiero', formatValue(summary.data).slice(0, 4).join(' | '), '', '', ''], []] : []),
+    ['KPIs TCO', '', '', '', ''],
+    ['Indicador', 'Valor', 'Interpretacion', '', ''],
+    ...kpis.slice(0, 6).map((kpi) => [asText(kpi.title), asText(kpi.value), asText(kpi.description, ''), '', '']),
+    [],
+    ...(rankings[0]?.rows.length ? [
+      ['Ranking financiero', '', '', '', ''],
+      ...rankings[0].rows.slice(0, 8).map((row) => Object.values(row).slice(0, 5)),
+      [],
+    ] : []),
+    ...(alerts.length ? [
+      ['Costos ocultos e informacion requerida', '', '', '', ''],
+      ...alerts.slice(0, 5).map((row) => [row.Detalle, '', '', '', '']),
+      [],
+    ] : []),
+    ...(recommendations.length ? [
+      ['Recomendaciones financieras', '', '', '', ''],
+      ...recommendations.slice(0, 6).map((row) => [row.Detalle, '', '', '', '']),
+    ] : []),
+  ], [30, 46, 18, 28, 36], 10);
+
+  if (matrices[0]?.rows.length) appendDashboardJsonSheet(XLSX, workbook, used, '02_Matriz_TCO', matrices[0].rows);
+  if (scenarios[0]?.rows.length) appendDashboardJsonSheet(XLSX, workbook, used, '03_Escenarios', scenarios[0].rows);
+  const riskRecommendationRows = [
+    ...risks.map((row) => ({ Tipo: 'Riesgo financiero', Detalle: row.Detalle })),
+    ...alerts.map((row) => ({ Tipo: 'Costo oculto o pendiente', Detalle: row.Detalle })),
+    ...recommendations.map((row) => ({ Tipo: 'Recomendacion', Detalle: row.Detalle })),
+  ];
+  if (riskRecommendationRows.length) appendDashboardJsonSheet(XLSX, workbook, used, '04_Riesgos_Recomendaciones', riskRecommendationRows);
+  if (rankings[0]?.rows.length) appendDashboardJsonSheet(XLSX, workbook, used, '05_Ranking_Financiero', rankings[0].rows);
+  matrices.slice(1).forEach((table, index) => appendDashboardJsonSheet(XLSX, workbook, used, `${String(index + 6).padStart(2, '0')}_${table.title}`, table.rows));
+  XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+}
+
 function addExportPayloadTable(ctx: PdfContext, title: string, rows: Array<Record<string, unknown>>, maxRows = 10) {
   const keys = Object.keys(rows[0] ?? {}).slice(0, 6);
   if (!keys.length) return;
@@ -4476,6 +4608,10 @@ function addExportPayloadPdf(input: PdfInput, payload: ExportPayload, format: Ex
   }
   if (isProposalExportPayload(cleanPayload)) {
     addProposalPayloadPdf(input, cleanPayload, format);
+    return;
+  }
+  if (isTcoExportPayload(cleanPayload)) {
+    addTcoPayloadPdf(input, cleanPayload, format);
     return;
   }
   const ctx = createContext({ ...input, title: cleanPayload.title });
@@ -4521,6 +4657,10 @@ async function downloadExportPayloadXlsx(input: AgentExportInput, payload: Expor
   }
   if (isProposalExportPayload(payload)) {
     await downloadProposalExportPayloadXlsx(input, payload);
+    return;
+  }
+  if (isTcoExportPayload(payload)) {
+    await downloadTcoExportPayloadXlsx(input, payload);
     return;
   }
   const XLSX = await import('xlsx');
@@ -4719,6 +4859,86 @@ async function downloadProposalExportPayloadPptx(input: AgentExportInput, payloa
   await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
 }
 
+async function downloadTcoExportPayloadPptx(input: AgentExportInput, payload: ExportPayload) {
+  const pptxgen = (await import('pptxgenjs')).default;
+  const pptx = new pptxgen();
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, 'ppt') };
+  const summary = firstExportBlock(cleanPayload, 'summary');
+  const decision = tcoMainDecision(cleanPayload);
+  const kpis = tcoPayloadKpis(cleanPayload);
+  const matrices = tcoFinancialTables(cleanPayload);
+  const rankings = tcoPayloadTables(cleanPayload, ['ranking']);
+  const scenarios = tcoScenarioTables(cleanPayload);
+  const risks = tcoPayloadRows(cleanPayload, ['risk']);
+  const recommendations = tcoPayloadRows(cleanPayload, ['recommendation']);
+  const alerts = tcoPayloadRows(cleanPayload, ['alert']);
+
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'Buyer Nodus';
+  pptx.subject = input.agentName || cleanPayload.title;
+  pptx.title = cleanPayload.title;
+  pptx.company = getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Buyer Nodus';
+  pptx.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'es-PE' };
+
+  let slide = pptx.addSlide();
+  slide.background = { color: 'FFFFFF' };
+  slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'BUYER NODUS', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: 'F97316' });
+  slide.addText(cleanPayload.title, { x: 0.55, y: 1.0, w: 11.9, h: 0.9, fontSize: 30, bold: true, color: '09008B', fit: 'shrink' });
+  slide.addShape('rect', { x: 0.55, y: 2.05, w: 2.4, h: 0.08, fill: { color: 'F97316' }, line: { color: 'F97316' } });
+  if (cleanPayload.subtitle) slide.addText(cleanPayload.subtitle, { x: 0.6, y: 2.35, w: 11.7, h: 0.5, fontSize: 13, color: '334155', fit: 'shrink' });
+  if (summary) slide.addText(formatValue(summary.data).slice(0, 3).join('\n'), { x: 0.65, y: 3.05, w: 11.6, h: 1.3, fontSize: 14, color: '334155', fit: 'shrink' });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Decision financiera', 'Opcion recomendada o decision no concluyente segun la informacion disponible.');
+  slide.addShape('roundRect', { x: 0.75, y: 1.35, w: 11.7, h: 2.25, fill: { color: asText(decision.Estado, '').toLowerCase().includes('validacion') ? 'FFFBEB' : 'ECFDF5' }, line: { color: 'CBD5E1', pt: 1 }, radius: 0.12 });
+  slide.addText(asText(decision.Decision, 'Decision no concluyente'), { x: 1.05, y: 1.65, w: 11.1, h: 0.52, fontSize: 22, bold: true, color: asText(decision.Estado, '').toLowerCase().includes('validacion') ? '92400E' : '166534', fit: 'shrink' });
+  slide.addText(asText(decision.Sustento, ''), { x: 1.05, y: 2.28, w: 11.1, h: 0.85, fontSize: 13, color: '334155', fit: 'shrink' });
+  addPptFooter(slide, input);
+
+  if (kpis.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'KPIs TCO', 'Indicadores financieros para leer costo total, horizonte y suficiencia del analisis.');
+    addPptKpiCards(slide, kpis.slice(0, 6));
+    addPptFooter(slide, input);
+  }
+
+  if (rankings[0]?.rows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Ranking financiero', 'Comparacion de alternativas por costo total y riesgo.');
+    addPptProposalTable(slide, rankings[0].rows, { maxRows: Math.min(rankings[0].rows.length, 7), fontSize: 7.5 });
+    addPptFooter(slide, input);
+  }
+
+  if (matrices[0]?.rows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Matriz TCO resumida', 'Costos directos, indirectos, ocultos y observaciones financieras por alternativa.');
+    addPptProposalTable(slide, matrices[0].rows, { maxRows: Math.min(matrices[0].rows.length, 8), fontSize: 6.5 });
+    addPptFooter(slide, input);
+  }
+
+  if (scenarios[0]?.rows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Escenarios y sensibilidad', 'Lectura de escenarios entregados por el analisis, sin supuestos adicionales.');
+    addPptProposalTable(slide, scenarios[0].rows, { maxRows: Math.min(scenarios[0].rows.length, 8), fontSize: 7 });
+    addPptFooter(slide, input);
+  }
+
+  if (risks.length || alerts.length || recommendations.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Riesgos, costos ocultos y recomendaciones', 'Puntos financieros a validar antes de decidir.');
+    slide.addText([
+      ...risks.slice(0, 4).map((row) => `Riesgo: ${row.Detalle}`),
+      ...alerts.slice(0, 4).map((row) => `Pendiente: ${row.Detalle}`),
+      '',
+      ...recommendations.slice(0, 5).map((row) => `Recomendacion: ${row.Detalle}`),
+    ].filter((item) => item !== undefined).join('\n'), { x: 0.75, y: 1.35, w: 11.65, h: 5.05, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
+    addPptFooter(slide, input);
+  }
+
+  await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
+}
+
 async function downloadExportPayloadPptx(input: AgentExportInput, payload: ExportPayload) {
   if (isDashboardExportPayload(payload)) {
     await downloadDashboardExportPayloadPptx(input, payload);
@@ -4726,6 +4946,10 @@ async function downloadExportPayloadPptx(input: AgentExportInput, payload: Expor
   }
   if (isProposalExportPayload(payload)) {
     await downloadProposalExportPayloadPptx(input, payload);
+    return;
+  }
+  if (isTcoExportPayload(payload)) {
+    await downloadTcoExportPayloadPptx(input, payload);
     return;
   }
   const pptxgen = (await import('pptxgenjs')).default;
