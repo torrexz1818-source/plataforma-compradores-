@@ -153,6 +153,12 @@ export function tcoResultToExportPayload(result: unknown): ExportPayload {
   const strategicRecommendation = asRecord(data.strategic_recommendation);
   const scenarios = scenarioRows(data);
   const hiddenCosts = hiddenCostRows(data);
+  const financialRows = directCostRows(data);
+  const rankings = rankingRows(data);
+  const comparableAlternatives = new Set([
+    ...rankings.map((row) => cleanText(row.Alternativa)),
+    ...financialRows.map((row) => cleanText(row.Alternativa)),
+  ].filter(Boolean));
 
   return {
     agentId: 'tco_analysis',
@@ -167,8 +173,8 @@ export function tcoResultToExportPayload(result: unknown): ExportPayload {
       block('tco-decision', 'decision', 'Decision financiera', decisionData(data), 15, cleanText(strategicRecommendation.recommendation_rationale), 'decision-card'),
       block('tco-kpis', 'kpi', 'Indicadores TCO', kpiRows(data), 20, undefined, 'kpi-cards'),
       block('tco-matrix', 'matrix', 'Matriz TCO editable', matrixRows(data), 30),
-      block('tco-scorecard', 'ranking', 'Ranking financiero', rankingRows(data), 40),
-      block('tco-financial-model', 'table', 'Modelo financiero', tableFromRows(directCostRows(data)), 50),
+      block('tco-scorecard', 'ranking', 'Ranking financiero', comparableAlternatives.size >= 2 ? rankings : undefined, 40),
+      block('tco-financial-model', 'table', 'Modelo financiero', tableFromRows(financialRows), 50),
       block('tco-scenarios', 'table', 'Escenarios y sensibilidad', tableFromRows(scenarios), 55),
       block('tco-hidden-costs', 'alert', 'Costos ocultos', tableFromRows(hiddenCosts), 58),
       block('tco-risks', 'risk', 'Riesgos financieros', tableFromRows(riskRows(data)), 60),

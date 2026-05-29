@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertDeliverableCanDownload,
   auditDeliverableBeforeDownload,
   buildExportPayload,
   cleanExportBlocks,
   isRenderable,
   type ExportPayload,
 } from '@/lib/exports';
+import { validateFilesBeforeAgentRun } from '@/lib/agents/quality';
 
 const completeDashboard = {
   dashboard_title: 'Dashboard de compras',
@@ -234,6 +236,31 @@ describe('exports shared layer', () => {
     expect(report.suggestions).toContain('Confirmar vigencia de propuesta B');
   });
 
+  it('does not create a fake proposal ranking with only one provider', () => {
+    const report = auditDeliverableBeforeDownload({
+      agentKey: 'proposal_comparison',
+      result: {
+        ...completeProposal,
+        suppliers: [completeProposal.suppliers[0]],
+        ranking: [completeProposal.ranking[0]],
+      },
+    });
+    expect(report.status).toBe('user_permission_required');
+    expect(report.sanitizedPayload.blocks.map((block) => block.id)).not.toContain('proposal-ranking');
+  });
+
+  it('blocks download while user permission is pending', () => {
+    const report = auditDeliverableBeforeDownload({
+      agentKey: 'proposal_comparison',
+      result: {
+        ...completeProposal,
+        suppliers: [completeProposal.suppliers[0]],
+        ranking: [completeProposal.ranking[0]],
+      },
+    });
+    expect(() => assertDeliverableCanDownload(report)).toThrow();
+  });
+
   it('approves a complete TCO result and preserves financial decision blocks', () => {
     const report = auditDeliverableBeforeDownload({ agentKey: 'tco_analysis', result: completeTco });
     const ids = report.sanitizedPayload.blocks.map((block) => block.id);
@@ -253,6 +280,45 @@ describe('exports shared layer', () => {
       'Matriz de costos o modelo financiero TCO',
       'Ranking o comparacion clara de alternativas',
     ]));
+  });
+
+  it('requires user permission for a recoverable TCO limitation and allows it after explicit override', () => {
+    const limitedTco = {
+      ...completeTco,
+      ranking: [{ position: 1, alternative: 'Alternativa A', ranking_type: 'TCO', reason: 'Unica alternativa detectada' }],
+      financial_model: [],
+      tco_matrix: [{ cost_component: 'Referencia', values: { 'Alternativa A': null } }],
+      tco_totals: [],
+    };
+    const report = auditDeliverableBeforeDownload({ agentKey: 'tco_analysis', result: limitedTco });
+    expect(report.status).toBe('user_permission_required');
+    expect(report.userCanOverride).toBe(true);
+
+    const accepted = auditDeliverableBeforeDownload({
+      agentKey: 'tco_analysis',
+      result: limitedTco,
+      options: {
+        qualityPermission: {
+          accepted: true,
+          source: 'override',
+          statement: 'Acepto continuar con informacion limitada.',
+        },
+      },
+    });
+    expect(accepted.status).toBe('approved_with_warnings');
+    expect(JSON.stringify(accepted.sanitizedPayload)).toContain('Consideraciones del analisis');
+  });
+
+  it('does not export a fake ranking for TCO with only one alternative', () => {
+    const limitedTco = {
+      ...completeTco,
+      ranking: [{ position: 1, alternative: 'Alternativa A', ranking_type: 'TCO', total_tco: 58000, reason: 'Unica alternativa detectada' }],
+      financial_model: [{ Alternativa: 'Alternativa A', TCO: 58000 }],
+      tco_matrix: [{ cost_component: 'Adquisicion', values: { 'Alternativa A': 58000 } }],
+    };
+    const report = auditDeliverableBeforeDownload({ agentKey: 'tco_analysis', result: limitedTco });
+    expect(report.status).toBe('user_permission_required');
+    expect(report.sanitizedPayload.blocks.map((block) => block.id)).not.toContain('tco-scorecard');
   });
 
   it('keeps dashboard useful when a table is incomplete and removes placeholder cells', () => {
@@ -310,6 +376,69 @@ describe('exports shared layer', () => {
     expect(report.status).toBe('approved_with_warnings');
     expect(table.columns).toEqual(['Proveedor']);
     expect(table.rows).toEqual([{ Proveedor: 'Proveedor A' }]);
+  });
+
+  it('cleans absurd labels before exporting', () => {
+    const payload: ExportPayload = {
+      agentId: 'generic',
+      title: 'Reporte con labels',
+      blocks: [
+        {
+          id: 'labels',
+          type: 'table',
+          title: 'Dato faltante',
+          priority: 1,
+          data: {
+            columns: ['Dato 1', 'undefined', 'Este label es una oracion completa demasiado larga que deberia resumirse antes de llegar al entregable final para no romper la lectura ejecutiva'],
+            rows: [
+              {
+                'Dato 1': 'Proveedor A',
+                undefined: 'N/A',
+                'Este label es una oracion completa demasiado larga que deberia resumirse antes de llegar al entregable final para no romper la lectura ejecutiva': 'Valor util',
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const report = auditDeliverableBeforeDownload(payload);
+    const serialized = JSON.stringify(report.sanitizedPayload);
+    expect(serialized).not.toContain('Dato 1');
+    expect(serialized).not.toContain('undefined');
+    expect(serialized).toContain('Tabla de analisis');
+    expect(report.status).toBe('approved_with_warnings');
+  });
+
+  it('blocks empty files during preflight validation', async () => {
+    const report = await validateFilesBeforeAgentRun({
+      agentKey: 'dashboard_creator',
+      files: [new File([''], 'vacio.csv', { type: 'text/csv' })],
+      requireFiles: true,
+    });
+    expect(report.status).toBe('blocked');
+    expect(report.criticalIssues.join(' ')).toMatch(/vacio/i);
+  });
+
+  it('approves a useful CSV file during preflight validation', async () => {
+    const report = await validateFilesBeforeAgentRun({
+      agentKey: 'dashboard_creator',
+      files: [new File(['Proveedor,Monto\nProveedor A,1200'], 'compras.csv', { type: 'text/csv' })],
+      requireFiles: true,
+    });
+    expect(report.status).toBe('approved');
+  });
+
+  it('blocks totally irrelevant content for the selected agent', () => {
+    const report = auditDeliverableBeforeDownload({
+      agentKey: 'tco_analysis',
+      result: {
+        title: 'Receta de cocina',
+        summary: 'Lista de ingredientes, pasos de preparacion y tiempos de coccion.',
+        items: ['Harina', 'Azucar', 'Horno'],
+      },
+    });
+    expect(report.status).toBe('blocked');
+    expect(report.userCanOverride).toBe(false);
   });
 
   it('removes forbidden technical terms from public payloads', () => {

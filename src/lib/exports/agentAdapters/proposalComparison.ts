@@ -184,6 +184,8 @@ export function proposalComparisonToExportPayload(result: unknown): ExportPayloa
   const data = asRecord(result);
   const ranking = asArray(data.ranking).map(asRecord);
   const recommendedName = cleanText(data.recommended_supplier || ranking[0]?.supplier_name);
+  const suppliers = supplierRecords(data);
+  const canCompareProviders = suppliers.length >= 2;
   const rankingData = rankingRows(data, recommendedName);
   const weightedData = weightedRows(data, recommendedName);
   const decision = decisionData(data, recommendedName);
@@ -195,9 +197,9 @@ export function proposalComparisonToExportPayload(result: unknown): ExportPayloa
       block('proposal-summary', 'summary', 'Resumen ejecutivo', cleanValue(data.executive_summary), 10),
       block('proposal-decision', 'decision', 'Decision ejecutiva', decision, 20, cleanText(data.final_recommendation), 'decision-card'),
       block('proposal-kpis', 'kpi', 'Indicadores del comparativo', kpiRows(data, recommendedName), 25, undefined, 'kpi-cards'),
-      block('proposal-ranking', 'ranking', 'Ranking de proveedores', firstRenderable(rankingData, weightedData), 30),
+      block('proposal-ranking', 'ranking', 'Ranking de proveedores', canCompareProviders ? firstRenderable(rankingData, weightedData) : undefined, 30),
       block('proposal-evaluation-matrix', 'matrix', 'Matriz de evaluacion', evaluationRows(data), 40, cleanText(data.auto_generated_criteria_note)),
-      block('proposal-weighted-totals', 'ranking', 'Puntaje ponderado total', weightedData, 45),
+      block('proposal-weighted-totals', 'ranking', 'Puntaje ponderado total', canCompareProviders ? weightedData : undefined, 45),
       block('proposal-executive-table', 'table', 'Resumen comparativo', executiveComparisonTable(data), 50),
       block('proposal-comparison-table', 'table', 'Matriz comparativa editable', comparisonTable(data), 60),
       block('proposal-risks', 'risk', 'Riesgos principales', cleanValue(firstRenderable(data.global_risks, supplierRecords(data).flatMap((supplier) => asArray(supplier.risks)))), 70),

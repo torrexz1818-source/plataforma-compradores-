@@ -6,6 +6,7 @@ import {
   type ExportBuildOptions,
   type ExportPayload,
 } from '@/lib/exports';
+import type { QualityManualInput, QualityUserPermission } from '@/lib/agents/quality';
 
 export type DeliverableAgentKey =
   | 'dashboard_creator'
@@ -26,6 +27,8 @@ export type DeliverableQualityReport = {
     critical: string[];
     optional: string[];
   };
+  userCanOverride: boolean;
+  requiresUserInput: boolean;
   sanitizedContent: Record<string, unknown>;
   sanitizedPayload: ExportPayload;
   userMessage: string;
@@ -43,7 +46,11 @@ export function sanitizeMissingFieldsForExport(content: unknown, agentKey = 'gen
 export function auditDeliverableBeforeDownload(params: {
   agentKey?: string;
   result: unknown;
-  options?: ExportBuildOptions;
+  options?: ExportBuildOptions & {
+    qualityPermission?: QualityUserPermission;
+    manualQualityInput?: QualityManualInput;
+    userInstructions?: string;
+  };
 }): DeliverableQualityReport {
   const report = auditExportPayloadBeforeDownload({
     agentKey: params.agentKey,

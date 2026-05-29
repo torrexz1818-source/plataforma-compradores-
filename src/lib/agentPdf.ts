@@ -11,6 +11,7 @@ import {
   assertDeliverableCanDownload,
   auditDeliverableBeforeDownload,
 } from '@/lib/deliverableQuality';
+import type { QualityManualInput, QualityUserPermission } from '@/lib/agents/quality';
 import {
   blockLabel,
   buildExportPayload,
@@ -54,6 +55,8 @@ export type AgentExportInput = PdfInput & {
   format: AgentExportFormat;
   agentKey?: string;
   termsScope?: TermsExportScope;
+  qualityPermission?: QualityUserPermission;
+  manualQualityInput?: QualityManualInput;
 };
 
 type PdfContext = {
@@ -5055,7 +5058,11 @@ export async function downloadAgentResult(input: AgentExportInput) {
   const qualityReport = auditDeliverableBeforeDownload({
     agentKey: input.agentKey,
     result: input.result,
-    options: { termsScope: input.termsScope },
+    options: {
+      termsScope: input.termsScope,
+      qualityPermission: input.qualityPermission,
+      manualQualityInput: input.manualQualityInput,
+    },
   });
   assertDeliverableCanDownload(qualityReport);
   if (exportFormat) {
@@ -5066,7 +5073,11 @@ export async function downloadAgentResult(input: AgentExportInput) {
     const formatQualityReport = auditDeliverableBeforeDownload({
       agentKey: input.agentKey,
       result: payload,
-      options: { termsScope: input.termsScope },
+      options: {
+        termsScope: input.termsScope,
+        qualityPermission: input.qualityPermission,
+        manualQualityInput: input.manualQualityInput,
+      },
     });
     assertDeliverableCanDownload(formatQualityReport);
     const formatPayload = formatQualityReport.sanitizedPayload;

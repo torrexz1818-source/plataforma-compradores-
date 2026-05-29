@@ -75,7 +75,14 @@ import {
   auditDeliverableBeforeDownload,
   type DeliverableQualityReport,
 } from '@/lib/deliverableQuality';
+import {
+  validateFilesBeforeAgentRun,
+  type AgentProgressStepStatus,
+  type QualityManualInput,
+  type QualityUserPermission,
+} from '@/lib/agents/quality';
 import MonetizationPanel from '@/components/MonetizationPanel';
+import { QualityPermissionDialog } from '@/components/agents/QualityPermissionDialog';
 
 const iconMap = {
   Bot,
@@ -118,6 +125,11 @@ type TermsPendingField = {
   group: string;
   help: string;
   options?: string[];
+};
+
+type QualityPermissionDialogState = {
+  qualityId: string;
+  report: DeliverableQualityReport;
 };
 
 const optionalTermsField = (name: string, label: string, placeholder: string, type: TermsFormField['type'] = 'text', options: string[] = []): TermsFormField => ({
@@ -410,6 +422,11 @@ const NexuIA = () => {
   const [selectedExportFormat, setSelectedExportFormat] = useState<AgentExportFormat>('pdf');
   const [isExportingResult, setIsExportingResult] = useState(false);
   const [confirmedQualityWarnings, setConfirmedQualityWarnings] = useState<Record<string, boolean>>({});
+  const [qualityPermissions, setQualityPermissions] = useState<Record<string, QualityUserPermission>>({});
+  const [manualQualityInputs, setManualQualityInputs] = useState<Record<string, QualityManualInput>>({});
+  const [qualityPermissionDialog, setQualityPermissionDialog] = useState<QualityPermissionDialogState | null>(null);
+  const [qualityManualDraft, setQualityManualDraft] = useState('');
+  const [showQualityManualForm, setShowQualityManualForm] = useState(false);
   const termsFormSchemaMutation = useTermsFormSchema();
   const termsGenerateMutation = useGenerateTermsOfReference();
   const dashboardCreatorMutation = useDashboardCreator();
@@ -590,6 +607,12 @@ const NexuIA = () => {
     setSelectedPdfMode('standard_branded');
     setFeedbackStars(5);
     setFeedbackType('me_sirvio');
+    setConfirmedQualityWarnings({});
+    setQualityPermissions({});
+    setManualQualityInputs({});
+    setQualityPermissionDialog(null);
+    setQualityManualDraft('');
+    setShowQualityManualForm(false);
   }, [routeAgentId]);
 
   useEffect(() => {
@@ -996,6 +1019,21 @@ const NexuIA = () => {
       return;
     }
 
+    const fileQuality = await validateFilesBeforeAgentRun({
+      agentKey: 'proposal_comparison',
+      files: uploadedComparisonFiles,
+      requireFiles: true,
+      maxFiles: 8,
+    });
+    if (fileQuality.status === 'blocked') {
+      toast({
+        title: 'No se pueden procesar los archivos',
+        description: fileQuality.criticalIssues.join(' ') || fileQuality.userMessage,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (!(await ensureNodusIaCredit())) {
       return;
     }
@@ -1095,12 +1133,215 @@ const NexuIA = () => {
     await validateAgentPdfMode({ agentKey: selectedAgentKey, pdfMode: selectedPdfMode });
   };
 
+  const getQualityOptions = (qualityId: string) => ({
+    qualityPermission: qualityPermissions[qualityId],
+    manualQualityInput: manualQualityInputs[qualityId],
+  });
+
+  const openQualityPermissionDialog = (qualityId: string, report: DeliverableQualityReport) => {
+    setQualityPermissionDialog({ qualityId, report });
+    setQualityManualDraft(manualQualityInputs[qualityId]?.text ?? '');
+    setShowQualityManualForm(false);
+  };
+
   const canDownloadQuality = (qualityId: string, report?: DeliverableQualityReport) => {
     if (!report) return false;
     if (report.status === 'blocked') return false;
+    if (report.status === 'user_permission_required') return report.userCanOverride || Boolean(qualityPermissions[qualityId]?.accepted);
     if (report.status === 'approved_with_warnings') return Boolean(confirmedQualityWarnings[qualityId]);
     return true;
   };
+
+  const confirmQualityOverride = () => {
+    if (!qualityPermissionDialog) return;
+    if (!qualityPermissionDialog.report.userCanOverride) {
+      toast({
+        title: 'No se puede continuar bajo responsabilidad',
+        description: 'Este caso requiere cambiar el documento o agregar informacion minima para evitar un resultado falso o enganoso.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const permission: QualityUserPermission = {
+      accepted: true,
+      acceptedAt: new Date().toISOString(),
+      qualityId: qualityPermissionDialog.qualityId,
+      source: 'override',
+      statement: 'Entiendo que el archivo se generara con la informacion disponible y que puede no alcanzar la maxima calidad posible por falta de datos complementarios.',
+    };
+    setQualityPermissions((current) => ({ ...current, [qualityPermissionDialog.qualityId]: permission }));
+    setConfirmedQualityWarnings((current) => ({ ...current, [qualityPermissionDialog.qualityId]: true }));
+    setQualityPermissionDialog(null);
+    toast({
+      title: 'Permiso registrado',
+      description: 'Ahora puedes descargar el entregable limitado con consideraciones del analisis.',
+    });
+  };
+
+  const applyManualQualityInput = () => {
+    if (!qualityPermissionDialog) return;
+    if (qualityPermissionDialog.report.status === 'blocked') {
+      goToAgentInputs();
+      return;
+    }
+    const text = qualityManualDraft.trim();
+    if (!text) {
+      toast({
+        title: 'Agrega informacion antes de continuar.',
+        description: 'Incluye precios, plazos, criterios, responsables o el dato minimo faltante.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setManualQualityInputs((current) => ({
+      ...current,
+      [qualityPermissionDialog.qualityId]: { text },
+    }));
+    setQualityPermissions((current) => ({
+      ...current,
+      [qualityPermissionDialog.qualityId]: {
+        accepted: true,
+        acceptedAt: new Date().toISOString(),
+        qualityId: qualityPermissionDialog.qualityId,
+        source: 'manual_input',
+        statement: 'El usuario agrego informacion complementaria para completar el entregable.',
+      },
+    }));
+    setConfirmedQualityWarnings((current) => ({ ...current, [qualityPermissionDialog.qualityId]: true }));
+    setQualityPermissionDialog(null);
+    toast({
+      title: 'Informacion agregada',
+      description: 'La descarga incluira esta informacion como contexto complementario.',
+    });
+  };
+
+  const goToAgentInputs = () => {
+    setQualityPermissionDialog(null);
+    document.getElementById('agent-inputs-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toast({
+      title: 'Puedes cambiar o agregar documentos',
+      description: 'Actualiza los archivos o completa el contexto y vuelve a procesar el agente.',
+    });
+  };
+
+  const downloadQualityTemplate = (report: DeliverableQualityReport) => {
+    const rows = [
+      ['Campo sugerido', 'Valor a completar'],
+      ...[...report.missingFields.critical, ...report.missingFields.optional]
+        .slice(0, 12)
+        .map((field) => [field, '']),
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'plantilla-datos-minimos-nodus.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const progressStepStatus = (params: {
+    index: number;
+    activeStep: number;
+    isPending?: boolean;
+    isSuccess?: boolean;
+    isError?: boolean;
+    report?: DeliverableQualityReport;
+    label: string;
+  }): AgentProgressStepStatus => {
+    if (params.isPending) {
+      if (params.index < params.activeStep) return 'completed';
+      if (params.index === params.activeStep) return 'running';
+      return 'pending';
+    }
+    if (params.isError) {
+      if (params.index < params.activeStep) return 'completed';
+      if (params.index === params.activeStep) return 'failed';
+      return 'pending';
+    }
+    if (!params.isSuccess || !params.report) return 'pending';
+    const label = params.label.toLowerCase();
+    const issues = [...params.report.criticalIssues, ...params.report.warnings].join(' ').toLowerCase();
+    if (params.report.status === 'blocked' && (label.includes('descarg') || issues.includes(label))) return 'blocked';
+    if (params.report.status === 'user_permission_required' && (
+      label.includes('descarg') ||
+      label.includes('modelo') ||
+      label.includes('ranking') ||
+      label.includes('grafico') ||
+      label.includes('gráfico')
+    )) return 'permission_required';
+    if (params.report.status === 'approved_with_warnings' && (
+      label.includes('descarg') ||
+      issues.includes(label.split(' ')[0])
+    )) return 'warning';
+    return 'completed';
+  };
+
+  const progressStepClass = (status: AgentProgressStepStatus) => {
+    if (status === 'completed') return 'border-success/20 bg-success/10 text-success-foreground';
+    if (status === 'running') return 'border-primary/20 bg-primary/10 text-primary shadow-sm';
+    if (status === 'warning') return 'border-amber-200 bg-amber-50 text-amber-800';
+    if (status === 'permission_required') return 'border-amber-300 bg-amber-100 text-amber-900';
+    if (status === 'blocked' || status === 'failed') return 'border-destructive/25 bg-white text-destructive shadow-sm';
+    return 'border-primary/10 bg-muted/30 text-muted-foreground';
+  };
+
+  const renderProgressStepIcon = (status: AgentProgressStepStatus) => {
+    if (status === 'completed') return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" />;
+    if (status === 'warning' || status === 'permission_required') return <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-amber-600" />;
+    if (status === 'blocked' || status === 'failed') return <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-destructive" />;
+    return <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${status === 'running' ? 'animate-pulse bg-primary' : 'bg-muted-foreground/30'}`} />;
+  };
+
+  const qualityResultBannerClass = (report?: DeliverableQualityReport) => {
+    if (report?.status === 'blocked') return 'border-destructive/20 bg-destructive/10 text-destructive';
+    if (report?.status === 'user_permission_required') return 'border-amber-200 bg-amber-50 text-amber-900';
+    return 'border-success/20 bg-success/10 text-success-foreground';
+  };
+
+  const renderQualityResultIcon = (report?: DeliverableQualityReport) => (
+    report?.status === 'blocked'
+      ? <TriangleAlert className="h-4 w-4 text-destructive" />
+      : report?.status === 'user_permission_required'
+        ? <TriangleAlert className="h-4 w-4 text-amber-600" />
+        : <CheckCircle2 className="h-4 w-4 text-success" />
+  );
+
+  const qualityResultTitle = (
+    report: DeliverableQualityReport | undefined,
+    labels: { ready: string; permission: string; blocked: string },
+  ) => {
+    if (report?.status === 'blocked') return labels.blocked;
+    if (report?.status === 'user_permission_required') return labels.permission;
+    return labels.ready;
+  };
+
+  const renderQualityProgressSummary = (
+    stages: Array<{ label: string; message: string }>,
+    report: DeliverableQualityReport | undefined,
+    activeStep: number,
+  ) => (
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      {stages.map((step, index) => {
+        const status = progressStepStatus({
+          index,
+          activeStep,
+          isSuccess: true,
+          report,
+          label: step.label,
+        });
+        return (
+          <div key={step.label} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${progressStepClass(status)}`}>
+            {renderProgressStepIcon(status)}
+            <span>{step.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
 
   const renderExportControls = (
     onDownload: () => void | Promise<void>,
@@ -1132,7 +1373,13 @@ const NexuIA = () => {
         type="button"
         variant="outline"
         className="rounded-full"
-        onClick={() => void onDownload()}
+        onClick={() => {
+          if (quality?.report?.status === 'user_permission_required' && !qualityPermissions[quality.id]?.accepted) {
+            openQualityPermissionDialog(quality.id, quality.report);
+            return;
+          }
+          void onDownload();
+        }}
         disabled={isExportingResult || (quality ? !canDownloadQuality(quality.id, quality.report) : false)}
       >
         <Download className="mr-2 h-4 w-4" />
@@ -1147,19 +1394,23 @@ const NexuIA = () => {
       ? 'border-success/20 bg-success/10'
       : report.status === 'approved_with_warnings'
         ? 'border-amber-200 bg-amber-50'
-        : 'border-destructive/20 bg-destructive/10';
+        : report.status === 'user_permission_required'
+          ? 'border-amber-300 bg-amber-50'
+          : 'border-destructive/20 bg-destructive/10';
     const label = report.status === 'approved'
       ? 'Aprobado'
       : report.status === 'approved_with_warnings'
         ? 'Aprobado con advertencias'
-        : 'Requiere informacion adicional';
+        : report.status === 'user_permission_required'
+          ? 'Requiere permiso'
+          : 'Bloqueado';
 
     return (
       <div data-export-hidden="true" className={`rounded-2xl border p-4 text-sm ${tone}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 font-semibold text-foreground">
-              {report.status === 'blocked' ? <TriangleAlert className="h-4 w-4 text-destructive" /> : <ShieldCheck className="h-4 w-4 text-primary" />}
+              {report.status === 'blocked' ? <TriangleAlert className="h-4 w-4 text-destructive" /> : report.status === 'user_permission_required' ? <TriangleAlert className="h-4 w-4 text-amber-600" /> : <ShieldCheck className="h-4 w-4 text-primary" />}
               <span>Revision del entregable</span>
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{report.userMessage}</p>
@@ -1206,6 +1457,24 @@ const NexuIA = () => {
             />
             <span>Entiendo que el archivo se generara con la informacion disponible y que puede no alcanzar la maxima calidad posible por falta de datos complementarios.</span>
           </label>
+        ) : null}
+
+        {report.status === 'user_permission_required' ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/80 p-3 text-xs leading-5 text-muted-foreground">
+            <span className="flex-1">Antes de descargar necesitas decidir si agregas informacion, cambias documento o continuas bajo responsabilidad.</span>
+            <Button type="button" size="sm" variant="outline" className="rounded-full bg-white" onClick={() => openQualityPermissionDialog(qualityId, report)}>
+              Revisar opciones
+            </Button>
+          </div>
+        ) : null}
+
+        {report.status === 'blocked' ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-white/80 p-3 text-xs leading-5 text-muted-foreground">
+            <span className="flex-1">No se permite continuar bajo responsabilidad para evitar un resultado falso o engañoso.</span>
+            <Button type="button" size="sm" variant="outline" className="rounded-full bg-white" onClick={() => openQualityPermissionDialog(qualityId, report)}>
+              Ver opciones
+            </Button>
+          </div>
         ) : null}
       </div>
     );
@@ -1338,6 +1607,21 @@ const NexuIA = () => {
       return;
     }
 
+    const fileQuality = await validateFilesBeforeAgentRun({
+      agentKey: 'dashboard_creator',
+      files: dashboardFiles,
+      requireFiles: true,
+      maxFiles: 8,
+    });
+    if (fileQuality.status === 'blocked') {
+      toast({
+        title: 'No se pueden procesar los archivos',
+        description: fileQuality.criticalIssues.join(' ') || fileQuality.userMessage,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setDashboardProgressStep(0);
     setDashboardUploadPercent(0);
     dashboardCreatorMutation.mutate(
@@ -1426,6 +1710,23 @@ const NexuIA = () => {
       return;
     }
 
+    if (termsFiles.length) {
+      const fileQuality = await validateFilesBeforeAgentRun({
+        agentKey: 'terms_of_reference',
+        files: termsFiles,
+        requireFiles: false,
+        maxFiles: 8,
+      });
+      if (fileQuality.status === 'blocked') {
+        toast({
+          title: 'No se pueden procesar los archivos',
+          description: fileQuality.criticalIssues.join(' ') || fileQuality.userMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     setTermsProcessingStep(termsFiles.length ? 0 : 2);
     termsGenerateMutation.mutate(
       {
@@ -1472,6 +1773,10 @@ const NexuIA = () => {
       if (input.qualityReport.status === 'blocked') {
         throw new Error(input.qualityReport.userMessage);
       }
+      if (input.qualityReport.status === 'user_permission_required' && !qualityPermissions[input.qualityId]?.accepted) {
+        openQualityPermissionDialog(input.qualityId, input.qualityReport);
+        return;
+      }
       if (input.qualityReport.status === 'approved_with_warnings' && !confirmedQualityWarnings[input.qualityId]) {
         throw new Error('Confirma que deseas continuar con la informacion disponible antes de descargar.');
       }
@@ -1489,6 +1794,8 @@ const NexuIA = () => {
         pdfOptions: pdfOptionsQuery.data,
         captureElementId: selectedExportFormat === 'pdf' ? input.captureElementId : undefined,
         termsScope: input.termsScope,
+        qualityPermission: qualityPermissions[input.qualityId],
+        manualQualityInput: manualQualityInputs[input.qualityId],
       });
       if (selectedAgent) {
         logAgentUsage(selectedAgent.id, `${input.operationName} ${selectedExportFormat.toUpperCase()}`, input.result, selectedExportFormat === 'pdf');
@@ -1750,7 +2057,10 @@ const NexuIA = () => {
     const scopedQualityReport = auditDeliverableBeforeDownload({
       agentKey: 'terms_of_reference',
       result,
-      options: { termsScope: { ...scopedExport, hasPendingWarnings: forceWarnings && pendingItems.some((item) => item.type === 'COMPLETAR') } },
+      options: {
+        termsScope: { ...scopedExport, hasPendingWarnings: forceWarnings && pendingItems.some((item) => item.type === 'COMPLETAR') },
+        ...getQualityOptions('terms'),
+      },
     });
     await handleExportResult({
       title: `${scopedExport.documentCode} ${scopedExport.documentTitle}`,
@@ -1803,7 +2113,7 @@ const NexuIA = () => {
     const updatedQualityReport = auditDeliverableBeforeDownload({
       agentKey: 'terms_of_reference',
       result: updated,
-      options: { termsScope: scope },
+      options: { termsScope: scope, ...getQualityOptions('terms') },
     });
     setTermsPendingReview(null);
     await handleExportResult({
@@ -1879,6 +2189,23 @@ const NexuIA = () => {
         variant: 'destructive',
       });
       return;
+    }
+
+    if (tcoFiles.length) {
+      const fileQuality = await validateFilesBeforeAgentRun({
+        agentKey: 'tco_analysis',
+        files: tcoFiles,
+        requireFiles: false,
+        maxFiles: 8,
+      });
+      if (fileQuality.status === 'blocked') {
+        toast({
+          title: 'No se pueden procesar los archivos',
+          description: fileQuality.criticalIssues.join(' ') || fileQuality.userMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     if (!(await ensureNodusIaCredit())) {
@@ -1999,12 +2326,12 @@ const NexuIA = () => {
 
   const proposalComparisonResult = proposalComparisonMutation.data;
   const proposalQualityReport = proposalComparisonResult
-    ? auditDeliverableBeforeDownload({ agentKey: 'proposal_comparison', result: proposalComparisonResult })
+    ? auditDeliverableBeforeDownload({ agentKey: 'proposal_comparison', result: proposalComparisonResult, options: getQualityOptions('proposal') })
     : undefined;
   const termsFormSchema = termsFormSchemaMutation.data;
   const termsResult = (termsEditedResult ?? termsGenerateMutation.data) as typeof termsGenerateMutation.data;
   const termsQualityReport = termsResult
-    ? auditDeliverableBeforeDownload({ agentKey: 'terms_of_reference', result: termsResult })
+    ? auditDeliverableBeforeDownload({ agentKey: 'terms_of_reference', result: termsResult, options: getQualityOptions('terms') })
     : undefined;
   const termsGeneratedDocuments = termsResult?.generated_documents?.length
     ? termsResult.generated_documents
@@ -2020,7 +2347,7 @@ const NexuIA = () => {
   }, [termsResult?.title, termsDefaultTab]);
   const tcoResult = tcoAnalysisMutation.data;
   const tcoQualityReport = tcoResult
-    ? auditDeliverableBeforeDownload({ agentKey: 'tco_analysis', result: tcoResult })
+    ? auditDeliverableBeforeDownload({ agentKey: 'tco_analysis', result: tcoResult, options: getQualityOptions('tco') })
     : undefined;
   const tcoPresentation = tcoResult ? normalizeTcoForPresentation(tcoResult) : undefined;
   const tcoRecommendation = tcoResult?.strategic_recommendation;
@@ -2031,10 +2358,10 @@ const NexuIA = () => {
   const tcoConfidence = tcoPresentation?.scorecard.confidenceLevel || tcoResult?.extracted_data_quality?.confidence_level || 'No especificado';
   const dashboardResult = dashboardCreatorMutation.data;
   const dashboardQualityReport = dashboardResult
-    ? auditDeliverableBeforeDownload({ agentKey: 'dashboard_creator', result: dashboardResult })
+    ? auditDeliverableBeforeDownload({ agentKey: 'dashboard_creator', result: dashboardResult, options: getQualityOptions('dashboard') })
     : undefined;
   const runQualityReport = isCurrentRunForSelectedAgent && runExecution
-    ? auditDeliverableBeforeDownload({ agentKey: selectedAgentKey, result: runExecution.outputData })
+    ? auditDeliverableBeforeDownload({ agentKey: selectedAgentKey, result: runExecution.outputData, options: getQualityOptions('generic-run') })
     : undefined;
   const dashboardProgressPercent = dashboardProgressStep === 0 && dashboardUploadPercent > 0
     ? Math.max(8, Math.min(18, (dashboardUploadPercent / 100) * 18))
@@ -2895,7 +3222,7 @@ const NexuIA = () => {
                   </div>
 
                   <div className="grid min-w-0 gap-4 lg:grid-cols-2">
-                    <div className="min-w-0 rounded-[20px] border border-primary/15 p-3 sm:rounded-[24px] sm:p-4">
+                    <div id="agent-inputs-panel" className="min-w-0 rounded-[20px] border border-primary/15 p-3 sm:rounded-[24px] sm:p-4">
                       <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground/70">
                         Inputs requeridos
                       </p>
@@ -3347,25 +3674,20 @@ const NexuIA = () => {
 
                       <div className="grid gap-2 sm:grid-cols-2">
                         {tcoProgressStages.map((step, index) => {
-                          const isCompleted = index < tcoProgressStep;
-                          const isActive = index === tcoProgressStep;
+                          const status = progressStepStatus({
+                            index,
+                            activeStep: tcoProgressStep,
+                            isPending: tcoAnalysisMutation.isPending,
+                            report: tcoQualityReport,
+                            label: step.label,
+                          });
                           return (
                             <div
                               key={step.label}
-                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
-                                isCompleted
-                                  ? 'border-success/20 bg-success/10 text-success-foreground'
-                                  : isActive
-                                    ? 'border-primary/20 bg-primary/10 text-primary shadow-sm'
-                                    : 'border-primary/10 bg-muted/30 text-muted-foreground'
-                              }`}
+                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${progressStepClass(status)}`}
                             >
-                              {isCompleted ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                              ) : (
-                                <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse bg-primary' : 'bg-muted-foreground/30'}`} />
-                              )}
-                              <span>{step.label}{isActive ? '…' : ''}</span>
+                              {renderProgressStepIcon(status)}
+                              <span>{step.label}{status === 'running' ? '…' : ''}</span>
                             </div>
                           );
                         })}
@@ -3374,6 +3696,24 @@ const NexuIA = () => {
                       <p className="rounded-2xl bg-primary/5 px-3 py-2 text-xs leading-5 text-primary/75">
                         Mantén esta pantalla abierta mientras el agente procesa la información.
                       </p>
+                    </div>
+                  ) : null}
+
+                  {isTcoAnalysis && tcoAnalysisMutation.isSuccess ? (
+                    <div className={`space-y-2 rounded-2xl border p-4 text-sm ${qualityResultBannerClass(tcoQualityReport)}`}>
+                      <div className="flex items-center gap-2 font-medium">
+                        {renderQualityResultIcon(tcoQualityReport)}
+                        <span>{qualityResultTitle(tcoQualityReport, {
+                          ready: 'Analisis TCO listo',
+                          permission: 'TCO requiere decision antes de descargar',
+                          blocked: 'TCO bloqueado por calidad insuficiente',
+                        })}</span>
+                      </div>
+                      <Progress value={100} className="h-2 bg-success/10" />
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        {tcoQualityReport?.userMessage ?? 'Ya puedes revisar el resultado y descargar el reporte.'}
+                      </p>
+                      {renderQualityProgressSummary(tcoProgressStages, tcoQualityReport, tcoProgressStages.length - 1)}
                     </div>
                   ) : null}
 
@@ -3398,25 +3738,20 @@ const NexuIA = () => {
 
                       <div className="grid gap-2 sm:grid-cols-2">
                         {dashboardProgressStages.map((step, index) => {
-                          const isCompleted = index < dashboardProgressStep;
-                          const isActive = index === dashboardProgressStep;
+                          const status = progressStepStatus({
+                            index,
+                            activeStep: dashboardProgressStep,
+                            isPending: dashboardCreatorMutation.isPending,
+                            report: dashboardQualityReport,
+                            label: step.label,
+                          });
                           return (
                             <div
                               key={step.label}
-                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
-                                isCompleted
-                                  ? 'border-success/20 bg-success/10 text-success-foreground'
-                                  : isActive
-                                    ? 'border-primary/20 bg-primary/10 text-primary shadow-sm'
-                                    : 'border-primary/10 bg-muted/30 text-muted-foreground'
-                              }`}
+                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${progressStepClass(status)}`}
                             >
-                              {isCompleted ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                              ) : (
-                                <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse bg-primary' : 'bg-muted-foreground/30'}`} />
-                              )}
-                              <span>{step.label}{isActive ? '…' : ''}</span>
+                              {renderProgressStepIcon(status)}
+                              <span>{step.label}{status === 'running' ? '…' : ''}</span>
                             </div>
                           );
                         })}
@@ -3429,15 +3764,20 @@ const NexuIA = () => {
                   ) : null}
 
                   {isDashboardCreator && dashboardCreatorMutation.isSuccess ? (
-                    <div className="space-y-2 rounded-2xl border border-success/20 bg-success/10 p-4 text-sm text-success-foreground">
+                    <div className={`space-y-2 rounded-2xl border p-4 text-sm ${qualityResultBannerClass(dashboardQualityReport)}`}>
                       <div className="flex items-center gap-2 font-medium">
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                        <span>Dashboard listo</span>
+                        {renderQualityResultIcon(dashboardQualityReport)}
+                        <span>{qualityResultTitle(dashboardQualityReport, {
+                          ready: 'Dashboard listo',
+                          permission: 'Dashboard requiere decision antes de descargar',
+                          blocked: 'Dashboard bloqueado por calidad insuficiente',
+                        })}</span>
                       </div>
                       <Progress value={100} className="h-2 bg-success/10" />
                       <p className="text-xs leading-5 text-muted-foreground">
-                        Ya puedes revisar y descargar el resultado.
+                        {dashboardQualityReport?.userMessage ?? 'Ya puedes revisar y descargar el resultado.'}
                       </p>
+                      {renderQualityProgressSummary(dashboardProgressStages, dashboardQualityReport, dashboardProgressStages.length - 1)}
                     </div>
                   ) : null}
 
@@ -3462,25 +3802,20 @@ const NexuIA = () => {
 
                       <div className="grid gap-2 sm:grid-cols-2">
                         {proposalProgressStages.map((step, index) => {
-                          const isCompleted = index < proposalProgressStep;
-                          const isActive = index === proposalProgressStep;
+                          const status = progressStepStatus({
+                            index,
+                            activeStep: proposalProgressStep,
+                            isPending: proposalComparisonMutation.isPending,
+                            report: proposalQualityReport,
+                            label: step.label,
+                          });
                           return (
                             <div
                               key={step.label}
-                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${
-                                isCompleted
-                                  ? 'border-success/20 bg-success/10 text-success-foreground'
-                                  : isActive
-                                    ? 'border-primary/20 bg-primary/10 text-primary shadow-sm'
-                                    : 'border-primary/10 bg-muted/30 text-muted-foreground'
-                              }`}
+                              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs transition ${progressStepClass(status)}`}
                             >
-                              {isCompleted ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-                              ) : (
-                                <span className={`h-2.5 w-2.5 rounded-full ${isActive ? 'animate-pulse bg-primary' : 'bg-muted-foreground/30'}`} />
-                              )}
-                              <span>{step.label}{isActive ? '…' : ''}</span>
+                              {renderProgressStepIcon(status)}
+                              <span>{step.label}{status === 'running' ? '…' : ''}</span>
                             </div>
                           );
                         })}
@@ -3493,15 +3828,20 @@ const NexuIA = () => {
                   ) : null}
 
                   {isQuoteComparator && proposalComparisonMutation.isSuccess ? (
-                    <div className="space-y-2 rounded-2xl border border-success/20 bg-success/10 p-4 text-sm text-success-foreground">
+                    <div className={`space-y-2 rounded-2xl border p-4 text-sm ${qualityResultBannerClass(proposalQualityReport)}`}>
                       <div className="flex items-center gap-2 font-medium">
-                        <CheckCircle2 className="h-4 w-4 text-success" />
-                        <span>Comparativo listo</span>
+                        {renderQualityResultIcon(proposalQualityReport)}
+                        <span>{qualityResultTitle(proposalQualityReport, {
+                          ready: 'Comparativo listo',
+                          permission: 'Comparativo requiere decision antes de descargar',
+                          blocked: 'Comparativo bloqueado por calidad insuficiente',
+                        })}</span>
                       </div>
                       <Progress value={100} className="h-2 bg-success/10" />
                       <p className="text-xs leading-5 text-muted-foreground">
-                        Ya puedes revisar el resultado y descargar el reporte.
+                        {proposalQualityReport?.userMessage ?? 'Ya puedes revisar el resultado y descargar el reporte.'}
                       </p>
+                      {renderQualityProgressSummary(proposalProgressStages, proposalQualityReport, proposalProgressStages.length - 1)}
                     </div>
                   ) : null}
 
@@ -4862,6 +5202,30 @@ const NexuIA = () => {
         </div>
       </section>
       )}
+      <QualityPermissionDialog
+        open={Boolean(qualityPermissionDialog)}
+        report={qualityPermissionDialog?.report ?? null}
+        manualDraft={qualityManualDraft}
+        showManualForm={showQualityManualForm}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQualityPermissionDialog(null);
+            setShowQualityManualForm(false);
+          }
+        }}
+        onManualDraftChange={setQualityManualDraft}
+        onToggleManualForm={setShowQualityManualForm}
+        onApplyManualInput={applyManualQualityInput}
+        onChangeDocument={goToAgentInputs}
+        onDownloadTemplate={() => {
+          if (qualityPermissionDialog) downloadQualityTemplate(qualityPermissionDialog.report);
+        }}
+        onCancelProcess={() => {
+          setQualityPermissionDialog(null);
+          toast({ title: 'Proceso detenido', description: 'Puedes ajustar datos y reintentar cuando estes listo.' });
+        }}
+        onConfirmOverride={confirmQualityOverride}
+      />
     </div>
   );
 };

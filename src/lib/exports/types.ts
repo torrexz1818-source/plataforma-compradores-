@@ -33,7 +33,7 @@ export type ExportPayload = {
   blocks: ExportBlock[];
 };
 
-export type ExportAuditStatus = 'approved' | 'approved_with_warnings' | 'blocked';
+export type ExportAuditStatus = 'approved' | 'approved_with_warnings' | 'user_permission_required' | 'blocked';
 
 export type ExportAuditReport = {
   status: ExportAuditStatus;
@@ -45,6 +45,8 @@ export type ExportAuditReport = {
     critical: string[];
     optional: string[];
   };
+  userCanOverride: boolean;
+  requiresUserInput: boolean;
   sanitizedPayload: ExportPayload;
   userMessage: string;
   detectedData: string[];
@@ -58,4 +60,16 @@ export type ExportBuildOptions = {
     hasPendingWarnings?: boolean;
     processCode?: string;
   };
+  qualityPermission?: {
+    accepted: boolean;
+    acceptedAt?: string;
+    statement?: string;
+    source?: 'manual_input' | 'override';
+    qualityId?: string;
+  };
+  manualQualityInput?: {
+    text?: string;
+    fields?: Record<string, string>;
+  };
+  userInstructions?: string;
 };
