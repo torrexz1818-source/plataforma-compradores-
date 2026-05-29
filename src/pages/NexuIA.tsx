@@ -43,6 +43,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -93,6 +101,24 @@ const tcoAnalysisTypes = [
 
 const tcoEvaluationHorizons = ['Por compra', '1 año', '3 años', '5 años', 'Vida útil', 'Personalizado'];
 const tcoComparisonUnits = ['Por unidad', 'Por lote', 'Por usuario', 'Por km', 'Por hora', 'Por contrato', 'Por proyecto', 'Por año', 'Por mes'];
+
+type TermsPendingField = {
+  id: string;
+  label: string;
+  originalToken: string;
+  token: string;
+  type: 'COMPLETAR' | 'SUGERIDO';
+  documentCode: 'TDR-01' | 'BC-01' | 'INV-03' | 'CRO-04' | 'PEN-05' | 'PACKAGE';
+  document: string;
+  documentSection: string;
+  priority: 'alta' | 'media' | 'baja';
+  inputType: 'text' | 'date' | 'number' | 'textarea' | 'email' | 'select';
+  value: string;
+  replacement: string;
+  group: string;
+  help: string;
+  options?: string[];
+};
 
 const optionalTermsField = (name: string, label: string, placeholder: string, type: TermsFormField['type'] = 'text', options: string[] = []): TermsFormField => ({
   name,
@@ -372,7 +398,7 @@ const NexuIA = () => {
   const [termsEditedResult, setTermsEditedResult] = useState<Record<string, unknown> | null>(null);
   const [termsPendingReview, setTermsPendingReview] = useState<{
     scope: TermsExportScope;
-    items: Array<{ token: string; type: 'COMPLETAR' | 'SUGERIDO'; replacement: string; document: string }>;
+    items: TermsPendingField[];
   } | null>(null);
   const [isTermsDropActive, setIsTermsDropActive] = useState(false);
   const [loggedRunIds, setLoggedRunIds] = useState<Record<string, string>>({});
@@ -1435,7 +1461,7 @@ const NexuIA = () => {
         title: input.title,
         agentName: selectedAgent?.name,
         userName: user?.fullName,
-        result: input.qualityReport.sanitizedPayload,
+        result: input.termsScope?.hasPendingWarnings ? input.result : input.qualityReport.sanitizedPayload,
         fileName: input.fileName,
         format: selectedExportFormat,
         agentKey: selectedAgentKey,
@@ -1557,30 +1583,118 @@ const NexuIA = () => {
 
   const termsExportContextLabel = resolveTermsDownloadScope(termsActiveTab).documentCode;
 
-  const collectTermsPendingItems = (result: Record<string, unknown>, scope: TermsExportScope) => {
-    const document = textValue((result.generated_document as Record<string, unknown>) ?? {});
-    const bases = textValue(result.tender_bases);
-    const invitation = textValue(result.supplier_invitation_email);
-    const schedule = textValue(result.process_schedule);
-    const pending = textValue([result.missing_information, result.buyer_recommendations, result.recommended_questions]);
-    const scopedText = [
-      scope.sections.includes('tdr') || scope.sections.includes('matrizRiesgos') || scope.sections.includes('calidad') ? document : '',
-      scope.sections.includes('bases') ? bases : '',
-      scope.sections.includes('invitacion') ? invitation : '',
-      scope.sections.includes('cronograma') ? schedule : '',
-      scope.sections.includes('pendientes') ? pending : '',
-    ].join(' ');
-    const matches = Array.from(new Set(scopedText.match(/\[(COMPLETAR|SUGERIDO)[^\]]*\][^,;.\n"}]*/gi) ?? []));
-    return matches.map((token) => {
-      const type = /completar/i.test(token) ? 'COMPLETAR' as const : 'SUGERIDO' as const;
-      const clean = token.replace(/^\[(?:COMPLETAR|SUGERIDO)(?:\s*[-:]\s*confirmar)?\s*:?\s*/i, '').replace(/\]$/, '').trim();
-      return {
-        token,
-        type,
-        replacement: type === 'SUGERIDO' ? clean.replace(/^\]/, '').trim() : '',
-        document: scope.documentCode,
-      };
+  const getTermsProcessCodeForExport = (result: Record<string, unknown>) =>
+    textValue(result.process_code, '').trim();
+
+  const withTermsProcessCode = (scope: TermsExportScope, result: Record<string, unknown>): TermsExportScope => ({
+    ...scope,
+    processCode: getTermsProcessCodeForExport(result),
+  });
+
+  const normalizePendingLabel = (token: string) => {
+    const label = token
+      .replace(/^\[(COMPLETAR|SUGERIDO)(?:\s*[-:]\s*confirmar)?\s*:?\s*/i, '')
+      .replace(/\]$/g, '')
+      .replace(/[_-]+/g, ' ')
+      .trim();
+    if (!label) return /sugerido/i.test(token) ? 'Dato sugerido por confirmar' : 'Dato pendiente';
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  };
+
+  const normalizePendingKey = (value: string) =>
+    value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+  const inferTermsPendingInput = (label: string): Pick<TermsPendingField, 'inputType' | 'group' | 'priority' | 'help' | 'options'> => {
+    const normalized = normalizePendingKey(label);
+    if (/correo|email|e-mail/.test(normalized)) {
+      return { inputType: 'email', group: 'Contactos e invitación', priority: 'alta', help: 'Ingresa un correo válido para consultas o coordinación.' };
+    }
+    if (/fecha|plazo|convocatoria|adjudicacion|inicio|fin|limite|l[ií]mite/.test(normalized)) {
+      return { inputType: 'date', group: 'Fechas y cronograma', priority: 'alta', help: 'Selecciona la fecha aplicable para el documento.' };
+    }
+    if (/presupuesto|monto|importe|valor|precio/.test(normalized)) {
+      return { inputType: 'number', group: 'Condiciones comerciales', priority: 'alta', help: 'Ingresa un monto positivo, sin símbolos ni separadores especiales.' };
+    }
+    if (/moneda/.test(normalized)) {
+      return { inputType: 'select', group: 'Condiciones comerciales', priority: 'media', help: 'Selecciona la moneda del proceso.', options: ['PEN', 'USD', 'EUR', 'Otra'] };
+    }
+    if (/modalidad/.test(normalized)) {
+      return { inputType: 'select', group: 'Datos generales', priority: 'media', help: 'Selecciona o confirma la modalidad del concurso.', options: ['Concurso privado', 'Licitación', 'Solicitud de cotización', 'Compra directa', 'Otra'] };
+    }
+    if (/medio|envio|presentacion|presentaci[oó]n/.test(normalized)) {
+      return { inputType: 'select', group: 'Datos generales', priority: 'media', help: 'Indica cómo se presentarán las propuestas.', options: ['Correo electrónico', 'Plataforma', 'Presencial', 'Mixto', 'Otro'] };
+    }
+    if (/empresa|postor|contacto|responsable|cargo/.test(normalized)) {
+      return { inputType: 'text', group: 'Contactos e invitación', priority: 'alta', help: 'Completa el dato tal como debe aparecer en la invitación.' };
+    }
+    if (/norma|legal|tecnica|t[eé]cnica|garantia|garant[ií]a|condicion|condici[oó]n|observacion|observaci[oó]n|descripcion|descripci[oó]n/.test(normalized)) {
+      return { inputType: 'textarea', group: 'Requisitos técnicos / legales', priority: 'media', help: 'Describe el dato con el nivel de detalle necesario para el proveedor.' };
+    }
+    if (/codigo|c[oó]digo|entidad/.test(normalized)) {
+      return { inputType: 'text', group: 'Datos generales', priority: 'alta', help: normalized.includes('codigo') ? 'Ejemplo: TDR-2026-001 o BN-OBRA-001.' : 'Indica la entidad, empresa o área convocante.' };
+    }
+    return { inputType: 'text', group: 'Otros pendientes', priority: 'media', help: 'Completa este dato para mejorar el documento antes de descargar.' };
+  };
+
+  const cleanSuggestedTermsValue = (token: string) =>
+    normalizePendingLabel(token).replace(/^confirmar\s*:\s*/i, '').trim();
+
+  const extractTermsPendingFields = (
+    result: Record<string, unknown>,
+    scope: TermsExportScope,
+  ): TermsPendingField[] => {
+    const generatedDocument = (result.generated_document as Record<string, unknown>) ?? {};
+    const sourceSections = [
+      { section: 'TDR', enabled: scope.sections.includes('tdr'), value: generatedDocument },
+      { section: 'Matriz y riesgos', enabled: scope.sections.includes('matrizRiesgos'), value: [generatedDocument.evaluation_matrix, generatedDocument.compliance_matrix, generatedDocument.guarantees_penalties, generatedDocument.identified_risks] },
+      { section: 'Calidad', enabled: scope.sections.includes('calidad'), value: [result.checklist, result.quality_check, result.consistency_validation, result.buyer_recommendations, result.recommended_questions] },
+      { section: 'Bases', enabled: scope.sections.includes('bases'), value: [result.tender_bases, generatedDocument.evaluation_matrix, generatedDocument.guarantees_penalties] },
+      { section: 'Invitación', enabled: scope.sections.includes('invitacion'), value: [result.supplier_invitation_email, result.invited_bidders] },
+      { section: 'Cronograma', enabled: scope.sections.includes('cronograma'), value: [result.process_schedule, result.tender_process] },
+      { section: 'Pendientes y recomendaciones', enabled: scope.sections.includes('pendientes'), value: [result.missing_information, result.buyer_recommendations, result.recommended_questions, generatedDocument, result.tender_bases, result.supplier_invitation_email, result.process_schedule] },
+    ];
+    const fields = new Map<string, TermsPendingField>();
+    sourceSections.filter((source) => source.enabled).forEach((source) => {
+      const text = textValue(source.value, '');
+      const matches = text.match(/\[(COMPLETAR|SUGERIDO)[^\]]*\]/gi) ?? [];
+      matches.forEach((originalToken) => {
+        const id = normalizePendingKey(originalToken).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || `${scope.documentCode}-${fields.size + 1}`;
+        const type = /completar/i.test(originalToken) ? 'COMPLETAR' as const : 'SUGERIDO' as const;
+        const label = normalizePendingLabel(originalToken);
+        const inferred = inferTermsPendingInput(label);
+        const existing = fields.get(originalToken);
+        if (existing) {
+          fields.set(originalToken, {
+            ...existing,
+            documentSection: existing.documentSection.includes(source.section)
+              ? existing.documentSection
+              : `${existing.documentSection}, ${source.section}`,
+          });
+          return;
+        }
+        fields.set(originalToken, {
+          id,
+          label,
+          originalToken,
+          token: originalToken,
+          type,
+          documentCode: scope.documentCode,
+          document: scope.documentCode,
+          documentSection: source.section,
+          value: type === 'SUGERIDO' ? cleanSuggestedTermsValue(originalToken) : '',
+          replacement: type === 'SUGERIDO' ? cleanSuggestedTermsValue(originalToken) : '',
+          ...inferred,
+        });
+      });
     });
+    return Array.from(fields.values()).sort((a, b) => {
+      const priorityOrder = { alta: 0, media: 1, baja: 2 };
+      return priorityOrder[a.priority] - priorityOrder[b.priority] || a.label.localeCompare(b.label);
+    });
+  };
+
+  const collectTermsPendingItems = (result: Record<string, unknown>, scope: TermsExportScope) => {
+    return extractTermsPendingFields(result, scope);
   };
 
   const replaceTermsTokens = (value: unknown, replacements: Record<string, string>): unknown => {
@@ -1595,38 +1709,65 @@ const NexuIA = () => {
   };
 
   const exportTermsWithScope = async (scope: TermsExportScope, forceWarnings = false) => {
-    if (!termsResult || !termsQualityReport) return;
+    if (!termsResult) return;
     const result = termsResult as unknown as Record<string, unknown>;
-    const pendingItems = collectTermsPendingItems(result, scope);
+    const scopedExport = withTermsProcessCode(scope, result);
+    const pendingItems = collectTermsPendingItems(result, scopedExport);
+    const criticalPending = pendingItems.filter(isCriticalTermsPendingField);
+    if (forceWarnings && criticalPending.length) {
+      toast({
+        title: 'Completa los datos críticos antes de descargar.',
+        description: 'Los campos de alta prioridad deben resolverse para evitar un documento incompleto.',
+        variant: 'destructive',
+      });
+      return;
+    }
     if (!forceWarnings && pendingItems.length) {
-      setTermsPendingReview({ scope, items: pendingItems });
+      setTermsPendingReview({ scope: scopedExport, items: pendingItems });
       return;
     }
     if (forceWarnings) setTermsPendingReview(null);
-    await handleExportResult({
-      title: `${scope.documentCode} ${scope.documentTitle}`,
+    const scopedQualityReport = auditDeliverableBeforeDownload({
+      agentKey: 'terms_of_reference',
       result,
-      fileName: scope.documentCode,
-      operationName: `Descarga ${scope.documentCode}`,
-      termsScope: { ...scope, hasPendingWarnings: forceWarnings && pendingItems.some((item) => item.type === 'COMPLETAR') },
+      options: { termsScope: { ...scopedExport, hasPendingWarnings: forceWarnings && pendingItems.some((item) => item.type === 'COMPLETAR') } },
+    });
+    await handleExportResult({
+      title: `${scopedExport.documentCode} ${scopedExport.documentTitle}`,
+      result,
+      fileName: scopedExport.documentCode,
+      operationName: `Descarga ${scopedExport.documentCode}`,
+      termsScope: { ...scopedExport, hasPendingWarnings: forceWarnings && pendingItems.some((item) => item.type === 'COMPLETAR') },
       qualityId: 'terms',
-      qualityReport: termsQualityReport,
+      qualityReport: scopedQualityReport,
     });
   };
 
-  const updateTermsPendingReplacement = (token: string, replacement: string) => {
+  const updateTermsPendingReplacement = (id: string, replacement: string) => {
     setTermsPendingReview((current) => current
-      ? { ...current, items: current.items.map((item) => item.token === token ? { ...item, replacement } : item) }
+      ? { ...current, items: current.items.map((item) => item.id === id ? { ...item, replacement, value: replacement } : item) }
       : current);
   };
 
+  const validateTermsPendingField = (item: TermsPendingField) => {
+    const value = item.replacement.trim();
+    if (!value) return item.type === 'COMPLETAR' ? 'Campo pendiente' : '';
+    if (item.inputType === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'Correo inválido';
+    if (item.inputType === 'date' && Number.isNaN(new Date(value).getTime())) return 'Fecha inválida';
+    if (item.inputType === 'number' && (!(Number(value) > 0) || Number.isNaN(Number(value)))) return 'Debe ser un número positivo';
+    return '';
+  };
+
+  const isCriticalTermsPendingField = (item: TermsPendingField) =>
+    item.type === 'COMPLETAR' && item.priority === 'alta' && !item.replacement.trim();
+
   const applyTermsPendingAndDownload = async () => {
     if (!termsPendingReview || !termsResult) return;
-    const missingRequired = termsPendingReview.items.filter((item) => item.type === 'COMPLETAR' && !item.replacement.trim());
-    if (missingRequired.length) {
+    const invalidFields = termsPendingReview.items.filter((item) => validateTermsPendingField(item));
+    if (invalidFields.length) {
       toast({
-        title: 'Completa los datos pendientes.',
-        description: 'Para usar esta opción, completa los campos marcados como obligatorios o descarga con advertencias.',
+        title: 'Todavía hay campos sin completar.',
+        description: 'Puedes completarlos o descargar con advertencias.',
         variant: 'destructive',
       });
       return;
@@ -1638,8 +1779,12 @@ const NexuIA = () => {
     );
     const updated = replaceTermsTokens(termsResult as unknown as Record<string, unknown>, replacements) as Record<string, unknown>;
     setTermsEditedResult(updated);
-    const scope = termsPendingReview.scope;
-    const updatedQualityReport = auditDeliverableBeforeDownload({ agentKey: 'terms_of_reference', result: updated });
+    const scope = withTermsProcessCode(termsPendingReview.scope, updated);
+    const updatedQualityReport = auditDeliverableBeforeDownload({
+      agentKey: 'terms_of_reference',
+      result: updated,
+      options: { termsScope: scope },
+    });
     setTermsPendingReview(null);
     await handleExportResult({
       title: `${scope.documentCode} ${scope.documentTitle}`,
@@ -2373,6 +2518,43 @@ const NexuIA = () => {
       {(items?.length ? items : ['No especificado']).map((item) => <li key={item}>- {item}</li>)}
     </ul>
   );
+
+  const renderTermsPendingInput = (item: TermsPendingField) => {
+    const commonClass = 'mt-2 min-w-0 rounded-xl border-amber-200 bg-white';
+    if (item.inputType === 'textarea') {
+      return (
+        <Textarea
+          value={item.replacement}
+          onChange={(event) => updateTermsPendingReplacement(item.id, event.target.value)}
+          placeholder={`Completa ${item.label.toLowerCase()}`}
+          className={`${commonClass} min-h-[88px]`}
+        />
+      );
+    }
+    if (item.inputType === 'select') {
+      return (
+        <select
+          value={item.replacement}
+          onChange={(event) => updateTermsPendingReplacement(item.id, event.target.value)}
+          className={`${commonClass} h-10 w-full px-3 text-sm text-foreground`}
+        >
+          <option value="">Selecciona una opción</option>
+          {(item.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
+        </select>
+      );
+    }
+    return (
+      <Input
+        type={item.inputType}
+        value={item.replacement}
+        min={item.inputType === 'number' ? 0 : undefined}
+        step={item.inputType === 'number' ? '0.01' : undefined}
+        onChange={(event) => updateTermsPendingReplacement(item.id, event.target.value)}
+        placeholder={`Completa ${item.label.toLowerCase()}`}
+        className={commonClass}
+      />
+    );
+  };
 
   const renderAgentFeedbackPanel = () => {
     if (!currentFeedbackRunId) {
@@ -3777,59 +3959,131 @@ const NexuIA = () => {
                         </TabsContent>
                       </Tabs>
 
-                      {termsPendingReview ? (
-                        <div data-export-hidden="true" className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                          <div className="flex flex-wrap items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-amber-950">Datos por completar antes de descargar</p>
-                              <p className="mt-1 text-xs leading-5 text-amber-800">
-                                Detectamos información pendiente en {termsPendingReview.scope.documentCode}. Puedes completarla ahora o continuar con advertencias.
-                              </p>
-                            </div>
-                            <Button type="button" variant="outline" className="rounded-full border-amber-300 bg-white" onClick={() => setTermsPendingReview(null)}>
-                              Cerrar
-                            </Button>
-                          </div>
-                          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                            {termsPendingReview.items.map((item) => (
-                              <div key={item.token} className="rounded-xl border border-amber-200 bg-white p-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
-                                    {item.type === 'COMPLETAR' ? 'Dato por completar' : 'Dato sugerido por confirmar'}
-                                  </p>
-                                  <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-medium text-amber-800">{item.document}</span>
+                      <Dialog open={Boolean(termsPendingReview)} onOpenChange={(open) => { if (!open) setTermsPendingReview(null); }}>
+                        <DialogContent data-export-hidden="true" className="max-h-[88vh] overflow-y-auto border-primary/15 bg-white sm:max-w-5xl">
+                          <DialogHeader>
+                            <DialogTitle>Completa la información antes de descargar</DialogTitle>
+                            <DialogDescription>
+                              Detectamos datos pendientes en este documento. Puedes completarlos ahora para generar un archivo más profesional.
+                            </DialogDescription>
+                          </DialogHeader>
+
+                          {termsPendingReview ? (
+                            <div className="space-y-5">
+                              <div className="grid gap-3 rounded-2xl border border-primary/15 bg-primary/5 p-4 sm:grid-cols-3">
+                                <div>
+                                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Documento</p>
+                                  <p className="mt-1 text-sm font-semibold text-foreground">{termsPendingReview.scope.documentCode}</p>
                                 </div>
-                                <p className="mt-2 text-xs leading-5 text-muted-foreground">{item.token}</p>
-                                <Textarea
-                                  value={item.replacement}
-                                  onChange={(event) => updateTermsPendingReplacement(item.token, event.target.value)}
-                                  placeholder={item.type === 'COMPLETAR' ? 'Completa el dato pendiente' : 'Acepta, edita o deja la sugerencia'}
-                                  className="mt-3 min-h-[72px] rounded-xl border-amber-200"
-                                />
-                                {item.type === 'SUGERIDO' ? (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="mt-2 h-7 rounded-full px-2 text-xs text-primary hover:bg-primary/10"
-                                    onClick={() => updateTermsPendingReplacement(item.token, item.token.replace(/^\[SUGERIDO[^\]]*\]\s*/i, '').trim())}
-                                  >
-                                    Aceptar sugerencia
-                                  </Button>
-                                ) : null}
+                                <div>
+                                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Pendientes</p>
+                                  <p className="mt-1 text-sm font-semibold text-foreground">
+                                    {termsPendingReview.items.filter((item) => item.type === 'COMPLETAR').length}
+                                  </p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground/70">Sugeridos</p>
+                                  <p className="mt-1 text-sm font-semibold text-foreground">
+                                    {termsPendingReview.items.filter((item) => item.type === 'SUGERIDO').length}
+                                  </p>
+                                </div>
                               </div>
-                            ))}
-                          </div>
-                          <div className="mt-4 flex flex-wrap justify-end gap-2">
-                            <Button type="button" variant="outline" className="rounded-full bg-white" onClick={() => void exportTermsWithScope(termsPendingReview.scope, true)}>
-                              Descargar con advertencias
+
+                              {['Datos generales', 'Fechas y cronograma', 'Condiciones comerciales', 'Contactos e invitación', 'Requisitos técnicos / legales', 'Otros pendientes'].map((group) => {
+                                const items = termsPendingReview.items.filter((item) => item.type === 'COMPLETAR' && item.group === group);
+                                if (!items.length) return null;
+                                return (
+                                  <div key={group} className="space-y-3">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/70">{group}</p>
+                                    <div className="grid gap-3 lg:grid-cols-2">
+                                      {items.map((item) => (
+                                        <div key={item.id} className="rounded-2xl border border-amber-200 bg-amber-50/55 p-4">
+                                          <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <div>
+                                              <label className="text-sm font-semibold text-foreground">{item.label}</label>
+                                              <p className="mt-1 text-xs leading-5 text-muted-foreground">{item.help}</p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-1">
+                                              <Badge variant="outline" className="bg-white">{item.documentCode}</Badge>
+                                              <Badge variant="outline" className="bg-white">{item.priority}</Badge>
+                                            </div>
+                                          </div>
+                                          {renderTermsPendingInput(item)}
+                                          <p className="mt-2 text-[11px] leading-4 text-muted-foreground">
+                                            Sección: {item.documentSection}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+
+                              {termsPendingReview.items.some((item) => item.type === 'SUGERIDO') ? (
+                                <div className="space-y-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-foreground/70">Datos sugeridos por confirmar</p>
+                                  <div className="grid gap-3 lg:grid-cols-2">
+                                    {termsPendingReview.items.filter((item) => item.type === 'SUGERIDO').map((item) => (
+                                      <div key={item.id} className="rounded-2xl border border-primary/15 bg-white p-4">
+                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                          <div>
+                                            <label className="text-sm font-semibold text-foreground">{item.label}</label>
+                                            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                              Puedes aceptar, editar o mantener la sugerencia visible en el archivo.
+                                            </p>
+                                          </div>
+                                          <Badge variant="outline">{item.documentCode}</Badge>
+                                        </div>
+                                        {renderTermsPendingInput(item)}
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 rounded-full px-3 text-xs text-primary hover:bg-primary/10"
+                                            onClick={() => updateTermsPendingReplacement(item.id, cleanSuggestedTermsValue(item.originalToken))}
+                                          >
+                                            Aceptar sugerencia
+                                          </Button>
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 rounded-full px-3 text-xs text-muted-foreground hover:bg-primary/10"
+                                            onClick={() => updateTermsPendingReplacement(item.id, '')}
+                                          >
+                                            Mantener como sugerido
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : null}
+
+                          <DialogFooter className="gap-2 sm:justify-between">
+                            <Button type="button" variant="ghost" className="rounded-full" onClick={() => setTermsPendingReview(null)}>
+                              Cancelar
                             </Button>
-                            <Button type="button" className="rounded-full" onClick={() => void applyTermsPendingAndDownload()}>
-                              Completar datos y descargar
-                            </Button>
-                          </div>
-                        </div>
-                      ) : null}
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-full bg-white"
+                                disabled={Boolean(termsPendingReview?.items.some(isCriticalTermsPendingField))}
+                                onClick={() => termsPendingReview ? void exportTermsWithScope(termsPendingReview.scope, true) : undefined}
+                              >
+                                Descargar con advertencias
+                              </Button>
+                              <Button type="button" className="rounded-full" onClick={() => void applyTermsPendingAndDownload()}>
+                                Guardar y descargar
+                              </Button>
+                            </div>
+                          </DialogFooter>
+                        </DialogContent>
+                      </Dialog>
 
                       {termsResult.supporting_documents_summary.length ? (
                         <div className="rounded-2xl border border-primary/15 bg-white p-4">

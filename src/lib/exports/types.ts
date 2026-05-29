@@ -56,5 +56,6 @@ export type ExportBuildOptions = {
     documentTitle: string;
     sections: string[];
     hasPendingWarnings?: boolean;
+    processCode?: string;
   };
 };
