@@ -1,3 +1,5 @@
+import { runAiAgent } from '@/lib/agentRunApi';
+
 export type TermsFormField = {
   name: string;
   label: string;
@@ -172,43 +174,15 @@ export type GenerateTermsPayload = {
   files: File[];
 };
 
-const DEFAULT_AI_ENGINE_URL = '/ai-engine';
 const ALLOWED_FILE_EXTENSIONS = ['pdf', 'docx', 'xlsx', 'csv', 'jpg', 'jpeg', 'png'];
 const MAX_FILES = 8;
 const MAX_FILE_SIZE_MB = 10;
-
-function getAiEngineBaseUrl() {
-  const configuredUrl = import.meta.env.VITE_AI_ENGINE_URL?.trim();
-  return (configuredUrl || DEFAULT_AI_ENGINE_URL).replace(/\/$/, '');
-}
 
 function getFriendlyErrorMessage(message: string) {
   if (message.toLowerCase().includes('failed to fetch')) {
     return 'No se pudo conectar con el motor de IA. Verifica que el AI Engine esté levantado.';
   }
   return message || 'No se pudo completar la acción. Intenta nuevamente.';
-}
-
-async function readError(response: Response, fallback: string) {
-  try {
-    const data = (await response.json()) as { detail?: unknown; message?: unknown };
-    if (typeof data.detail === 'string') {
-      return data.detail;
-    }
-    if (Array.isArray(data.detail)) {
-      return data.detail
-        .map((item) =>
-          typeof item === 'object' && item && 'msg' in item ? String((item as { msg: unknown }).msg) : String(item),
-        )
-        .join(', ');
-    }
-    if (typeof data.message === 'string') {
-      return data.message;
-    }
-  } catch {
-    return response.statusText || fallback;
-  }
-  return fallback;
 }
 
 export function validateTermsFiles(files: File[]) {
@@ -230,29 +204,24 @@ export function validateTermsFiles(files: File[]) {
 }
 
 export async function createTermsFormSchema(initialDescription: string): Promise<TermsFormSchema> {
-  let response: Response;
+  const formData = new FormData();
+  formData.append('agentId', 'terms_of_reference');
+  formData.append('operation', 'form_schema');
+  formData.append('initial_description', initialDescription);
 
   try {
-    response = await fetch(`${getAiEngineBaseUrl()}/agents/terms-of-reference/form-schema`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initial_description: initialDescription }),
-    });
+    return await runAiAgent<TermsFormSchema>(formData);
   } catch (error) {
     throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));
   }
-
-  if (!response.ok) {
-    throw new Error(getFriendlyErrorMessage(await readError(response, 'No se pudo generar el formulario inteligente. Intenta nuevamente.')));
-  }
-
-  return response.json() as Promise<TermsFormSchema>;
 }
 
 export async function generateTermsOfReference(payload: GenerateTermsPayload): Promise<TermsResult> {
   const formData = new FormData();
   const fields = payload.fields;
 
+  formData.append('agentId', 'terms_of_reference');
+  formData.append('operation', 'generate');
   formData.append('initial_description', payload.initialDescription);
   formData.append('title', fields.title || '');
   formData.append('requirement_type', fields.requirement_type || '');
@@ -274,19 +243,9 @@ export async function generateTermsOfReference(payload: GenerateTermsPayload): P
   formData.append('dynamic_form_data', JSON.stringify(payload.dynamicFormData));
   payload.files.forEach((file) => formData.append('files', file, file.name));
 
-  let response: Response;
   try {
-    response = await fetch(`${getAiEngineBaseUrl()}/agents/terms-of-reference/generate`, {
-      method: 'POST',
-      body: formData,
-    });
+    return await runAiAgent<TermsResult>(formData);
   } catch (error) {
     throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));
   }
-
-  if (!response.ok) {
-    throw new Error(getFriendlyErrorMessage(await readError(response, 'No se pudo generar el término de referencia. Intenta nuevamente.')));
-  }
-
-  return response.json() as Promise<TermsResult>;
 }

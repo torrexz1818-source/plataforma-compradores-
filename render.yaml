@@ -7,8 +7,6 @@ services:
     envVars:
       - key: VITE_API_URL
         value: https://api.buyernodus.com
-      - key: VITE_AI_ENGINE_URL
-        value: https://plataforma-compradores-128y.onrender.com
 
   - type: web
     name: buyernodus-ai-engine
@@ -35,6 +33,8 @@ services:
         value: "false"
       - key: STORE_EXTRACTED_TEXT
         value: "false"
+      - key: HEALTH_DEEP_TIMEOUT_SECONDS
+        value: "8"
       - key: CORS_ORIGINS
         value: https://buyernodus.com,https://www.buyernodus.com,https://buyernodus-frontend.onrender.com,http://localhost:5173,http://127.0.0.1:5173
 
@@ -58,6 +58,16 @@ services:
         value: America/Lima
       - key: CORS_ORIGINS
         value: https://buyernodus.com,https://www.buyernodus.com
+      - key: AI_ENGINE_URL
+        value: https://plataforma-compradores-128y.onrender.com
+      - key: AI_PROVIDER
+        value: openai
+      - key: AI_AGENT_TIMEOUT_MS
+        value: "120000"
+      - key: AI_HEALTH_TIMEOUT_MS
+        value: "10000"
+      - key: AI_DEEP_HEALTH_ENABLED
+        value: "false"
       - key: MONGODB_URI
         sync: false
       - key: MONGODB_DB_NAME

@@ -1,3 +1,5 @@
+import { runAiAgent } from '@/lib/agentRunApi';
+
 export type ProposalComparisonRankingItem = {
   position: number;
   supplier_name: string;
@@ -106,13 +108,6 @@ export type AnalyzeProposalComparisonPayload = {
   files: File[];
 };
 
-const DEFAULT_AI_ENGINE_URL = '/ai-engine';
-
-function getAiEngineBaseUrl() {
-  const configuredUrl = import.meta.env.VITE_AI_ENGINE_URL?.trim();
-  return (configuredUrl || DEFAULT_AI_ENGINE_URL).replace(/\/$/, '');
-}
-
 function getFriendlyErrorMessage(message: string) {
   if (message.toLowerCase().includes('failed to fetch')) {
     return 'No se pudo conectar con el AI Engine. Verifica que el ecosistema esté levantado en http://localhost:5173/ y que el motor interno esté activo.';
@@ -125,6 +120,8 @@ export async function analyzeProposalComparison(
   payload: AnalyzeProposalComparisonPayload,
 ): Promise<ProposalComparisonResult> {
   const formData = new FormData();
+  formData.append('agentId', 'proposal_comparison');
+  formData.append('operation', 'analyze');
   formData.append('title', payload.title || 'Comparativo de propuestas de proveedores');
   formData.append('service', payload.service);
 
@@ -134,41 +131,9 @@ export async function analyzeProposalComparison(
 
   payload.files.forEach((file) => formData.append('files', file, file.name));
 
-  let response: Response;
-
   try {
-    response = await fetch(`${getAiEngineBaseUrl()}/agents/proposal-comparison/analyze`, {
-      method: 'POST',
-      body: formData,
-    });
+    return await runAiAgent<ProposalComparisonResult>(formData);
   } catch (error) {
     throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));
   }
-
-  if (!response.ok) {
-    let message = 'No se pudo analizar las propuestas.';
-
-    try {
-      const data = (await response.json()) as { detail?: unknown; message?: unknown };
-      if (typeof data.detail === 'string') {
-        message = data.detail;
-      } else if (Array.isArray(data.detail)) {
-        message = data.detail
-          .map((item) =>
-            typeof item === 'object' && item && 'msg' in item
-              ? String((item as { msg: unknown }).msg)
-              : String(item),
-          )
-          .join(', ');
-      } else if (typeof data.message === 'string') {
-        message = data.message;
-      }
-    } catch {
-      message = response.statusText || message;
-    }
-
-    throw new Error(getFriendlyErrorMessage(message));
-  }
-
-  return response.json() as Promise<ProposalComparisonResult>;
 }

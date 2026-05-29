@@ -200,7 +200,7 @@ function getRuntimeApiBaseUrl() {
   return API_BASE_URL;
 }
 
-function buildUrl(path: string) {
+export function getApiUrl(path: string) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${getRuntimeApiBaseUrl()}${normalizedPath}`;
 }
@@ -343,7 +343,7 @@ async function tryFallbackFetch(path: string, options: RequestInit) {
   return null;
 }
 
-async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
+export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
 
@@ -368,7 +368,7 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
   let response: Response;
 
   try {
-    response = await performFetch(buildUrl(path), requestOptions);
+    response = await performFetch(getApiUrl(path), requestOptions);
   } catch (primaryError) {
     const fallbackResponse = await tryFallbackFetch(path, requestOptions);
     if (!fallbackResponse) {

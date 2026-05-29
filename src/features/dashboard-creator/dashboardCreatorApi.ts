@@ -1,3 +1,5 @@
+import { openAiAgentXhr, readAgentRunXhrResponse } from '@/lib/agentRunApi';
+
 export type DashboardKpi = {
   title: string;
   value: string;
@@ -135,15 +137,10 @@ export type GenerateDashboardPayload = {
   onProgress?: (event: { stage: 'uploading_files' | 'reading_files'; uploadPercent?: number }) => void;
 };
 
-const DEFAULT_AI_ENGINE_URL = '/ai-engine';
-
-function getAiEngineBaseUrl() {
-  const configuredUrl = import.meta.env.VITE_AI_ENGINE_URL?.trim();
-  return (configuredUrl || DEFAULT_AI_ENGINE_URL).replace(/\/$/, '');
-}
-
 export async function generateDashboard(payload: GenerateDashboardPayload): Promise<DashboardResult> {
   const formData = new FormData();
+  formData.append('agentId', 'dashboard_creator');
+  formData.append('operation', 'generate');
   formData.append('title', (payload.dashboardName || payload.title).trim());
   formData.append('objective', (payload.objectiveInstructions || payload.objective).trim());
   formData.append('use_llm_insights', String(payload.useLlmInsights ?? false));
@@ -158,9 +155,7 @@ export async function generateDashboard(payload: GenerateDashboardPayload): Prom
   payload.onProgress?.({ stage: 'uploading_files', uploadPercent: 0 });
 
   return new Promise<DashboardResult>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open('POST', `${getAiEngineBaseUrl()}/agents/dashboard-creator/generate`);
-    request.responseType = 'text';
+    const request = openAiAgentXhr();
 
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable) {
@@ -205,9 +200,9 @@ export async function generateDashboard(payload: GenerateDashboardPayload): Prom
       }
 
       try {
-        resolve(JSON.parse(responseText) as DashboardResult);
-      } catch {
-        reject(new Error('No se pudo leer el resultado del dashboard.'));
+        resolve(readAgentRunXhrResponse<DashboardResult>(responseText));
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error('No se pudo leer el resultado del dashboard.'));
       }
     };
 

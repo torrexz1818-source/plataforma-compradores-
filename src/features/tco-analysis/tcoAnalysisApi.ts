@@ -1,3 +1,5 @@
+import { runAiAgent } from '@/lib/agentRunApi';
+
 export type TcoAlternativeInput = {
   supplier_name: string;
   origin_country?: string;
@@ -194,13 +196,6 @@ export type AnalyzeTcoPayload = {
   files: File[];
 };
 
-const DEFAULT_AI_ENGINE_URL = '/ai-engine';
-
-function getAiEngineBaseUrl() {
-  const configuredUrl = import.meta.env.VITE_AI_ENGINE_URL?.trim();
-  return (configuredUrl || DEFAULT_AI_ENGINE_URL).replace(/\/$/, '');
-}
-
 function getFriendlyErrorMessage(message: string) {
   if (message.toLowerCase().includes('failed to fetch')) {
     return 'No se pudo conectar con el AI Engine.';
@@ -209,28 +204,10 @@ function getFriendlyErrorMessage(message: string) {
   return message || 'No se pudo generar el análisis TCO.';
 }
 
-async function readError(response: Response, fallback: string) {
-  try {
-    const data = (await response.json()) as { detail?: unknown; message?: unknown };
-    if (typeof data.detail === 'string') return data.detail;
-    if (Array.isArray(data.detail)) {
-      return data.detail
-        .map((item) =>
-          typeof item === 'object' && item && 'msg' in item
-            ? String((item as { msg: unknown }).msg)
-            : String(item),
-        )
-        .join(', ');
-    }
-    if (typeof data.message === 'string') return data.message;
-  } catch {
-    return response.statusText || fallback;
-  }
-  return fallback;
-}
-
 export async function analyzeTco(payload: AnalyzeTcoPayload): Promise<TcoAnalysisResult> {
   const formData = new FormData();
+  formData.append('agentId', 'tco_analysis');
+  formData.append('operation', 'analyze');
   formData.append('title', payload.title);
   formData.append('item_name', payload.itemName);
   formData.append('analysis_type', payload.analysisType);
@@ -250,19 +227,9 @@ export async function analyzeTco(payload: AnalyzeTcoPayload): Promise<TcoAnalysi
 
   payload.files.forEach((file) => formData.append('files', file, file.name));
 
-  let response: Response;
   try {
-    response = await fetch(`${getAiEngineBaseUrl()}/agents/tco-analysis/analyze`, {
-      method: 'POST',
-      body: formData,
-    });
+    return await runAiAgent<TcoAnalysisResult>(formData);
   } catch (error) {
     throw new Error(getFriendlyErrorMessage(error instanceof Error ? error.message : ''));
   }
-
-  if (!response.ok) {
-    throw new Error(getFriendlyErrorMessage(await readError(response, 'No se pudo generar el análisis TCO.')));
-  }
-
-  return response.json() as Promise<TcoAnalysisResult>;
 }

@@ -36,13 +36,17 @@ JWT_SECRET=dev-buyernodus-secret
 HOST=0.0.0.0
 PORT=10000
 CORS_ORIGINS=https://buyernodus.com,https://www.buyernodus.com
+AI_ENGINE_URL=https://ai.buyernodus.com
+AI_PROVIDER=openai
+AI_AGENT_TIMEOUT_MS=120000
+AI_HEALTH_TIMEOUT_MS=10000
+AI_DEEP_HEALTH_ENABLED=false
 ```
 
 ### Frontend
 
 ```env
 VITE_API_URL=https://api.buyernodus.com
-VITE_AI_ENGINE_URL=https://ai.buyernodus.com
 ```
 
 ### Recuperacion De Contrasena
@@ -122,7 +126,22 @@ npm install
 Inicia el backend:
 
 ```bash
+copy backend\.env.example backend\.env
+# Edita backend\.env y configura MONGODB_URI con una URI valida de MongoDB.
+# Para probar Nodus IA local, configura AI_ENGINE_URL=http://127.0.0.1:8000 o la URL real del AI Engine.
 npm run dev:backend
+```
+
+Inicia el AI Engine si vas a ejecutar agentes localmente:
+
+```bash
+cd ai-engine
+copy .env.example .env
+# Edita ai-engine\.env y configura OPENAI_API_KEY solo en tu entorno local.
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 En otra terminal, inicia el frontend:
@@ -135,6 +154,7 @@ Abre:
 
 - Frontend: `http://localhost:5173`
 - Backend: `http://127.0.0.1:10000/health`
+- Health Nodus IA: `http://127.0.0.1:10000/api/ai/health`
 
 Localmente el frontend usa `VITE_API_URL=/api` desde `.env.development`, y Vite hace proxy al backend en `127.0.0.1:10000`. Produccion usa `.env.production` con `https://api.buyernodus.com`.
 

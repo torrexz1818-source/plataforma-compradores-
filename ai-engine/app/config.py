@@ -12,6 +12,9 @@ load_dotenv(BASE_DIR / ".env", encoding="utf-8-sig")
 class Settings(BaseModel):
     openai_api_key: str = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     openai_model: str = Field(default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4.1-mini"))
+    health_deep_timeout_seconds: float = Field(
+        default_factory=lambda: float(os.getenv("HEALTH_DEEP_TIMEOUT_SECONDS", "8"))
+    )
     max_files_per_analysis: int = Field(
         default_factory=lambda: int(os.getenv("MAX_FILES_PER_ANALYSIS", "5"))
     )

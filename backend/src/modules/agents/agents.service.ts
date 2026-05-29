@@ -141,6 +141,36 @@ type ModuleActivationSettingsRecord = {
   updatedAt: Date;
 };
 
+type UploadedAgentFile = {
+  fieldname: string;
+  originalname: string;
+  buffer: Buffer;
+  mimetype: string;
+  size: number;
+};
+
+type AgentRunFailureStage =
+  | 'frontend_to_backend'
+  | 'backend_to_ai_engine'
+  | 'ai_provider_response'
+  | 'timeout';
+
+type AiErrorCode =
+  | 'AI_ENGINE_NOT_CONFIGURED'
+  | 'AI_ENGINE_INVALID_URL'
+  | 'AI_ENGINE_UNREACHABLE'
+  | 'AI_ENGINE_TIMEOUT'
+  | 'AI_PROVIDER_ERROR'
+  | 'AUTH_REQUIRED'
+  | 'VALIDATION_ERROR'
+  | 'UNKNOWN_AGENT_ERROR';
+
+type AiEngineEndpointConfig = {
+  path: string;
+  mode: 'json' | 'multipart';
+  provider: string;
+};
+
 const TOKEN_PRICING = {
   inputPerMillion: Number(process.env.AI_INPUT_TOKEN_USD_PER_MILLION ?? 0.15),
   outputPerMillion: Number(process.env.AI_OUTPUT_TOKEN_USD_PER_MILLION ?? 0.6),
@@ -181,6 +211,37 @@ const NODUS_IA_ALLOWED_ROLES = new Set<string>([
   UserRole.EXPERT,
   UserRole.ADMIN,
 ]);
+
+const AI_ENGINE_UNAVAILABLE_MESSAGE =
+  'No se pudo conectar con el motor de IA. Intenta nuevamente en unos minutos.';
+
+const AI_ENGINE_ENDPOINTS: Record<string, AiEngineEndpointConfig> = {
+  'proposal_comparison:analyze': {
+    path: '/agents/proposal-comparison/analyze',
+    mode: 'multipart',
+    provider: 'openai',
+  },
+  'terms_of_reference:form_schema': {
+    path: '/agents/terms-of-reference/form-schema',
+    mode: 'json',
+    provider: 'openai',
+  },
+  'terms_of_reference:generate': {
+    path: '/agents/terms-of-reference/generate',
+    mode: 'multipart',
+    provider: 'openai',
+  },
+  'tco_analysis:analyze': {
+    path: '/agents/tco-analysis/analyze',
+    mode: 'multipart',
+    provider: 'openai',
+  },
+  'dashboard_creator:generate': {
+    path: '/agents/dashboard-creator/generate',
+    mode: 'multipart',
+    provider: 'openai',
+  },
+};
 
 @Injectable()
 export class AgentsService {
@@ -627,7 +688,16 @@ export class AgentsService {
     return this.updateAgentStatus(agentId, 'active');
   }
 
-  async runAgent(input: { agentId: string; userId: string; userRole?: string; inputData: Record<string, unknown> }) {
+  async runAgent(input: {
+    agentId: string;
+    userId: string;
+    userRole?: string;
+    inputData: Record<string, unknown>;
+    aiOperation?: string;
+    formFields?: Record<string, unknown>;
+    files?: UploadedAgentFile[];
+    requestMeta?: { traceId?: string; country?: string };
+  }) {
     await this.ensureAgentCatalog();
     const [agent, user] = await Promise.all([this.findAgent(input.agentId), this.usersService.requireActiveUser(input.userId)]);
 
@@ -637,6 +707,10 @@ export class AgentsService {
     }
     if (agent.status !== 'active' && user.role !== UserRole.ADMIN) {
       throw new ForbiddenException(agent.status === 'coming_soon' ? 'Este agente estara disponible proximamente' : 'Este agente no esta disponible');
+    }
+
+    if (input.aiOperation?.trim()) {
+      return this.runAiEngineAgent({ ...input, agent, userName: user.fullName, userRole: user.role });
     }
 
     const startedAt = Date.now();
@@ -688,6 +762,751 @@ export class AgentsService {
         executedAt: execution.executedAt.toISOString(),
       },
     };
+  }
+
+  async getAiHealth(requestMeta?: { traceId?: string; country?: string }) {
+    const traceId = requestMeta?.traceId || randomUUID();
+    const aiEngineBaseUrl = this.getAiEngineBaseUrl();
+    const provider = this.getPrimaryProvider();
+    const timeoutMs = this.getAiHealthTimeoutMs();
+    const startedAt = Date.now();
+    const checkedUrlHost = this.getUrlHost(aiEngineBaseUrl);
+
+    if (!aiEngineBaseUrl) {
+      this.logAiEvent({
+        endpoint: '/ai/health',
+        traceId,
+        country: requestMeta?.country,
+        provider,
+        stage: 'backend_to_ai_engine',
+        statusCode: 503,
+        latencyMs: Date.now() - startedAt,
+        message: 'AI_ENGINE_URL is not configured',
+        errorCode: 'AI_ENGINE_NOT_CONFIGURED',
+      });
+
+      return this.buildAiHealthResponse({
+        ok: false,
+        aiEngineConfigured: false,
+        aiEngineReachable: false,
+        provider,
+        timeoutMs,
+        checkedUrlHost,
+        errorCode: 'AI_ENGINE_NOT_CONFIGURED',
+        message: 'AI_ENGINE_URL no esta configurado en el backend.',
+        traceId,
+      });
+    }
+
+    if (!this.isValidProductionAiEngineUrl(aiEngineBaseUrl)) {
+      this.logAiEvent({
+        endpoint: '/ai/health',
+        traceId,
+        country: requestMeta?.country,
+        provider,
+        stage: 'backend_to_ai_engine',
+        statusCode: 503,
+        latencyMs: Date.now() - startedAt,
+        message: `Invalid AI_ENGINE_URL host: ${checkedUrlHost || 'unknown'}`,
+        errorCode: 'AI_ENGINE_INVALID_URL',
+      });
+
+      return this.buildAiHealthResponse({
+        ok: false,
+        aiEngineConfigured: false,
+        aiEngineReachable: false,
+        provider,
+        timeoutMs,
+        checkedUrlHost,
+        errorCode: 'AI_ENGINE_INVALID_URL',
+        message: 'AI_ENGINE_URL debe ser una URL absoluta https/http accesible desde el backend.',
+        traceId,
+      });
+    }
+
+    const healthUrl = `${aiEngineBaseUrl}/health`;
+
+    try {
+      const response = await this.fetchWithTimeout(healthUrl, { method: 'GET' }, timeoutMs);
+      this.logAiEvent({
+        endpoint: '/ai/health',
+        traceId,
+        country: requestMeta?.country,
+        provider,
+        stage: 'ai_provider_response',
+        statusCode: response.status,
+        latencyMs: Date.now() - startedAt,
+        errorCode: response.ok ? null : 'AI_ENGINE_UNREACHABLE',
+      });
+
+      return this.buildAiHealthResponse({
+        ok: response.ok,
+        aiEngineConfigured: true,
+        aiEngineReachable: response.ok,
+        provider,
+        timeoutMs,
+        checkedUrlHost,
+        errorCode: response.ok ? null : 'AI_ENGINE_UNREACHABLE',
+        message: response.ok
+          ? 'Backend y AI Engine responden correctamente.'
+          : `AI Engine respondio con status ${response.status}.`,
+        traceId,
+      });
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.name === 'AbortError';
+      const errorCode: AiErrorCode = isTimeout ? 'AI_ENGINE_TIMEOUT' : 'AI_ENGINE_UNREACHABLE';
+      this.logAiEvent({
+        endpoint: '/ai/health',
+        traceId,
+        country: requestMeta?.country,
+        provider,
+        stage: isTimeout ? 'timeout' : 'backend_to_ai_engine',
+        statusCode: 503,
+        latencyMs: Date.now() - startedAt,
+        message: error instanceof Error ? error.message : String(error),
+        errorCode,
+      });
+
+      return this.buildAiHealthResponse({
+        ok: false,
+        aiEngineConfigured: true,
+        aiEngineReachable: false,
+        provider,
+        timeoutMs,
+        checkedUrlHost,
+        errorCode,
+        message: isTimeout
+          ? 'Timeout al consultar el AI Engine desde el backend.'
+          : 'El backend no pudo alcanzar el AI Engine.',
+        traceId,
+      });
+    }
+  }
+
+  async getAiDeepHealth(requestMeta?: { traceId?: string; country?: string }) {
+    const traceId = requestMeta?.traceId || randomUUID();
+    const provider = this.getPrimaryProvider();
+    const timeoutMs = this.getAiHealthTimeoutMs();
+    const aiEngineBaseUrl = this.getAiEngineBaseUrl();
+    const checkedUrlHost = this.getUrlHost(aiEngineBaseUrl);
+
+    if (process.env.AI_DEEP_HEALTH_ENABLED?.toLowerCase() !== 'true') {
+      return {
+        ...this.buildAiHealthResponse({
+          ok: false,
+          aiEngineConfigured: Boolean(aiEngineBaseUrl),
+          aiEngineReachable: false,
+          provider,
+          timeoutMs,
+          checkedUrlHost,
+          errorCode: 'VALIDATION_ERROR',
+          message: 'Health profundo deshabilitado. Activa AI_DEEP_HEALTH_ENABLED=true para ejecutarlo.',
+          traceId,
+        }),
+        deep: { enabled: false },
+      };
+    }
+
+    const baseHealth = await this.getAiHealth({ traceId, country: requestMeta?.country });
+    if (!baseHealth.ok || !aiEngineBaseUrl) {
+      return {
+        ...baseHealth,
+        deep: { enabled: true, providerReachable: false },
+      };
+    }
+
+    const startedAt = Date.now();
+    try {
+      const response = await this.fetchWithTimeout(`${aiEngineBaseUrl}/health/deep`, { method: 'GET' }, timeoutMs);
+      const body = this.parseAiEngineResponse(await response.text());
+      const providerReachable = response.ok && body.provider_reachable !== false;
+      const errorCode: AiErrorCode | null = providerReachable ? null : 'AI_PROVIDER_ERROR';
+
+      this.logAiEvent({
+        endpoint: '/api/ai/health/deep',
+        traceId,
+        country: requestMeta?.country,
+        provider,
+        stage: 'ai_provider_response',
+        statusCode: response.status,
+        latencyMs: Date.now() - startedAt,
+        errorCode,
+        message: typeof body.message === 'string' ? body.message : undefined,
+      });
+
+      return {
+        ...this.buildAiHealthResponse({
+          ok: providerReachable,
+          aiEngineConfigured: true,
+          aiEngineReachable: response.ok,
+          provider,
+          timeoutMs,
+          checkedUrlHost,
+          errorCode,
+          message: providerReachable
+            ? 'Backend, AI Engine y proveedor IA responden correctamente.'
+            : 'El AI Engine responde, pero el proveedor IA no esta disponible.',
+          traceId,
+        }),
+        deep: {
+          enabled: true,
+          providerReachable,
+          statusCode: response.status,
+        },
+      };
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.name === 'AbortError';
+      const errorCode: AiErrorCode = isTimeout ? 'AI_ENGINE_TIMEOUT' : 'AI_PROVIDER_ERROR';
+
+      this.logAiEvent({
+        endpoint: '/api/ai/health/deep',
+        traceId,
+        country: requestMeta?.country,
+        provider,
+        stage: isTimeout ? 'timeout' : 'ai_provider_response',
+        statusCode: 503,
+        latencyMs: Date.now() - startedAt,
+        errorCode,
+        message: error instanceof Error ? error.message : String(error),
+      });
+
+      return {
+        ...this.buildAiHealthResponse({
+          ok: false,
+          aiEngineConfigured: true,
+          aiEngineReachable: !isTimeout,
+          provider,
+          timeoutMs,
+          checkedUrlHost,
+          errorCode,
+          message: isTimeout
+            ? 'Timeout durante el health profundo.'
+            : 'No se pudo completar el health profundo del proveedor IA.',
+          traceId,
+        }),
+        deep: {
+          enabled: true,
+          providerReachable: false,
+        },
+      };
+    }
+  }
+
+  private async runAiEngineAgent(input: {
+    agentId: string;
+    userId: string;
+    userRole?: string;
+    inputData: Record<string, unknown>;
+    aiOperation?: string;
+    formFields?: Record<string, unknown>;
+    files?: UploadedAgentFile[];
+    requestMeta?: { traceId?: string; country?: string };
+    agent: AgentRecord;
+    userName: string;
+  }) {
+    const traceId = input.requestMeta?.traceId || randomUUID();
+    const startedAt = Date.now();
+    const agentKey = input.agent.agentKey;
+    const operation = input.aiOperation?.trim() || 'run';
+    const endpointConfig = AI_ENGINE_ENDPOINTS[`${agentKey}:${operation}`];
+    const provider = endpointConfig?.provider ?? this.getPrimaryProvider();
+
+    if (!endpointConfig) {
+      return this.buildFailedAiExecution({
+        input,
+        traceId,
+        provider,
+        startedAt,
+        stage: 'frontend_to_backend',
+        statusCode: 400,
+        errorCode: 'UNKNOWN_AGENT_ERROR',
+        message: 'Operacion de agente no soportada.',
+      });
+    }
+
+    this.logAiEvent({
+      endpoint: '/agents/run',
+      traceId,
+      country: input.requestMeta?.country,
+      provider,
+      stage: 'frontend_to_backend',
+      statusCode: 202,
+      agentKey,
+      operation,
+    });
+
+    const aiEngineBaseUrl = this.getAiEngineBaseUrl();
+    if (!aiEngineBaseUrl) {
+      return this.buildFailedAiExecution({
+        input,
+        traceId,
+        provider,
+        startedAt,
+        stage: 'backend_to_ai_engine',
+        statusCode: 503,
+        errorCode: 'AI_ENGINE_NOT_CONFIGURED',
+        message: AI_ENGINE_UNAVAILABLE_MESSAGE,
+        diagnosticMessage: 'AI_ENGINE_URL is not configured',
+      });
+    }
+
+    if (!this.isValidProductionAiEngineUrl(aiEngineBaseUrl)) {
+      return this.buildFailedAiExecution({
+        input,
+        traceId,
+        provider,
+        startedAt,
+        stage: 'backend_to_ai_engine',
+        statusCode: 503,
+        errorCode: 'AI_ENGINE_INVALID_URL',
+        message: AI_ENGINE_UNAVAILABLE_MESSAGE,
+        diagnosticMessage: `Invalid AI_ENGINE_URL host: ${this.getUrlHost(aiEngineBaseUrl) || 'unknown'}`,
+      });
+    }
+
+    const aiEngineUrl = `${aiEngineBaseUrl}${endpointConfig.path}`;
+
+    try {
+      const response = await this.fetchWithTimeout(
+        aiEngineUrl,
+        this.buildAiEngineRequest(endpointConfig, input.formFields ?? {}, input.files ?? []),
+        this.getAgentTimeoutMs(agentKey),
+      );
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        const message = this.extractAiEngineErrorMessage(responseText) || AI_ENGINE_UNAVAILABLE_MESSAGE;
+        return this.buildFailedAiExecution({
+          input,
+          traceId,
+          provider,
+          startedAt,
+          stage: 'ai_provider_response',
+          statusCode: response.status,
+          errorCode: response.status >= 500 ? 'AI_PROVIDER_ERROR' : 'AI_ENGINE_UNREACHABLE',
+          message: response.status >= 500 ? AI_ENGINE_UNAVAILABLE_MESSAGE : message,
+          diagnosticMessage: message,
+        });
+      }
+
+      const outputData = this.parseAiEngineResponse(responseText);
+      const execution = await this.persistAiExecution({
+        input,
+        traceId,
+        outputData,
+        provider,
+        modelName: this.extractModelName(outputData),
+        status: 'completed',
+        startedAt,
+      });
+
+      this.logAiEvent({
+        endpoint: endpointConfig.path,
+        traceId,
+        country: input.requestMeta?.country,
+        provider,
+        stage: 'ai_provider_response',
+        statusCode: response.status,
+        latencyMs: Date.now() - startedAt,
+        agentKey,
+        operation,
+      });
+
+      return {
+        ok: true,
+        errorCode: null,
+        message: 'Agente ejecutado correctamente.',
+        traceId,
+        execution,
+      };
+    } catch (error) {
+      const isTimeout = error instanceof Error && error.name === 'AbortError';
+      return this.buildFailedAiExecution({
+        input,
+        traceId,
+        provider,
+        startedAt,
+        stage: isTimeout ? 'timeout' : 'backend_to_ai_engine',
+        statusCode: 503,
+        errorCode: isTimeout ? 'AI_ENGINE_TIMEOUT' : 'AI_ENGINE_UNREACHABLE',
+        message: AI_ENGINE_UNAVAILABLE_MESSAGE,
+        diagnosticMessage: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private buildAiEngineRequest(
+    endpointConfig: AiEngineEndpointConfig,
+    fields: Record<string, unknown>,
+    files: UploadedAgentFile[],
+  ): RequestInit {
+    if (endpointConfig.mode === 'json') {
+      return {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.buildAiEngineJsonBody(fields)),
+      };
+    }
+
+    const formData = new FormData();
+    Object.entries(fields).forEach(([key, value]) => {
+      if (key === 'agentId' || key === 'operation' || key === 'inputData' || typeof value === 'undefined') return;
+      if (Array.isArray(value)) {
+        value.forEach((item) => formData.append(key, String(item)));
+        return;
+      }
+      formData.append(key, typeof value === 'string' ? value : JSON.stringify(value));
+    });
+
+    files.forEach((file) => {
+      const blob = new Blob([file.buffer as unknown as BlobPart], {
+        type: file.mimetype || 'application/octet-stream',
+      });
+      formData.append(file.fieldname || 'files', blob, file.originalname || 'archivo');
+    });
+
+    return {
+      method: 'POST',
+      body: formData,
+    };
+  }
+
+  private buildAiEngineJsonBody(fields: Record<string, unknown>) {
+    const inputData = fields.inputData;
+    if (inputData && typeof inputData === 'object' && !Array.isArray(inputData)) {
+      return inputData;
+    }
+
+    if (typeof fields.initial_description === 'string') {
+      return { initial_description: fields.initial_description };
+    }
+
+    return fields;
+  }
+
+  private async buildFailedAiExecution(input: {
+    input: {
+      agentId: string;
+      userId: string;
+      userRole?: string;
+      inputData: Record<string, unknown>;
+      formFields?: Record<string, unknown>;
+      requestMeta?: { traceId?: string; country?: string };
+      agent: AgentRecord;
+    };
+    traceId: string;
+    provider: string;
+    startedAt: number;
+    stage: AgentRunFailureStage;
+    statusCode: number;
+    errorCode: AiErrorCode;
+    message: string;
+    diagnosticMessage?: string;
+  }) {
+    const outputData = {
+      ok: false,
+      errorCode: input.errorCode,
+      message: input.message || AI_ENGINE_UNAVAILABLE_MESSAGE,
+      execution: null,
+      traceId: input.traceId,
+    };
+    const execution = await this.persistAiExecution({
+      input: input.input,
+      traceId: input.traceId,
+      outputData,
+      provider: input.provider,
+      modelName: 'unavailable',
+      status: 'failed',
+      errorMessage: input.message,
+      startedAt: input.startedAt,
+    });
+
+    this.logAiEvent({
+      endpoint: '/agents/run',
+      traceId: input.traceId,
+      country: input.input.requestMeta?.country,
+      provider: input.provider,
+      stage: input.stage,
+      statusCode: input.statusCode,
+      latencyMs: Date.now() - input.startedAt,
+      agentKey: input.input.agent.agentKey,
+      errorCode: input.errorCode,
+      message: input.diagnosticMessage ?? input.message,
+    });
+
+    return {
+      ok: false,
+      errorCode: input.errorCode,
+      message: input.message || AI_ENGINE_UNAVAILABLE_MESSAGE,
+      traceId: input.traceId,
+      execution,
+    };
+  }
+
+  private async persistAiExecution(input: {
+    input: {
+      agentId: string;
+      userId: string;
+      userRole?: string;
+      inputData: Record<string, unknown>;
+      formFields?: Record<string, unknown>;
+      files?: UploadedAgentFile[];
+      agent: AgentRecord;
+    };
+    traceId: string;
+    outputData: Record<string, unknown>;
+    provider: string;
+    modelName?: string;
+    status: 'completed' | 'failed';
+    errorMessage?: string;
+    startedAt: number;
+  }) {
+    const agent = input.input.agent;
+    const inputData = this.buildStoredAiInput(input.input.inputData, input.input.formFields ?? {});
+    const tokenStats = this.normalizeTokenUsage({ inputData, outputData: input.outputData });
+    const now = new Date();
+    const execution: AgentExecutionRecord = {
+      id: randomUUID(),
+      agentRunId: input.traceId,
+      agentId: agent.id,
+      agentKey: agent.agentKey,
+      agentName: agent.name,
+      userId: input.input.userId,
+      userRole: input.input.userRole ?? 'buyer',
+      inputData,
+      inputSummary: this.summarizeInput(inputData),
+      inputPayloadJson: inputData,
+      outputData: input.outputData,
+      outputJson: input.outputData,
+      outputText: String(input.outputData.summary ?? input.outputData.executive_summary ?? input.outputData.message ?? ''),
+      status: input.status,
+      errorMessage: input.errorMessage,
+      operationName: 'Ejecucion de agente IA',
+      modelProvider: input.provider,
+      modelName: input.modelName ?? 'No especificado',
+      model: input.modelName ?? 'No especificado',
+      ...tokenStats,
+      latencyMs: Date.now() - input.startedAt,
+      fileCount: input.input.files?.length ?? 0,
+      fileTypesJson: input.input.files?.map((file) => file.mimetype) ?? [],
+      approxTotalFileSize: input.input.files?.reduce((total, file) => total + file.size, 0) ?? 0,
+      pdfGenerated: false,
+      executedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    await this.executionsCollection().insertOne(execution);
+    return {
+      id: execution.id,
+      agentRunId: execution.agentRunId,
+      agentId: execution.agentKey,
+      userId: execution.userId,
+      agentName: agent.name,
+      inputData: execution.inputData,
+      outputData: execution.outputData,
+      totalTokens: execution.totalTokens,
+      costAmount: execution.costAmount,
+      pdfGenerated: execution.pdfGenerated,
+      executedAt: execution.executedAt.toISOString(),
+    };
+  }
+
+  private getAiEngineBaseUrl() {
+    const configuredUrl =
+      process.env.AI_ENGINE_URL?.trim() ||
+      process.env.BUYER_NODUS_AI_ENGINE_URL?.trim() ||
+      (process.env.NODE_ENV === 'production' ? '' : 'http://127.0.0.1:8000');
+
+    return configuredUrl.replace(/\/$/, '');
+  }
+
+  private buildAiHealthResponse(input: {
+    ok: boolean;
+    aiEngineConfigured: boolean;
+    aiEngineReachable: boolean;
+    provider: string;
+    timeoutMs: number;
+    checkedUrlHost: string;
+    errorCode: AiErrorCode | null;
+    message: string;
+    traceId: string;
+  }) {
+    return {
+      ok: input.ok,
+      backend: 'ok',
+      aiEngineConfigured: input.aiEngineConfigured,
+      aiEngineReachable: input.aiEngineReachable,
+      provider: input.provider,
+      timeoutMs: input.timeoutMs,
+      checkedUrlHost: input.checkedUrlHost,
+      errorCode: input.errorCode,
+      message: input.message,
+      traceId: input.traceId,
+    };
+  }
+
+  private getUrlHost(url: string) {
+    if (!url) return '';
+
+    try {
+      return new URL(url).host;
+    } catch {
+      return '';
+    }
+  }
+
+  private isValidProductionAiEngineUrl(url: string) {
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') return false;
+      if (parsedUrl.pathname && parsedUrl.pathname !== '/') return false;
+      if (parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1') return false;
+      if (parsedUrl.hostname === '0.0.0.0' || parsedUrl.hostname === '::1') return false;
+      if (this.isPrivateIpv4Host(parsedUrl.hostname)) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private isPrivateIpv4Host(hostname: string) {
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) return false;
+    const octets = hostname.split('.').map((part) => Number(part));
+    if (octets.some((octet) => Number.isNaN(octet) || octet < 0 || octet > 255)) return false;
+    return (
+      octets[0] === 10 ||
+      (octets[0] === 169 && octets[1] === 254) ||
+      (octets[0] === 192 && octets[1] === 168) ||
+      (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+    );
+  }
+
+  private getPrimaryProvider() {
+    return process.env.AI_PROVIDER?.trim() || 'openai';
+  }
+
+  private isFallbackProviderConfigured() {
+    const fallbackProvider = process.env.AI_FALLBACK_PROVIDER?.trim();
+    if (!fallbackProvider) return false;
+
+    const credentialByProvider: Record<string, string | undefined> = {
+      openai: process.env.OPENAI_API_KEY,
+      anthropic: process.env.ANTHROPIC_API_KEY,
+      gemini: process.env.GEMINI_API_KEY,
+    };
+
+    return Boolean(credentialByProvider[fallbackProvider]?.trim());
+  }
+
+  private getAgentTimeoutMs(agentKey: string) {
+    const specificTimeout = process.env[`AI_AGENT_TIMEOUT_MS_${agentKey.toUpperCase()}`]?.trim();
+    return Number.parseInt(specificTimeout || process.env.AI_AGENT_TIMEOUT_MS || '', 10) || 120_000;
+  }
+
+  private getAiHealthTimeoutMs() {
+    return Number.parseInt(process.env.AI_HEALTH_TIMEOUT_MS || '', 10) || 10_000;
+  }
+
+  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private parseAiEngineResponse(responseText: string): Record<string, unknown> {
+    if (!responseText.trim()) {
+      return {};
+    }
+
+    try {
+      const parsed = JSON.parse(responseText) as unknown;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : { result: parsed };
+    } catch {
+      return { result: responseText };
+    }
+  }
+
+  private extractAiEngineErrorMessage(responseText: string) {
+    const parsed = this.parseAiEngineResponse(responseText);
+    const detail = parsed.detail;
+    const message = parsed.message;
+
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) =>
+          item && typeof item === 'object' && 'msg' in item
+            ? String((item as { msg: unknown }).msg)
+            : String(item),
+        )
+        .join(', ');
+    }
+    if (typeof message === 'string') return message;
+    return '';
+  }
+
+  private extractModelName(outputData: Record<string, unknown>) {
+    return typeof outputData.model_name === 'string'
+      ? outputData.model_name
+      : process.env.OPENAI_MODEL?.trim() || 'ai-engine';
+  }
+
+  private buildStoredAiInput(inputData: Record<string, unknown>, formFields: Record<string, unknown>) {
+    if (Object.keys(inputData).length) {
+      return inputData;
+    }
+
+    return Object.fromEntries(
+      Object.entries(formFields).filter(([key]) => key !== 'inputData'),
+    );
+  }
+
+  private isEnvPresent(name: string) {
+    return Boolean(process.env[name]?.trim());
+  }
+
+  private logAiEvent(event: {
+    endpoint: string;
+    traceId: string;
+    country?: string;
+    provider: string;
+    stage: AgentRunFailureStage;
+    statusCode: number;
+    latencyMs?: number;
+    agentKey?: string;
+    operation?: string;
+    message?: string;
+    errorCode?: AiErrorCode | null;
+  }) {
+    const payload = {
+      scope: 'nodus_ia',
+      endpoint: event.endpoint,
+      country: event.country || 'unknown',
+      provider: event.provider,
+      stage: event.stage,
+      statusCode: event.statusCode,
+      traceId: event.traceId,
+      latencyMs: event.latencyMs,
+      agentKey: event.agentKey,
+      operation: event.operation,
+      errorCode: event.errorCode,
+      message: event.message,
+    };
+
+    if (event.statusCode >= 400 || event.stage === 'timeout') {
+      console.error(JSON.stringify(payload));
+      return;
+    }
+
+    console.log(JSON.stringify(payload));
   }
 
   async submitFeedback(input: {
