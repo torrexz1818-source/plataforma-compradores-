@@ -37,7 +37,7 @@ HOST=0.0.0.0
 PORT=10000
 CORS_ORIGINS=https://buyernodus.com,https://www.buyernodus.com
 AI_ENGINE_URL=https://ai.buyernodus.com
-AI_PROVIDER=openai
+AI_PROVIDER=anthropic
 AI_AGENT_TIMEOUT_MS=120000
 AI_HEALTH_TIMEOUT_MS=10000
 AI_DEEP_HEALTH_ENABLED=false
@@ -137,7 +137,7 @@ Inicia el AI Engine si vas a ejecutar agentes localmente:
 ```bash
 cd ai-engine
 copy .env.example .env
-# Edita ai-engine\.env y configura OPENAI_API_KEY solo en tu entorno local.
+# Edita ai-engine\.env y configura ANTHROPIC_API_KEY y ANTHROPIC_MODEL solo en tu entorno local.
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt

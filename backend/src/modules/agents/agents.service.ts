@@ -219,27 +219,27 @@ const AI_ENGINE_ENDPOINTS: Record<string, AiEngineEndpointConfig> = {
   'proposal_comparison:analyze': {
     path: '/agents/proposal-comparison/analyze',
     mode: 'multipart',
-    provider: 'openai',
+    provider: 'anthropic',
   },
   'terms_of_reference:form_schema': {
     path: '/agents/terms-of-reference/form-schema',
     mode: 'json',
-    provider: 'openai',
+    provider: 'anthropic',
   },
   'terms_of_reference:generate': {
     path: '/agents/terms-of-reference/generate',
     mode: 'multipart',
-    provider: 'openai',
+    provider: 'anthropic',
   },
   'tco_analysis:analyze': {
     path: '/agents/tco-analysis/analyze',
     mode: 'multipart',
-    provider: 'openai',
+    provider: 'anthropic',
   },
   'dashboard_creator:generate': {
     path: '/agents/dashboard-creator/generate',
     mode: 'multipart',
-    provider: 'openai',
+    provider: 'anthropic',
   },
 };
 
@@ -384,7 +384,7 @@ export class AgentsService {
         agentName: execution.agentName ?? execution.agentId,
         operationName: execution.operationName ?? 'Ejecucion de agente',
         model: execution.modelName ?? execution.model ?? 'No especificado',
-        modelProvider: execution.modelProvider ?? 'openai',
+        modelProvider: execution.modelProvider ?? 'anthropic',
         inputTokens: execution.inputTokens ?? 0,
         outputTokens: execution.outputTokens ?? 0,
         totalTokens: execution.totalTokens ?? 0,
@@ -441,7 +441,7 @@ export class AgentsService {
       outputJson: input.outputData ?? {},
       status: 'completed',
       operationName: input.operationName ?? 'Operacion externa',
-      modelProvider: 'openai',
+      modelProvider: 'anthropic',
       modelName: input.model ?? 'No especificado',
       model: input.model ?? 'No especificado',
       ...tokenStats,
@@ -733,7 +733,7 @@ export class AgentsService {
       outputText: String(outputData.summary ?? ''),
       status: 'completed',
       operationName: 'Ejecucion de agente',
-      modelProvider: 'openai',
+      modelProvider: 'anthropic',
       modelName: 'mock-local',
       model: 'mock-local',
       ...tokenStats,
@@ -1383,20 +1383,11 @@ export class AgentsService {
   }
 
   private getPrimaryProvider() {
-    return process.env.AI_PROVIDER?.trim() || 'openai';
+    return 'anthropic';
   }
 
   private isFallbackProviderConfigured() {
-    const fallbackProvider = process.env.AI_FALLBACK_PROVIDER?.trim();
-    if (!fallbackProvider) return false;
-
-    const credentialByProvider: Record<string, string | undefined> = {
-      openai: process.env.OPENAI_API_KEY,
-      anthropic: process.env.ANTHROPIC_API_KEY,
-      gemini: process.env.GEMINI_API_KEY,
-    };
-
-    return Boolean(credentialByProvider[fallbackProvider]?.trim());
+    return false;
   }
 
   private getAgentTimeoutMs(agentKey: string) {
@@ -1456,7 +1447,7 @@ export class AgentsService {
   private extractModelName(outputData: Record<string, unknown>) {
     return typeof outputData.model_name === 'string'
       ? outputData.model_name
-      : process.env.OPENAI_MODEL?.trim() || 'ai-engine';
+      : process.env.ANTHROPIC_MODEL?.trim() || 'ai-engine';
   }
 
   private buildStoredAiInput(inputData: Record<string, unknown>, formFields: Record<string, unknown>) {

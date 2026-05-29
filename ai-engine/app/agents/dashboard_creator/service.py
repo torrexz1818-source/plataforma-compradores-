@@ -12,7 +12,7 @@ from app.agents.dashboard_creator.insight_generator import build_basic_insights
 from app.agents.dashboard_creator.prompts import SYSTEM_PROMPT, build_insight_prompt, build_planner_prompt
 from app.agents.dashboard_creator.quality_validator import validate_dashboard_request, validate_dashboard_result_payload
 from app.agents.dashboard_creator.schemas import DashboardResult
-from app.ai.llm_client import analyze_with_openai
+from app.ai.llm_client import generate_agent_response
 from app.config import get_settings
 from app.document_processing.file_detector import validate_allowed_file
 from app.utils.google_pubsub_notifier import publish_dashboard_completed_event
@@ -443,8 +443,10 @@ async def generate_dashboard(
 
         if should_use_llm:
             try:
-                planner_result = await analyze_with_openai(
-                    build_planner_prompt(
+                planner_result = await generate_agent_response(
+                    agentType="dashboard_creator_planner",
+                    systemPrompt=SYSTEM_PROMPT,
+                    userPrompt=build_planner_prompt(
                         title=title,
                         objective=objective,
                         audience=audience,
@@ -454,7 +456,8 @@ async def generate_dashboard(
                         additional_context=additional_context,
                         profiled=profiled,
                     ),
-                    SYSTEM_PROMPT,
+                    documentPayload=profiled.get("document_summaries"),
+                    outputContract={"required": ["dashboard_plan"]},
                 )
                 dashboard_plan = _normalize_dashboard_plan(planner_result.get("dashboard_plan"))
                 dashboard_plan, plan_warnings = _validate_dashboard_plan(profiled, dashboard_plan)
@@ -465,8 +468,10 @@ async def generate_dashboard(
                         [{"title": "Validacion de dashboardPlan", "description": warning, "type": "data_quality"} for warning in plan_warnings],
                     )
 
-                llm_result = await analyze_with_openai(
-                    build_insight_prompt(
+                llm_result = await generate_agent_response(
+                    agentType="dashboard_creator_insights",
+                    systemPrompt=SYSTEM_PROMPT,
+                    userPrompt=build_insight_prompt(
                         title=title,
                         objective=objective,
                         audience=audience,
@@ -476,8 +481,31 @@ async def generate_dashboard(
                         additional_context=additional_context,
                         profiled=profiled,
                     ),
-                    SYSTEM_PROMPT,
+                    documentPayload=profiled.get("document_summaries"),
+                    outputContract={
+                        "required": [
+                            "executive_summary",
+                            "kpis",
+                            "charts",
+                            "tables",
+                            "insights",
+                            "recommendations",
+                            "missing_information",
+                        ],
+                        "quality": [
+                            "executiveSummary",
+                            "findings",
+                            "risks",
+                            "missingCriticalData",
+                            "evidenceReferences",
+                            "downloadReadiness",
+                            "qualityWarnings",
+                        ],
+                    },
                 )
+                llm_result.pop("_usage", None)
+                llm_result.pop("_model", None)
+                llm_result.pop("_warnings", None)
                 executive_summary = str(llm_result.get("executive_summary") or executive_summary)
                 if not dashboard_plan:
                     dashboard_plan = _normalize_dashboard_plan(llm_result.get("dashboard_plan"))
@@ -557,8 +585,8 @@ async def generate_dashboard(
             findings=findings,
             missing_data_items=_missing_data_items(profiled, missing_information, dashboard_plan),
             llm_used=llm_used,
-            model_provider="OpenAI" if llm_used else None,
-            model_name=settings.openai_model if llm_used else None,
+            model_provider="anthropic" if llm_used else None,
+            model_name=settings.anthropic_model if llm_used else None,
             latency_ms=int((time.perf_counter() - started_at) * 1000),
         )
         result = validate_dashboard_result_payload(result)

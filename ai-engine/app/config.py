@@ -10,8 +10,21 @@ load_dotenv(BASE_DIR / ".env", encoding="utf-8-sig")
 
 
 class Settings(BaseModel):
-    openai_api_key: str = Field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
-    openai_model: str = Field(default_factory=lambda: os.getenv("OPENAI_MODEL", "gpt-4.1-mini"))
+    ai_provider: str = Field(default_factory=lambda: os.getenv("AI_PROVIDER", "anthropic").strip().lower())
+    anthropic_api_key: str = Field(default_factory=lambda: os.getenv("ANTHROPIC_API_KEY", "").strip())
+    anthropic_model: str = Field(default_factory=lambda: os.getenv("ANTHROPIC_MODEL", "").strip())
+    anthropic_max_tokens: int = Field(
+        default_factory=lambda: int(os.getenv("ANTHROPIC_MAX_TOKENS", "8192"))
+    )
+    anthropic_temperature: float = Field(
+        default_factory=lambda: float(os.getenv("ANTHROPIC_TEMPERATURE", "0.2"))
+    )
+    anthropic_timeout_seconds: float = Field(
+        default_factory=lambda: float(os.getenv("ANTHROPIC_TIMEOUT_SECONDS", "120"))
+    )
+    anthropic_max_retries: int = Field(
+        default_factory=lambda: int(os.getenv("ANTHROPIC_MAX_RETRIES", "2"))
+    )
     health_deep_timeout_seconds: float = Field(
         default_factory=lambda: float(os.getenv("HEALTH_DEEP_TIMEOUT_SECONDS", "8"))
     )

@@ -28,7 +28,7 @@ export async function runAiAgent<T>(formData: FormData): Promise<T> {
   return response.execution.outputData;
 }
 
-export function openAiAgentXhr() {
+export function aiAgentXhr() {
   const request = new XMLHttpRequest();
   request.open('POST', getApiUrl('/agents/run'));
   request.setRequestHeader('Accept', 'application/json');

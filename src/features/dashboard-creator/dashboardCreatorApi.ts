@@ -1,4 +1,4 @@
-import { openAiAgentXhr, readAgentRunXhrResponse } from '@/lib/agentRunApi';
+import { aiAgentXhr, readAgentRunXhrResponse } from '@/lib/agentRunApi';
 
 export type DashboardKpi = {
   title: string;
@@ -157,7 +157,7 @@ export async function generateDashboard(payload: GenerateDashboardPayload): Prom
   payload.onProgress?.({ stage: 'uploading_files', uploadPercent: 0 });
 
   return new Promise<DashboardResult>((resolve, reject) => {
-    const request = openAiAgentXhr();
+    const request = aiAgentXhr();
 
     request.upload.onprogress = (event) => {
       if (!event.lengthComputable) {

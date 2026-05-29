@@ -2,10 +2,10 @@ from pathlib import Path
 
 from fastapi import HTTPException, UploadFile
 
-from app.agents.proposal_comparison.prompts import build_user_prompt
+from app.agents.proposal_comparison.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.agents.proposal_comparison.schemas import ExtractedDocument, ProposalComparisonResult
 from app.agents.proposal_comparison.scoring import normalize_ranking
-from app.ai.llm_client import analyze_with_openai
+from app.ai.llm_client import generate_agent_response
 from app.config import get_settings
 from app.document_processing.file_detector import detect_file_type, validate_allowed_file
 from app.document_processing.structured_document import build_public_document_warning, build_structured_document_payload, evidence_text
@@ -100,7 +100,37 @@ async def analyze_proposals(
         ]
 
         prompt = build_user_prompt(title, service, objective, criteria, documents_for_prompt)
-        raw_result = await analyze_with_openai(prompt)
+        raw_result = await generate_agent_response(
+            agentType="proposal_comparison",
+            systemPrompt=SYSTEM_PROMPT,
+            userPrompt=prompt,
+            documentPayload=documents_for_prompt,
+            outputContract={
+                "required": [
+                    "analysis_title",
+                    "suppliers",
+                    "evaluation_matrix",
+                    "ranking",
+                    "recommendation",
+                    "risks",
+                    "missing_information",
+                ],
+                "quality": [
+                    "executiveSummary",
+                    "findings",
+                    "tables",
+                    "recommendations",
+                    "risks",
+                    "missingCriticalData",
+                    "evidenceReferences",
+                    "downloadReadiness",
+                    "qualityWarnings",
+                ],
+            },
+        )
+        raw_usage = raw_result.pop("_usage", {})
+        raw_model = raw_result.pop("_model", None)
+        raw_result.pop("_warnings", None)
         raw_result["document_traceability"] = documents_for_prompt
         normalized_result = normalize_ranking(raw_result)
 
@@ -130,6 +160,12 @@ async def analyze_proposals(
             "disclaimer",
             "Este análisis es una recomendación asistida por IA y debe ser validado por el comprador antes de tomar una decisión final.",
         )
+
+        normalized_result["model_provider"] = "anthropic"
+        normalized_result["model_name"] = raw_model or settings.anthropic_model
+        if isinstance(raw_usage, dict):
+            normalized_result["tokens_input"] = raw_usage.get("tokens_input")
+            normalized_result["tokens_output"] = raw_usage.get("tokens_output")
 
         print("proposal_comparison_analysis_completed", {"file_count": len(files)})
         return ProposalComparisonResult.model_validate(normalized_result)

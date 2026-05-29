@@ -14,7 +14,7 @@ from app.agents.terms_of_reference.prompts import (
 from app.agents.terms_of_reference.quality_validator import validate_quality
 from app.agents.terms_of_reference.schemas import ChecklistItem, DashboardMetric, FormSchemaResponse, TermsOfReferenceResult
 from app.agents.terms_of_reference.template_selector import base_form_sections, get_template
-from app.ai.llm_client import analyze_with_openai
+from app.ai.llm_client import generate_agent_response
 from app.config import get_settings
 from app.document_processing.file_detector import detect_file_type, validate_allowed_file
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
@@ -296,7 +296,26 @@ async def create_form_schema(initial_description: str) -> FormSchemaResponse:
 
     base_sections = base_form_sections()
     prompt = build_form_schema_prompt(initial_description, base_sections)
-    raw = await analyze_with_openai(prompt, FORM_SCHEMA_SYSTEM_PROMPT)
+    raw = await generate_agent_response(
+        agentType="terms_of_reference_form_schema",
+        systemPrompt=FORM_SCHEMA_SYSTEM_PROMPT,
+        userPrompt=prompt,
+        outputContract={
+            "required": [
+                "detected_category",
+                "requirement_type",
+                "complexity",
+                "recommended_template",
+                "form_sections",
+                "recommended_safety_requirements",
+                "suggested_documents",
+                "notes_for_buyer",
+            ]
+        },
+    )
+    raw.pop("_usage", None)
+    raw.pop("_model", None)
+    raw.pop("_warnings", None)
     return _normalize_form_schema(raw, initial_description)
 
 
@@ -898,7 +917,35 @@ async def generate_terms_of_reference(
         }
 
         try:
-            raw = await analyze_with_openai(build_generate_prompt(payload), GENERATE_SYSTEM_PROMPT)
+            raw = await generate_agent_response(
+                agentType="terms_of_reference_generate",
+                systemPrompt=GENERATE_SYSTEM_PROMPT,
+                userPrompt=build_generate_prompt(payload),
+                documentPayload=payload.get("supporting_documents"),
+                outputContract={
+                    "required": [
+                        "generated_document",
+                        "bases_document",
+                        "invitation_email",
+                        "process_schedule",
+                        "quality_report",
+                    ],
+                    "quality": [
+                        "executiveSummary",
+                        "findings",
+                        "tables",
+                        "recommendations",
+                        "risks",
+                        "missingCriticalData",
+                        "evidenceReferences",
+                        "downloadReadiness",
+                        "qualityWarnings",
+                    ],
+                },
+            )
+            raw.pop("_usage", None)
+            raw.pop("_model", None)
+            raw.pop("_warnings", None)
         except HTTPException:
             raise
         except Exception:

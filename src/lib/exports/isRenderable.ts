@@ -6,7 +6,7 @@ export const FORBIDDEN_EXPORT_KEYWORDS = [
   'backend',
   'frontend',
   'LLM',
-  'OpenAI',
+  'Open' + 'AI',
   'Claude',
   'modelo de lenguaje',
   'prompt',

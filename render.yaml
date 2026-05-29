@@ -19,10 +19,16 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
-      - key: OPENAI_API_KEY
+      - key: AI_PROVIDER
+        value: anthropic
+      - key: ANTHROPIC_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-4.1-mini
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: ANTHROPIC_MAX_TOKENS
+        value: "8192"
+      - key: ANTHROPIC_TEMPERATURE
+        value: "0.2"
       - key: MAX_FILES_PER_ANALYSIS
         value: "5"
       - key: MAX_FILE_SIZE_MB
@@ -61,7 +67,7 @@ services:
       - key: AI_ENGINE_URL
         value: https://plataforma-compradores-128y.onrender.com
       - key: AI_PROVIDER
-        value: openai
+        value: anthropic
       - key: AI_AGENT_TIMEOUT_MS
         value: "120000"
       - key: AI_HEALTH_TIMEOUT_MS

@@ -1,6 +1,6 @@
 # AI Engine - Comparativos de propuestas de proveedores
 
-Este motor FastAPI implementa el MVP del agente de IA "Comparativos de propuestas de proveedores" para Buyer Nodus. Recibe propuestas, extrae texto de forma temporal, consulta OpenAI y devuelve un JSON comparativo con ranking, riesgos, información faltante y recomendación final.
+Este motor FastAPI implementa los agentes de Nodus IA para Buyer Nodus. Recibe documentos de forma temporal, construye un payload documental trazable, consulta Claude mediante la API nativa de Anthropic y devuelve JSON estructurado para plataforma y descargables.
 
 ## Privacidad
 
@@ -33,8 +33,11 @@ pip install -r requirements.txt
 Copia `.env.example` como `.env` y configura tu clave:
 
 ```bash
-OPENAI_API_KEY=tu_clave
-OPENAI_MODEL=gpt-4.1-mini
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=confirma-el-id-en-la-consola-de-anthropic
+ANTHROPIC_MAX_TOKENS=8192
+ANTHROPIC_TEMPERATURE=0.2
 MAX_FILES_PER_ANALYSIS=5
 MAX_FILE_SIZE_MB=10
 DELETE_TEMP_FILES=true
@@ -134,8 +137,11 @@ Endpoints:
 Variables de entorno:
 
 ```bash
-OPENAI_API_KEY=tu_clave
-OPENAI_MODEL=gpt-4.1-mini
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=confirma-el-id-en-la-consola-de-anthropic
+ANTHROPIC_MAX_TOKENS=8192
+ANTHROPIC_TEMPERATURE=0.2
 MAX_FILE_SIZE_MB=10
 DELETE_TEMP_FILES=true
 ```
@@ -221,8 +227,11 @@ Endpoints:
 Variables de entorno relevantes:
 
 ```bash
-OPENAI_API_KEY=tu_clave
-OPENAI_MODEL=gpt-4.1-mini
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=confirma-el-id-en-la-consola-de-anthropic
+ANTHROPIC_MAX_TOKENS=8192
+ANTHROPIC_TEMPERATURE=0.2
 MAX_FILE_SIZE_MB=10
 MAX_FILES_PER_ANALYSIS=5
 DELETE_TEMP_FILES=true
@@ -263,21 +272,21 @@ Limitaciones actuales:
 
 - La precisión del análisis depende de los costos entregados por el comprador o extraídos de documentos.
 - Si faltan impuestos, aranceles, tipo de cambio, fletes o seguros, el agente los marca como faltantes y no los inventa.
-- Tokens y costos reales dependen de la respuesta de OpenAI; si el proveedor no devuelve usage al cliente compartido, quedan sin registrar y el frontend registra una métrica aproximada.
+- Tokens y costos reales dependen de la respuesta de Anthropic; si el proveedor no devuelve usage al cliente compartido, quedan sin registrar y el frontend registra una métrica aproximada.
 
 ## Agente: Creador de Dashboard
 
-Convierte archivos de datos en un dashboard visual con KPIs, gráficos simples, tablas, insights y recomendaciones. Python genera el dashboard base; OpenAI solo interpreta un resumen compacto.
+Convierte archivos de datos en un dashboard visual con KPIs, gráficos simples, tablas, insights y recomendaciones. El procesamiento deterministico genera el dashboard base; Claude interpreta el payload documental estructurado cuando se solicitan insights adicionales.
 
 Flujo de datos:
 
-1. Python recibe archivos XLSX, CSV, PDF, DOCX, JPG, JPEG o PNG.
+1. El AI Engine recibe archivos XLSX, CSV, PDF, DOCX, JPG, JPEG o PNG.
 2. Excel/CSV se procesan con pandas como fuente tabular principal.
 3. PDF/DOCX/imágenes usan `document_reader.py`, MarkItDown si está disponible y fallback a extractores actuales.
-4. Python detecta columnas numéricas, fechas, categorías, proveedores, montos, calidad de datos y valores faltantes.
-5. Python calcula KPIs, agregados, tablas y datasets para gráficos.
-6. Solo se envía a OpenAI un resumen compacto con columnas, KPIs, top agrupaciones, alertas, objetivo y audiencia.
-7. Si OpenAI falla, el dashboard sigue funcionando con insights básicos generados por Python.
+4. El perfilador detecta columnas numéricas, fechas, categorías, proveedores, montos, calidad de datos y valores faltantes.
+5. El perfilador calcula KPIs, agregados, tablas y datasets para gráficos.
+6. Se envia a Claude el payload documental estructurado y el contrato de salida cuando se solicitan insights adicionales.
+7. Si Claude no responde, el endpoint devuelve un error controlado o usa solo resultados deterministicos cuando el flujo lo permite.
 
 Endpoints:
 

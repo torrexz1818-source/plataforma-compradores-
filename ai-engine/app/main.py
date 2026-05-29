@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from openai import AsyncOpenAI, OpenAIError
+from anthropic import APIError, AsyncAnthropic
 
 from app.agents.proposal_comparison.router import router as proposal_comparison_router
 from app.agents.tco_analysis.router import router as tco_analysis_router
@@ -42,26 +42,34 @@ def health_check():
 
 @app.get("/health/deep")
 async def deep_health_check():
-    if not settings.openai_api_key:
+    if settings.ai_provider != "anthropic":
         return {
             "ok": False,
-            "provider": "openai",
+            "provider": settings.ai_provider or "unknown",
             "provider_reachable": False,
             "error_code": "AI_PROVIDER_NOT_CONFIGURED",
-            "message": "OPENAI_API_KEY no esta configurada en el AI Engine.",
+            "message": "AI_PROVIDER debe ser anthropic.",
+        }
+    if not settings.anthropic_api_key or not settings.anthropic_model:
+        return {
+            "ok": False,
+            "provider": "anthropic",
+            "provider_reachable": False,
+            "error_code": "AI_PROVIDER_NOT_CONFIGURED",
+            "message": "ANTHROPIC_API_KEY y ANTHROPIC_MODEL deben estar configurados.",
         }
 
-    client = AsyncOpenAI(
-        api_key=settings.openai_api_key,
+    client = AsyncAnthropic(
+        api_key=settings.anthropic_api_key,
         timeout=settings.health_deep_timeout_seconds,
     )
 
     try:
-        model = await client.models.retrieve(settings.openai_model)
-    except OpenAIError as exc:
+        model = await client.models.retrieve(settings.anthropic_model)
+    except APIError as exc:
         return {
             "ok": False,
-            "provider": "openai",
+            "provider": "anthropic",
             "provider_reachable": False,
             "error_code": "AI_PROVIDER_ERROR",
             "message": exc.__class__.__name__,
@@ -69,9 +77,9 @@ async def deep_health_check():
 
     return {
         "ok": True,
-        "provider": "openai",
+        "provider": "anthropic",
         "provider_reachable": True,
-        "model": getattr(model, "id", settings.openai_model),
+        "model": getattr(model, "id", settings.anthropic_model),
         "error_code": None,
         "message": "AI Engine y proveedor IA responden correctamente.",
     }

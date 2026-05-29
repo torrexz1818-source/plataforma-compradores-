@@ -199,7 +199,7 @@ describe('AgentsService AI engine proxy', () => {
       backend: 'ok',
       aiEngineConfigured: false,
       aiEngineReachable: false,
-      provider: 'openai',
+      provider: 'anthropic',
       timeoutMs: 10000,
       checkedUrlHost: '127.0.0.1:8000',
       errorCode: 'AI_ENGINE_INVALID_URL',

@@ -9,13 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
-from openai import AsyncOpenAI, OpenAIError
 
 from app.agents.tco_analysis.prompts import SYSTEM_PROMPT, build_user_prompt
 from app.agents.tco_analysis.quality_validator import validate_alternatives, validate_required_fields
 from app.agents.tco_analysis.schemas import SupportingDocumentSummary, TcoAnalysisResult
 from app.agents.tco_analysis.sensitivity import build_sensitivity_from_totals
-from app.ai.json_utils import parse_json_response
+from app.ai.llm_client import generate_agent_response
 from app.config import get_settings
 from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type, validate_allowed_file
@@ -674,45 +673,57 @@ def build_image_content_parts(paths: list[Path], files: list[UploadFile]) -> lis
         mime_type = mimetypes.guess_type(filename)[0] or "image/png"
         encoded = base64.b64encode(path.read_bytes()).decode("ascii")
         parts.append({"type": "text", "text": f"Imagen adjunta para analisis TCO: {filename}"})
-        parts.append({"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{encoded}"}})
+        parts.append(
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": mime_type,
+                    "data": encoded,
+                },
+            }
+        )
     return parts
 
 
-async def analyze_tco_with_openai(user_prompt: str, image_parts: list[dict[str, Any]]) -> dict[str, Any]:
-    settings = get_settings()
-    if not settings.openai_api_key:
-        raise HTTPException(status_code=500, detail="El servicio de analisis no esta configurado.")
-
-    user_content: str | list[dict[str, Any]] = user_prompt
-    if image_parts:
-        user_content = [{"type": "text", "text": user_prompt}, *image_parts]
-
-    client = AsyncOpenAI(api_key=settings.openai_api_key)
-    try:
-        response = await client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_content},
+async def analyze_tco_with_claude(
+    user_prompt: str,
+    image_parts: list[dict[str, Any]],
+    documents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return await generate_agent_response(
+        agentType="tco_analysis",
+        systemPrompt=SYSTEM_PROMPT,
+        userPrompt=user_prompt,
+        documentPayload=documents,
+        imageContent=image_parts,
+        outputContract={
+            "required": [
+                "analysis_title",
+                "item_name",
+                "analysis_type",
+                "evaluation_horizon",
+                "currency",
+                "executive_summary",
+                "tco_matrix",
+                "scorecard",
+                "ranking",
+                "final_recommendation",
             ],
-            response_format={"type": "json_object"},
-        )
-    except OpenAIError as exc:
-        raise HTTPException(status_code=502, detail="No se pudo procesar el analisis TCO en este momento.") from exc
-
-    content = response.choices[0].message.content or ""
-    try:
-        result = parse_json_response(content)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail="El analisis TCO no devolvio una respuesta valida.") from exc
-
-    usage = getattr(response, "usage", None)
-    if usage:
-        result["_usage"] = {
-            "tokens_input": getattr(usage, "prompt_tokens", None),
-            "tokens_output": getattr(usage, "completion_tokens", None),
-        }
-    return result
+            "quality": [
+                "executiveSummary",
+                "kpis",
+                "findings",
+                "tables",
+                "risks",
+                "recommendations",
+                "missingCriticalData",
+                "evidenceReferences",
+                "downloadReadiness",
+                "qualityWarnings",
+            ],
+        },
+    )
 
 
 def build_fallback_result(
@@ -1728,21 +1739,10 @@ async def analyze_tco(
         )
         image_parts = build_image_content_parts(temp_paths, files)
 
-        try:
-            raw_result = await analyze_tco_with_openai(prompt, image_parts)
-        except HTTPException as exc:
-            if exc.status_code >= 500:
-                raw_result = build_fallback_result(
-                    title=title,
-                    item_name=item_name,
-                    analysis_type=analysis_type,
-                    evaluation_horizon=evaluation_horizon,
-                    comparison_unit=comparison_unit or "Por compra",
-                    currency=currency,
-                    documents=documents_for_prompt,
-                )
-            else:
-                raise
+        raw_result = await analyze_tco_with_claude(prompt, image_parts, documents_for_prompt)
+        raw_usage = raw_result.pop("_usage", {})
+        raw_model = raw_result.pop("_model", None)
+        raw_result.pop("_warnings", None)
 
         raw_result = ensure_result_defaults(
             raw_result,
@@ -1797,8 +1797,11 @@ async def analyze_tco(
             "disclaimer",
             "Este analisis TCO es una recomendacion asistida por IA y debe ser validado por el comprador antes de tomar una decision final.",
         )
-        raw_result["model_provider"] = "OpenAI"
-        raw_result["model_name"] = settings.openai_model
+        raw_result["model_provider"] = "anthropic"
+        raw_result["model_name"] = raw_model or settings.anthropic_model
+        if isinstance(raw_usage, dict):
+            raw_result["tokens_input"] = raw_usage.get("tokens_input")
+            raw_result["tokens_output"] = raw_usage.get("tokens_output")
         raw_result["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
 
         return TcoAnalysisResult.model_validate(raw_result)
