@@ -4095,6 +4095,10 @@ function isDashboardExportPayload(payload: ExportPayload) {
   return payload.agentId === 'dashboard_creator' || payload.agentId.includes('dashboard');
 }
 
+function isProposalExportPayload(payload: ExportPayload) {
+  return payload.agentId === 'proposal_comparison' || payload.agentId.includes('proposal') || payload.agentId.includes('quote');
+}
+
 function exportBlocksByType(payload: ExportPayload, type: ExportBlock['type']) {
   return payload.blocks.filter((block) => block.type === type);
 }
@@ -4143,6 +4147,67 @@ function dashboardPayloadFilterRows(payload: ExportPayload) {
   return payload.subtitle
     ? payload.subtitle.split('|').map((item) => ({ Seccion: 'Filtro', Detalle: item.trim() })).filter((row) => row.Detalle)
     : [];
+}
+
+function proposalPayloadKpis(payload: ExportPayload) {
+  return exportBlocksByType(payload, 'kpi')
+    .flatMap((block) => asArray(block.data).map(asRecord))
+    .filter((item) => asText(item.title, '') && asText(item.value, ''));
+}
+
+function proposalPayloadRows(payload: ExportPayload, types: ExportBlock['type'][]) {
+  return payload.blocks
+    .filter((block) => types.includes(block.type))
+    .flatMap((block) => exportBlockRows(block).slice(0, 8).map((row) => ({
+      Seccion: block.title || blockLabel(block.type),
+      Detalle: Object.values(row).map((value) => asText(value, '')).filter(Boolean).join(' | '),
+    })))
+    .filter((row) => row.Detalle);
+}
+
+function proposalPayloadTables(payload: ExportPayload, types: ExportBlock['type'][] = ['ranking', 'matrix', 'table']) {
+  return payload.blocks
+    .filter((block) => types.includes(block.type))
+    .flatMap((block) => exportTableBlocks(block))
+    .filter((table) => table.rows.length);
+}
+
+function proposalMainDecision(payload: ExportPayload) {
+  const decision = firstExportBlock(payload, 'decision');
+  const rows = decision ? exportBlockRows(decision) : [];
+  return rows[0] ?? {};
+}
+
+function addProposalPayloadPdf(input: PdfInput, payload: ExportPayload, format: ExportFormat = 'pdf') {
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, format) };
+  const ctx = createContext({ ...input, title: cleanPayload.title });
+  ctx.primaryColor = buyerNodusExportTheme.colors.navy;
+  const summary = firstExportBlock(cleanPayload, 'summary');
+  const decision = proposalMainDecision(cleanPayload);
+  const kpis = proposalPayloadKpis(cleanPayload);
+  const rankingTables = proposalPayloadTables(cleanPayload, ['ranking']);
+  const matrixTables = proposalPayloadTables(cleanPayload, ['matrix', 'table']);
+  const risks = proposalPayloadRows(cleanPayload, ['risk']);
+  const recommendations = proposalPayloadRows(cleanPayload, ['recommendation']);
+  const alerts = proposalPayloadRows(cleanPayload, ['alert']);
+
+  addHeader(ctx, { ...input, title: cleanPayload.title }, cleanPayload.subtitle);
+  if (summary) addCard(ctx, 'Resumen ejecutivo', formatValue(summary.data).slice(0, 5), 'blue');
+  if (Object.keys(decision).length) {
+    const tone = asText(decision.Estado, '').toLowerCase().includes('validacion') ? 'amber' : 'green';
+    addCard(ctx, asText(decision.Decision, 'Decision ejecutiva'), [
+      asText(decision.Sustento, ''),
+      asText(decision.Estado, ''),
+    ].filter(Boolean), tone);
+  }
+  if (kpis.length) addDashboardKpiCards(ctx, kpis);
+  rankingTables.slice(0, 2).forEach((table) => addExportPayloadTable(ctx, table.title, table.rows, 8));
+  matrixTables.slice(0, 3).forEach((table) => addExportPayloadTable(ctx, table.title, table.rows, 8));
+  if (risks.length) addCard(ctx, 'Riesgos principales', risks.slice(0, 6).map((row) => row.Detalle), 'amber');
+  if (recommendations.length) addCard(ctx, 'Recomendaciones de negociacion', recommendations.slice(0, 6).map((row) => row.Detalle), 'green');
+  if (alerts.length) addCard(ctx, 'Informacion requerida para cerrar decision', alerts.slice(0, 5).map((row) => row.Detalle), 'amber');
+  addFooter(ctx);
+  ctx.doc.save(input.fileName ?? getDefaultFileName(input, 'pdf'));
 }
 
 function addDashboardPayloadPdf(input: PdfInput, payload: ExportPayload, format: ExportFormat = 'pdf') {
@@ -4335,6 +4400,61 @@ async function downloadDashboardExportPayloadXlsx(input: AgentExportInput, paylo
   XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
 }
 
+async function downloadProposalExportPayloadXlsx(input: AgentExportInput, payload: ExportPayload) {
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.utils.book_new();
+  const used = new Set<string>();
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, 'excel') };
+  const summary = firstExportBlock(cleanPayload, 'summary');
+  const decision = proposalMainDecision(cleanPayload);
+  const kpis = proposalPayloadKpis(cleanPayload);
+  const rankings = proposalPayloadTables(cleanPayload, ['ranking']);
+  const matrices = proposalPayloadTables(cleanPayload, ['matrix', 'table']);
+  const risks = proposalPayloadRows(cleanPayload, ['risk']);
+  const recommendations = proposalPayloadRows(cleanPayload, ['recommendation']);
+  const alerts = proposalPayloadRows(cleanPayload, ['alert']);
+
+  appendDashboardAoaSheet(XLSX, workbook, used, '01_Resumen', [
+    ['BUYER NODUS | Comparativo ejecutivo de proveedores', '', '', '', ''],
+    ['Comparativo', cleanPayload.title, 'Fecha', formatDate(), ''],
+    ['Alcance', cleanPayload.subtitle || 'Propuestas cargadas por el usuario', '', '', ''],
+    [],
+    ['Decision ejecutiva', '', '', '', ''],
+    ['Decision', asText(decision.Decision, 'Decision no concluyente'), 'Estado', asText(decision.Estado, 'Requiere validacion'), ''],
+    ['Sustento', asText(decision.Sustento, ''), '', '', ''],
+    [],
+    ...(summary ? [['Resumen ejecutivo', formatValue(summary.data).slice(0, 3).join(' | '), '', '', ''], []] : []),
+    ['KPIs principales', '', '', '', ''],
+    ['Indicador', 'Valor', 'Interpretacion', '', ''],
+    ...kpis.slice(0, 6).map((kpi) => [asText(kpi.title), asText(kpi.value), asText(kpi.description, ''), '', '']),
+    [],
+    ...(rankings[0]?.rows.length ? [
+      ['Ranking visual', '', '', '', ''],
+      ...rankings[0].rows.slice(0, 8).map((row) => Object.values(row).slice(0, 5)),
+      [],
+    ] : []),
+    ...(alerts.length ? [
+      ['Advertencias profesionales', '', '', '', ''],
+      ...alerts.slice(0, 5).map((row) => [row.Detalle, '', '', '', '']),
+      [],
+    ] : []),
+    ...(recommendations.length ? [
+      ['Recomendaciones de negociacion', '', '', '', ''],
+      ...recommendations.slice(0, 6).map((row) => [row.Detalle, '', '', '', '']),
+    ] : []),
+  ], [28, 44, 18, 28, 36], 10);
+
+  if (matrices[0]?.rows.length) appendDashboardJsonSheet(XLSX, workbook, used, '02_Matriz_Comparativa', matrices[0].rows);
+  if (rankings[0]?.rows.length) appendDashboardJsonSheet(XLSX, workbook, used, '03_Ranking', rankings[0].rows);
+  appendDashboardJsonSheet(XLSX, workbook, used, '04_Riesgos_Recomendaciones', [
+    ...risks.map((row) => ({ Tipo: 'Riesgo', Detalle: row.Detalle })),
+    ...recommendations.map((row) => ({ Tipo: 'Recomendacion', Detalle: row.Detalle })),
+    ...alerts.map((row) => ({ Tipo: 'Advertencia', Detalle: row.Detalle })),
+  ]);
+  matrices.slice(1).forEach((table, index) => appendDashboardJsonSheet(XLSX, workbook, used, `${String(index + 5).padStart(2, '0')}_${table.title}`, table.rows));
+  XLSX.writeFile(workbook, getDefaultFileName(input, 'xlsx'));
+}
+
 function addExportPayloadTable(ctx: PdfContext, title: string, rows: Array<Record<string, unknown>>, maxRows = 10) {
   const keys = Object.keys(rows[0] ?? {}).slice(0, 6);
   if (!keys.length) return;
@@ -4352,6 +4472,10 @@ function addExportPayloadPdf(input: PdfInput, payload: ExportPayload, format: Ex
   const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, format) };
   if (isDashboardExportPayload(cleanPayload)) {
     addDashboardPayloadPdf(input, cleanPayload, format);
+    return;
+  }
+  if (isProposalExportPayload(cleanPayload)) {
+    addProposalPayloadPdf(input, cleanPayload, format);
     return;
   }
   const ctx = createContext({ ...input, title: cleanPayload.title });
@@ -4393,6 +4517,10 @@ function addExportPayloadPdf(input: PdfInput, payload: ExportPayload, format: Ex
 async function downloadExportPayloadXlsx(input: AgentExportInput, payload: ExportPayload) {
   if (isDashboardExportPayload(payload)) {
     await downloadDashboardExportPayloadXlsx(input, payload);
+    return;
+  }
+  if (isProposalExportPayload(payload)) {
+    await downloadProposalExportPayloadXlsx(input, payload);
     return;
   }
   const XLSX = await import('xlsx');
@@ -4519,9 +4647,85 @@ async function downloadDashboardExportPayloadPptx(input: AgentExportInput, paylo
   await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
 }
 
+async function downloadProposalExportPayloadPptx(input: AgentExportInput, payload: ExportPayload) {
+  const pptxgen = (await import('pptxgenjs')).default;
+  const pptx = new pptxgen();
+  const cleanPayload = { ...payload, blocks: cleanExportBlocks(payload.blocks, 'ppt') };
+  const summary = firstExportBlock(cleanPayload, 'summary');
+  const decision = proposalMainDecision(cleanPayload);
+  const kpis = proposalPayloadKpis(cleanPayload);
+  const rankings = proposalPayloadTables(cleanPayload, ['ranking']);
+  const matrices = proposalPayloadTables(cleanPayload, ['matrix', 'table']);
+  const risks = proposalPayloadRows(cleanPayload, ['risk']);
+  const recommendations = proposalPayloadRows(cleanPayload, ['recommendation']);
+  const alerts = proposalPayloadRows(cleanPayload, ['alert']);
+
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'Buyer Nodus';
+  pptx.subject = input.agentName || cleanPayload.title;
+  pptx.title = cleanPayload.title;
+  pptx.company = getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'Buyer Nodus';
+  pptx.theme = { headFontFace: 'Aptos Display', bodyFontFace: 'Aptos', lang: 'es-PE' };
+
+  let slide = pptx.addSlide();
+  slide.background = { color: 'FFFFFF' };
+  slide.addText(getBrandName(input.pdfMode ?? 'standard_branded', input.pdfOptions) || 'BUYER NODUS', { x: 0.55, y: 0.35, w: 6, h: 0.25, fontSize: 9, bold: true, color: 'F97316' });
+  slide.addText(cleanPayload.title, { x: 0.55, y: 1.0, w: 11.9, h: 0.9, fontSize: 30, bold: true, color: '09008B', fit: 'shrink' });
+  if (cleanPayload.subtitle) slide.addText(cleanPayload.subtitle, { x: 0.6, y: 2.12, w: 11.7, h: 0.52, fontSize: 13, color: '334155', fit: 'shrink' });
+  if (summary) slide.addText(formatValue(summary.data).slice(0, 3).join('\n'), { x: 0.65, y: 2.95, w: 11.6, h: 1.15, fontSize: 14, color: '334155', fit: 'shrink' });
+  addPptFooter(slide, input);
+
+  slide = pptx.addSlide();
+  addPptTitle(slide, 'Decision ejecutiva', 'Proveedor recomendado o decision no concluyente segun la informacion disponible.');
+  slide.addShape('roundRect', { x: 0.75, y: 1.35, w: 11.7, h: 2.2, fill: { color: asText(decision.Estado, '').toLowerCase().includes('validacion') ? 'FFFBEB' : 'ECFDF5' }, line: { color: 'CBD5E1', pt: 1 }, radius: 0.12 });
+  slide.addText(asText(decision.Decision, 'Decision no concluyente'), { x: 1.05, y: 1.65, w: 11.1, h: 0.5, fontSize: 22, bold: true, color: asText(decision.Estado, '').toLowerCase().includes('validacion') ? '92400E' : '166534', fit: 'shrink' });
+  slide.addText(asText(decision.Sustento, ''), { x: 1.05, y: 2.28, w: 11.1, h: 0.75, fontSize: 13, color: '334155', fit: 'shrink' });
+  addPptFooter(slide, input);
+
+  if (kpis.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Indicadores del comparativo', 'Lectura rapida para validar suficiencia y riesgos de decision.');
+    addPptKpiCards(slide, kpis.slice(0, 6));
+    addPptFooter(slide, input);
+  }
+
+  if (rankings[0]?.rows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Ranking visual de proveedores', 'Semaforo ejecutivo para priorizar decision y negociacion.');
+    addPptProposalTable(slide, rankings[0].rows, { maxRows: Math.min(rankings[0].rows.length, 7), fontSize: 7.5 });
+    addPptFooter(slide, input);
+  }
+
+  if (matrices[0]?.rows.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Matriz comparativa resumida', 'Criterios principales para comparar precio, plazo, condiciones, garantia y riesgos.');
+    addPptProposalTable(slide, matrices[0].rows, { maxRows: Math.min(matrices[0].rows.length, 8), fontSize: 6.6 });
+    addPptFooter(slide, input);
+  }
+
+  if (risks.length || recommendations.length || alerts.length) {
+    slide = pptx.addSlide();
+    addPptTitle(slide, 'Riesgos y recomendaciones de negociacion', 'Acciones sugeridas antes de adjudicar.');
+    slide.addText([
+      ...risks.slice(0, 4).map((row) => `Riesgo: ${row.Detalle}`),
+      '',
+      ...recommendations.slice(0, 5).map((row) => `Recomendacion: ${row.Detalle}`),
+      '',
+      ...alerts.slice(0, 3).map((row) => `Pendiente: ${row.Detalle}`),
+    ].filter((item) => item !== undefined).join('\n'), { x: 0.75, y: 1.35, w: 11.65, h: 5.05, fontSize: 12, color: '334155', fit: 'shrink', breakLine: false });
+    addPptFooter(slide, input);
+  }
+
+  await pptx.writeFile({ fileName: getDefaultFileName(input, 'pptx') });
+}
+
 async function downloadExportPayloadPptx(input: AgentExportInput, payload: ExportPayload) {
   if (isDashboardExportPayload(payload)) {
     await downloadDashboardExportPayloadPptx(input, payload);
+    return;
+  }
+  if (isProposalExportPayload(payload)) {
+    await downloadProposalExportPayloadPptx(input, payload);
     return;
   }
   const pptxgen = (await import('pptxgenjs')).default;

@@ -9,6 +9,15 @@ function text(value: unknown) {
   return String(value ?? '').trim();
 }
 
+function rowCount(value: unknown): number {
+  if (Array.isArray(value)) return value.length;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (Array.isArray(record.rows)) return record.rows.length;
+  }
+  return value ? 1 : 0;
+}
+
 export function collectPayloadQualityIssues(payload: ExportPayload) {
   const criticalIssues: string[] = [];
   const warnings: string[] = [];
@@ -46,10 +55,17 @@ export function collectPayloadQualityIssues(payload: ExportPayload) {
   }
 
   if (payload.agentId.includes('proposal')) {
+    const blocksById = new Map(payload.blocks.map((block) => [block.id, block]));
+    const rankingRows = rowCount(blocksById.get('proposal-ranking')?.data);
+    const matrixRows = rowCount(blocksById.get('proposal-comparison-table')?.data) || rowCount(blocksById.get('proposal-evaluation-matrix')?.data);
     if (!blockTypes.has('summary')) criticalIssues.push('Resumen ejecutivo del comparativo');
-    if (!blockTypes.has('ranking')) criticalIssues.push('Ranking de proveedores');
+    if (!blockTypes.has('ranking') || rankingRows < 2) criticalIssues.push('Ranking de al menos dos proveedores');
     if (!blockTypes.has('matrix') && !blockTypes.has('table')) criticalIssues.push('Matriz o tabla comparativa de criterios');
     if (!blockTypes.has('decision')) warnings.push('Conviene explicitar la decision o proveedor recomendado.');
+    if (!matrixRows) criticalIssues.push('Matriz comparativa con criterios utiles');
+    const payloadText = JSON.stringify(payload).toLowerCase();
+    if (!/(precio|monto|total|importe|cotizacion|cotizaci[oó]n)/i.test(payloadText)) warnings.push('Conviene validar precios o montos antes de adjudicar.');
+    if (!/(plazo|entrega|lead|tiempo|garant[ií]a|condiciones)/i.test(payloadText)) warnings.push('Faltan plazos, garantias o condiciones comerciales para cerrar la negociacion.');
   }
 
   if (payload.agentId.includes('terms')) {
