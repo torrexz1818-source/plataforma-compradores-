@@ -29,6 +29,12 @@ services:
         value: "8192"
       - key: ANTHROPIC_TEMPERATURE
         value: "0.2"
+      - key: ANTHROPIC_TIMEOUT_SECONDS
+        value: "75"
+      - key: ANTHROPIC_MAX_RETRIES
+        value: "1"
+      - key: TCO_MODEL_TIMEOUT_SECONDS
+        value: "90"
       - key: MAX_FILES_PER_ANALYSIS
         value: "5"
       - key: MAX_FILE_SIZE_MB

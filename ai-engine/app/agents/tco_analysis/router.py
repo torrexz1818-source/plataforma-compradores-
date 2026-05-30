@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, Request, UploadFile
 from fastapi.responses import Response
 
 from app.agents.tco_analysis.pdf_generator import build_tco_pdf
@@ -10,6 +10,7 @@ router = APIRouter(prefix="/agents/tco-analysis", tags=["TCO analysis"])
 
 @router.post("/analyze", response_model=TcoAnalysisResult)
 async def analyze(
+    request: Request,
     title: str = Form(...),
     item_name: str = Form(...),
     analysis_type: str = Form(...),
@@ -36,6 +37,7 @@ async def analyze(
         general_context=general_context,
         additional_instructions=additional_instructions,
         files=files,
+        trace_id=request.headers.get("x-trace-id") or request.headers.get("x-request-id"),
     )
 
 

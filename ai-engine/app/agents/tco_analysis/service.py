@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import json
+import logging
 import mimetypes
 import re
 import time
@@ -20,6 +22,8 @@ from app.document_processing.document_reader import read_document_text
 from app.document_processing.file_detector import detect_file_type, validate_allowed_file
 from app.document_processing.structured_document import build_public_document_warning, build_structured_document_payload
 from app.utils.temp_files import cleanup_files, save_upload_temporarily
+
+logger = logging.getLogger(__name__)
 
 MAX_DOCUMENT_CONTEXT_CHARS = 20000
 MAX_TOTAL_DOCUMENT_CONTEXT_CHARS = 90000
@@ -735,9 +739,9 @@ def build_fallback_result(
     comparison_unit: str,
     currency: str,
     documents: list[dict[str, Any]],
+    reason: str = "El modelo de analisis no respondio dentro del tiempo operativo.",
 ) -> dict[str, Any]:
     detected = build_detected_alternatives_from_documents(documents) if documents else []
-    best = detected[0]["supplier_name"] if detected else "No determinado"
 
     return {
         "analysis_title": title,
@@ -747,43 +751,24 @@ def build_fallback_result(
         "comparison_unit": comparison_unit,
         "currency": currency,
         "executive_summary": {
-            "best_alternative": best,
-            "best_alternative_score": 60,
-            "best_alternative_score_label": "Regular",
-            "why_it_wins": "Resultado preliminar construido con la informacion disponible; no existe una recomendacion analitica final.",
+            "best_alternative": "No determinado",
+            "best_alternative_score": None,
+            "best_alternative_score_label": "No determinado",
+            "why_it_wins": "No se completo el modelo TCO; no existe una recomendacion analitica final.",
             "estimated_saving_or_overcost": "No determinado",
-            "main_risk": "Analisis no completado por indisponibilidad temporal del servicio.",
+            "main_risk": reason,
             "final_recommendation": "No adjudicar con este resultado preliminar. Reintentar el analisis y pedir informacion faltante antes de decidir.",
         },
         "data_used": [],
         "tco_matrix": [
             {
                 "cost_component": "TCO total estimado",
-                "values": {best: "No especificado"} if detected else {},
+                "values": {},
                 "notes": PRELIMINARY_MISSING_INFO_NOTE,
             }
         ],
         "tco_totals": [],
-        "ranking": [
-            {
-                "position": 1,
-                "alternative": best,
-                "ranking_type": "Mejor alternativa estrategica",
-                "total_tco": None,
-                "score": 60,
-                "score_label": "Regular",
-                "score_breakdown": {
-                    "tco_cost_score": 50,
-                    "risk_score": 55,
-                    "warranty_support_score": 60,
-                    "availability_lead_time_score": 60,
-                    "data_confidence_score": 40,
-                    "weighted_formula": "35% TCO/costo, 25% riesgo, 20% garantia/soporte, 10% disponibilidad/lead time, 10% confianza de informacion",
-                },
-                "source_basis": ["Analisis preliminar sin montos numericos completos."],
-                "reason": "Ranking preliminar no concluyente. No hay interpretacion avanzada ni suficientes datos numericos para ordenar por menor TCO.",
-            }
-        ] if detected else [],
+        "ranking": [],
         "interpretation": {
             "why_winner_wins": "No determinado con precision por falta de datos completos.",
             "hidden_costs": ["Mantenimiento", "Repuestos", "Soporte", "Logistica", "Instalacion"],
@@ -814,11 +799,20 @@ def build_fallback_result(
             "detected_alternatives_count": len(detected),
             "documents_processed": len(documents),
             "confidence_level": "low",
-            "warnings": ["El servicio no estuvo disponible; se genero un resultado preliminar que no reemplaza el analisis TCO completo."]
+            "warnings": [f"{reason} Se preparo una respuesta limitada para que el usuario pueda reintentar, cambiar documentos o completar informacion."]
             if documents
             else [],
         },
-        "calculation_warnings": ["No se ejecuto calculo financiero previo; el resultado requiere validacion antes de decidir."],
+        "calculation_warnings": [
+            "No se ejecuto calculo financiero ni ranking porque el modelo no respondio a tiempo.",
+            "No se debe usar este resultado como recomendacion de adjudicacion.",
+        ],
+        "downloadReadiness": {
+            "status": "blocked",
+            "reason": reason,
+        },
+        "scorecard": None,
+        "model_timed_out": True,
         "disclaimer": "Este analisis TCO es una recomendacion asistida por IA y debe ser validado por el comprador antes de tomar una decision final.",
     }
 
@@ -1677,6 +1671,7 @@ async def analyze_tco(
     general_context: str | None,
     additional_instructions: str | None,
     files: list[UploadFile],
+    trace_id: str | None = None,
 ) -> TcoAnalysisResult:
     started_at = time.perf_counter()
     settings = get_settings()
@@ -1725,6 +1720,13 @@ async def analyze_tco(
             )
 
         documents_for_prompt = trim_total_document_context(documents)
+        logger.info(
+            "tco_analysis.start traceId=%s files=%s documents=%s manualAlternatives=%s",
+            trace_id or "missing",
+            len(files),
+            len(documents_for_prompt),
+            len(fallback_alternatives),
+        )
         prompt = build_user_prompt(
             title=title.strip(),
             item_name=item_name.strip(),
@@ -1739,7 +1741,32 @@ async def analyze_tco(
         )
         image_parts = build_image_content_parts(temp_paths, files)
 
-        raw_result = await analyze_tco_with_claude(prompt, image_parts, documents_for_prompt)
+        try:
+            raw_result = await asyncio.wait_for(
+                analyze_tco_with_claude(prompt, image_parts, documents_for_prompt),
+                timeout=settings.tco_model_timeout_seconds,
+            )
+        except TimeoutError:
+            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+            logger.warning(
+                "tco_analysis.model_timeout traceId=%s timeoutSeconds=%s elapsedMs=%s files=%s documents=%s manualAlternatives=%s",
+                trace_id or "missing",
+                settings.tco_model_timeout_seconds,
+                elapsed_ms,
+                len(files),
+                len(documents_for_prompt),
+                len(fallback_alternatives),
+            )
+            raw_result = build_fallback_result(
+                title=title,
+                item_name=item_name,
+                analysis_type=analysis_type,
+                evaluation_horizon=evaluation_horizon,
+                comparison_unit=comparison_unit or "Por compra",
+                currency=currency,
+                documents=documents_for_prompt,
+                reason="El modelo TCO no respondio dentro del tiempo operativo.",
+            )
         raw_usage = raw_result.pop("_usage", {})
         raw_model = raw_result.pop("_model", None)
         raw_result.pop("_warnings", None)
@@ -1754,6 +1781,30 @@ async def analyze_tco(
             currency=currency,
         )
         raw_result = sanitize_tco_result(raw_result)
+        if raw_result.get("model_timed_out"):
+            raw_result["scorecard"] = None
+            raw_result["ranking"] = []
+            raw_result["tco_totals"] = []
+            raw_result["financial_model"] = []
+            raw_result["executive_summary"] = {
+                **raw_result["executive_summary"],
+                "best_alternative": "No determinado",
+                "best_alternative_score": None,
+                "best_alternative_score_label": "No determinado",
+                "why_it_wins": "No se completo el modelo TCO; no existe una recomendacion analitica final.",
+                "final_recommendation": "Reintentar el analisis o completar informacion antes de decidir.",
+            }
+            raw_result["strategic_recommendation"] = {
+                "recommended_action": "Reintentar analisis",
+                "economic_option": "No determinado",
+                "technical_option": "No determinado",
+                "lowest_risk_option": "No determinado",
+                "balanced_option": "No determinado",
+                "final_recommended_option": "No determinado",
+                "recommendation_rationale": "El modelo TCO no respondio dentro del tiempo operativo; no se genero ranking ni calculo financiero.",
+                "negotiation_points": ["Solicitar costos, supuestos y condiciones comerciales faltantes antes de adjudicar."],
+                "next_steps": ["Reintentar procesamiento", "Cambiar documento", "Agregar informacion minima"],
+            }
         if (objective or "").strip():
             user_instructions = objective.strip()
             raw_result["user_priority_instructions"] = user_instructions
@@ -1774,7 +1825,20 @@ async def analyze_tco(
         quality["documents_processed"] = len(files)
         quality["confidence_level"] = quality.get("confidence_level") or ("medium" if len(raw_result.get("detected_alternatives", [])) >= 2 else "low")
         quality["warnings"] = _as_list(quality.get("warnings"))
-        if len(raw_result.get("detected_alternatives", [])) <= 1:
+        if raw_result.get("model_timed_out"):
+            quality["warnings"] = [
+                *quality.get("warnings", []),
+                "El motor TCO no produjo un resultado concluyente; no se genero ranking ni calculo financiero.",
+            ]
+            raw_result["calculation_warnings"] = [
+                *_as_list(raw_result.get("calculation_warnings")),
+                "Resultado bloqueado para descargables concluyentes hasta reintentar o completar informacion.",
+            ]
+            raw_result["downloadReadiness"] = {
+                "status": "blocked",
+                "reason": "El modelo TCO no respondio dentro del tiempo operativo; reintenta el analisis o agrega informacion minima.",
+            }
+        elif len(raw_result.get("detected_alternatives", [])) <= 1:
             quality["warnings"] = [
                 *quality.get("warnings", []),
                 "Analisis preliminar: se detecto una o ninguna alternativa. Para comparar TCO, agrega mas propuestas o cotizaciones.",

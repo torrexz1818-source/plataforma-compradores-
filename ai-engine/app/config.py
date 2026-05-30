@@ -25,6 +25,9 @@ class Settings(BaseModel):
     anthropic_max_retries: int = Field(
         default_factory=lambda: int(os.getenv("ANTHROPIC_MAX_RETRIES", "2"))
     )
+    tco_model_timeout_seconds: float = Field(
+        default_factory=lambda: float(os.getenv("TCO_MODEL_TIMEOUT_SECONDS", "90"))
+    )
     health_deep_timeout_seconds: float = Field(
         default_factory=lambda: float(os.getenv("HEALTH_DEEP_TIMEOUT_SECONDS", "8"))
     )

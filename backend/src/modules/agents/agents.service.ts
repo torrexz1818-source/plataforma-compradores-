@@ -171,6 +171,7 @@ type AiErrorCode =
   | 'AI_ENGINE_INVALID_URL'
   | 'AI_ENGINE_UNREACHABLE'
   | 'AI_ENGINE_TIMEOUT'
+  | 'AI_ENGINE_TCO_TIMEOUT'
   | 'AI_PROVIDER_ERROR'
   | 'AI_ENGINE_REQUEST_FAILED'
   | 'AI_ENGINE_BAD_RESPONSE'
@@ -1111,7 +1112,7 @@ export class AgentsService {
         aiEngineUrl,
         ...fileLog,
       });
-      const aiEngineRequest = this.buildAiEngineRequest(endpointConfig, input.formFields ?? {}, input.files ?? []);
+      const aiEngineRequest = this.buildAiEngineRequest(endpointConfig, input.formFields ?? {}, input.files ?? [], traceId);
       this.logAiEvent({
         endpoint: endpointConfig.path,
         traceId,
@@ -1149,6 +1150,7 @@ export class AgentsService {
 
       if (!response.ok) {
         const message = this.extractAiEngineErrorMessage(responseText) || AI_ENGINE_UNAVAILABLE_MESSAGE;
+        const errorCode = this.extractAiEngineErrorCode(responseText, response.status);
         return this.buildFailedAiExecution({
           input,
           traceId,
@@ -1156,7 +1158,7 @@ export class AgentsService {
           startedAt,
           stage: 'ai_provider_response',
           statusCode: response.status,
-          errorCode: response.status >= 500 ? 'AI_PROVIDER_ERROR' : 'AI_ENGINE_UNREACHABLE',
+          errorCode,
           message: response.status >= 500 ? AI_ENGINE_UNAVAILABLE_MESSAGE : message,
           diagnosticMessage: message,
         });
@@ -1238,11 +1240,12 @@ export class AgentsService {
     endpointConfig: AiEngineEndpointConfig,
     fields: Record<string, unknown>,
     files: UploadedAgentFile[],
+    traceId: string,
   ): RequestInit {
     if (endpointConfig.mode === 'json') {
       return {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Trace-Id': traceId },
         body: JSON.stringify(this.buildAiEngineJsonBody(fields)),
       };
     }
@@ -1266,6 +1269,7 @@ export class AgentsService {
 
     return {
       method: 'POST',
+      headers: { 'X-Trace-Id': traceId },
       body: formData,
     };
   }
@@ -1554,6 +1558,11 @@ export class AgentsService {
     const message = parsed.message;
 
     if (typeof detail === 'string') return detail;
+    if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+      const detailRecord = detail as Record<string, unknown>;
+      if (typeof detailRecord.message === 'string') return detailRecord.message;
+      if (typeof detailRecord.detail === 'string') return detailRecord.detail;
+    }
     if (Array.isArray(detail)) {
       return detail
         .map((item) =>
@@ -1565,6 +1574,34 @@ export class AgentsService {
     }
     if (typeof message === 'string') return message;
     return '';
+  }
+
+  private extractAiEngineErrorCode(responseText: string, statusCode: number): AiErrorCode {
+    const parsed = this.parseAiEngineResponse(responseText);
+    const detail = parsed.detail;
+    const detailRecord = detail && typeof detail === 'object' && !Array.isArray(detail)
+      ? (detail as Record<string, unknown>)
+      : {};
+    const candidate = String(parsed.errorCode ?? parsed.code ?? detailRecord.errorCode ?? detailRecord.code ?? '');
+    const knownCodes = new Set<AiErrorCode>([
+      'AI_ENGINE_NOT_CONFIGURED',
+      'AI_ENGINE_INVALID_URL',
+      'AI_ENGINE_UNREACHABLE',
+      'AI_ENGINE_TIMEOUT',
+      'AI_ENGINE_TCO_TIMEOUT',
+      'AI_PROVIDER_ERROR',
+      'AI_ENGINE_REQUEST_FAILED',
+      'AI_ENGINE_BAD_RESPONSE',
+      'AGENT_CATALOG_SYNC_FAILED',
+      'AGENT_EXECUTION_PERSIST_FAILED',
+      'AUTH_REQUIRED',
+      'VALIDATION_ERROR',
+      'UNKNOWN_AGENT_ERROR',
+    ]);
+
+    if (knownCodes.has(candidate as AiErrorCode)) return candidate as AiErrorCode;
+    if (statusCode === 408 || statusCode === 504) return 'AI_ENGINE_TIMEOUT';
+    return statusCode >= 500 ? 'AI_PROVIDER_ERROR' : 'AI_ENGINE_UNREACHABLE';
   }
 
   private extractModelName(outputData: Record<string, unknown>) {

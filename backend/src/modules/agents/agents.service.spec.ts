@@ -166,6 +166,169 @@ describe('AgentsService AI engine proxy', () => {
     });
   });
 
+  it('passes trace id to the AI Engine TCO endpoint', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.NODE_ENV = 'production';
+    process.env.AI_ENGINE_URL = 'https://ai.example.test';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(JSON.stringify({
+        analysis_title: 'Analisis TCO',
+        model_name: 'test-model',
+      })),
+    } as unknown as Response);
+    const { service } = createService({
+      agentsFindOne: jest.fn().mockResolvedValue({
+        ...activeAgent,
+        id: 'tco_analysis',
+        agentKey: 'tco_analysis',
+        slug: 'analisis-tco',
+        name: 'Analisis TCO',
+      }),
+    });
+
+    await service.runAgent({
+      agentId: 'tco_analysis',
+      userId: 'user-buyer-1',
+      inputData: {},
+      aiOperation: 'analyze',
+      formFields: {
+        agentId: 'tco_analysis',
+        operation: 'analyze',
+        title: 'Analisis TCO',
+        item_name: 'Equipo',
+        analysis_type: 'Compra',
+        evaluation_horizon: '3 anos',
+        currency: 'USD',
+      },
+      files: [],
+      requestMeta: { traceId: 'trace-tco-header', country: 'CN' },
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://ai.example.test/agents/tco-analysis/analyze',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'X-Trace-Id': 'trace-tco-header' },
+      }),
+    );
+  });
+
+  it('returns a structured TCO blocked payload without converting it to an engine error', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.NODE_ENV = 'production';
+    process.env.AI_ENGINE_URL = 'https://ai.example.test';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(JSON.stringify({
+        analysis_title: 'Analisis TCO',
+        downloadReadiness: {
+          status: 'blocked',
+          reason: 'El modelo TCO no respondio dentro del tiempo operativo.',
+        },
+        model_timed_out: true,
+        ranking: [],
+        scorecard: null,
+        financial_model: [],
+        model_name: 'test-model',
+      })),
+    } as unknown as Response);
+    const { service } = createService({
+      agentsFindOne: jest.fn().mockResolvedValue({
+        ...activeAgent,
+        id: 'tco_analysis',
+        agentKey: 'tco_analysis',
+        slug: 'analisis-tco',
+        name: 'Analisis TCO',
+      }),
+    });
+
+    const response = await service.runAgent({
+      agentId: 'tco_analysis',
+      userId: 'user-buyer-1',
+      inputData: {},
+      aiOperation: 'analyze',
+      formFields: {
+        agentId: 'tco_analysis',
+        operation: 'analyze',
+        title: 'Analisis TCO',
+        item_name: 'Equipo',
+        analysis_type: 'Compra',
+        evaluation_horizon: '3 anos',
+        currency: 'USD',
+      },
+      files: [],
+      requestMeta: { traceId: 'trace-tco-blocked-payload', country: 'CN' },
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.errorCode).toBeNull();
+    expect(response.execution.outputData).toMatchObject({
+      downloadReadiness: { status: 'blocked' },
+      model_timed_out: true,
+      ranking: [],
+      scorecard: null,
+      financial_model: [],
+    });
+  });
+
+  it('preserves AI Engine error codes returned by the TCO endpoint', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.NODE_ENV = 'production';
+    process.env.AI_ENGINE_URL = 'https://ai.example.test';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 504,
+      text: jest.fn().mockResolvedValue(JSON.stringify({
+        detail: {
+          errorCode: 'AI_ENGINE_TCO_TIMEOUT',
+          message: 'El modelo TCO no respondio dentro del tiempo operativo.',
+        },
+      })),
+    } as unknown as Response);
+    const { service } = createService({
+      agentsFindOne: jest.fn().mockResolvedValue({
+        ...activeAgent,
+        id: 'tco_analysis',
+        agentKey: 'tco_analysis',
+        slug: 'analisis-tco',
+        name: 'Analisis TCO',
+      }),
+    });
+
+    const response = await service.runAgent({
+      agentId: 'tco_analysis',
+      userId: 'user-buyer-1',
+      inputData: {},
+      aiOperation: 'analyze',
+      formFields: {
+        agentId: 'tco_analysis',
+        operation: 'analyze',
+        title: 'Analisis TCO',
+        item_name: 'Equipo',
+        analysis_type: 'Compra',
+        evaluation_horizon: '3 anos',
+        currency: 'USD',
+      },
+      files: [],
+      requestMeta: { traceId: 'trace-tco-timeout', country: 'CN' },
+    });
+
+    expect(response.ok).toBe(false);
+    expect(response.errorCode).toBe('AI_ENGINE_TCO_TIMEOUT');
+    expect(response.traceId).toBe('trace-tco-timeout');
+    expect(response.execution.outputData).toMatchObject({
+      ok: false,
+      errorCode: 'AI_ENGINE_TCO_TIMEOUT',
+      traceId: 'trace-tco-timeout',
+    });
+  });
+
   it('never returns execution as undefined on provider mock errors', async () => {
     jest.spyOn(console, 'log').mockImplementation(() => undefined);
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
