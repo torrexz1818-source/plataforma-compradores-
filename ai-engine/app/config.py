@@ -28,6 +28,7 @@ class Settings(BaseModel):
     tco_model_timeout_seconds: float = Field(
         default_factory=lambda: float(os.getenv("TCO_MODEL_TIMEOUT_SECONDS", "90"))
     )
+    agent_debug_mode: str = Field(default_factory=lambda: os.getenv("AGENT_DEBUG_MODE", "").strip().lower())
     health_deep_timeout_seconds: float = Field(
         default_factory=lambda: float(os.getenv("HEALTH_DEEP_TIMEOUT_SECONDS", "8"))
     )

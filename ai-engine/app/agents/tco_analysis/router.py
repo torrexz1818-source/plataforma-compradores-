@@ -22,8 +22,10 @@ async def analyze(
     alternatives_json: str | None = Form(default=None),
     general_context: str | None = Form(default=None),
     additional_instructions: str | None = Form(default=None),
+    debugMode: str | None = Form(default=None),
     files: list[UploadFile] = File(default=[]),
 ):
+    header_debug_mode = request.headers.get("x-agent-debug-mode")
     return await analyze_tco(
         title=title,
         item_name=item_name,
@@ -38,6 +40,7 @@ async def analyze(
         additional_instructions=additional_instructions,
         files=files,
         trace_id=request.headers.get("x-trace-id") or request.headers.get("x-request-id"),
+        debug_mode=header_debug_mode or debugMode,
     )
 
 

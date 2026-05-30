@@ -388,6 +388,9 @@ type AgentExecutionDocument = {
   costInput?: number;
   costOutput?: number;
   costTotal?: number;
+  costAmount?: number;
+  billable?: boolean;
+  billingStatus?: string;
   latencyMs?: number;
   pdfGenerated?: boolean;
   executedAt: Date;

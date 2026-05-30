@@ -817,6 +817,146 @@ def build_fallback_result(
     }
 
 
+def normalize_debug_mode(value: str | None) -> str | None:
+    normalized = (value or "").strip().lower()
+    if normalized in {"mock", "preflight_only"}:
+        return normalized
+    return None
+
+
+def alternative_has_cost(alternative: dict[str, Any]) -> bool:
+    cost_keys = {
+        "base_price",
+        "price",
+        "cost",
+        "total",
+        "acquisition_cost",
+        "purchase_price",
+        "annual_maintenance_cost",
+        "annual_operation_cost",
+        "implementation_cost",
+        "maintenance_cost",
+        "operation_cost",
+    }
+    return any(_as_number(alternative.get(key)) is not None for key in cost_keys)
+
+
+def evaluate_tco_preflight(
+    *,
+    documents: list[dict[str, Any]],
+    alternatives: list[dict[str, Any]],
+    has_written_context: bool,
+) -> dict[str, Any]:
+    text = json.dumps(documents, ensure_ascii=False, default=str).lower()
+    detected = build_detected_alternatives_from_documents(documents) if documents else []
+    has_named_alternative = bool(alternatives or detected)
+    has_cost_evidence = any(alternative_has_cost(item) for item in alternatives) or (
+        bool(re.search(r"\d", text)) and any(term in text for term in ("precio", "costo", "cost", "monto", "usd", "pen", "eur", "total"))
+    )
+    has_commercial_evidence = any(term in text for term in RELEVANT_TERMS) or bool(alternatives)
+    sufficient = has_named_alternative and has_cost_evidence and (has_commercial_evidence or has_written_context)
+    missing: list[str] = []
+    if not has_named_alternative:
+        missing.append("alternativas o proveedores")
+    if not has_cost_evidence:
+        missing.append("costos, precios o montos")
+    if not has_commercial_evidence and not has_written_context:
+        missing.append("condiciones comerciales o contexto util")
+
+    return {
+        "sufficient": sufficient,
+        "missing": missing,
+        "detected_alternatives": detected,
+        "has_cost_evidence": has_cost_evidence,
+        "has_commercial_evidence": has_commercial_evidence,
+    }
+
+
+def build_preflight_blocked_result(
+    *,
+    title: str,
+    item_name: str,
+    analysis_type: str,
+    evaluation_horizon: str,
+    comparison_unit: str,
+    currency: str,
+    documents: list[dict[str, Any]],
+    preflight: dict[str, Any],
+    debug_mode: str | None = None,
+) -> dict[str, Any]:
+    missing = preflight.get("missing") if isinstance(preflight.get("missing"), list) else []
+    reason = "No hay informacion suficiente para construir un analisis TCO. Agrega costos, alternativas, proveedores o cotizaciones."
+    result = build_fallback_result(
+        title=title,
+        item_name=item_name,
+        analysis_type=analysis_type,
+        evaluation_horizon=evaluation_horizon,
+        comparison_unit=comparison_unit,
+        currency=currency,
+        documents=documents,
+        reason=reason,
+    )
+    result["model_timed_out"] = False
+    result["modelCalled"] = False
+    result["billable"] = False
+    result["billingStatus"] = "blocked_before_model"
+    result["preflight"] = {
+        "sufficient": False,
+        "reason": "INSUFFICIENT_TCO_DATA",
+        "missing": missing,
+        "wouldCallModel": False,
+        "debugMode": debug_mode,
+    }
+    result["downloadReadiness"] = {
+        "status": "blocked",
+        "reason": "INSUFFICIENT_TCO_DATA",
+        "message": reason,
+    }
+    result["executive_summary"]["main_risk"] = reason
+    result["calculation_warnings"] = [
+        "No se llamo al modelo porque faltan datos minimos para TCO.",
+        "No se genero ranking, scorecard ni modelo financiero.",
+    ]
+    result["extracted_data_quality"]["warnings"] = [
+        reason,
+        *([f"Falta: {', '.join(str(item) for item in missing)}."] if missing else []),
+    ]
+    return result
+
+
+def build_mock_result(
+    *,
+    title: str,
+    item_name: str,
+    analysis_type: str,
+    evaluation_horizon: str,
+    comparison_unit: str,
+    currency: str,
+    documents: list[dict[str, Any]],
+) -> dict[str, Any]:
+    result = build_fallback_result(
+        title=title,
+        item_name=item_name,
+        analysis_type=analysis_type,
+        evaluation_horizon=evaluation_horizon,
+        comparison_unit=comparison_unit,
+        currency=currency,
+        documents=documents,
+        reason="Modo mock de diagnostico: no se llamo al modelo.",
+    )
+    result["model_timed_out"] = False
+    result["modelCalled"] = False
+    result["billable"] = False
+    result["billingStatus"] = "diagnostic"
+    result["debugMode"] = "mock"
+    result["downloadReadiness"] = {
+        "status": "ready_with_validation",
+        "reason": "Mock diagnostico sin consumo de modelo.",
+    }
+    result["calculation_warnings"] = ["Resultado mock para validar flujo tecnico; no usar para decision de compra."]
+    return result
+
+
 def ensure_result_defaults(
     result: dict[str, Any],
     *,
@@ -1672,9 +1812,11 @@ async def analyze_tco(
     additional_instructions: str | None,
     files: list[UploadFile],
     trace_id: str | None = None,
+    debug_mode: str | None = None,
 ) -> TcoAnalysisResult:
     started_at = time.perf_counter()
     settings = get_settings()
+    effective_debug_mode = normalize_debug_mode(debug_mode) or normalize_debug_mode(settings.agent_debug_mode)
     validate_required_fields(
         {
             "title": title,
@@ -1721,12 +1863,83 @@ async def analyze_tco(
 
         documents_for_prompt = trim_total_document_context(documents)
         logger.info(
-            "tco_analysis.start traceId=%s files=%s documents=%s manualAlternatives=%s",
+            "tco_analysis.start traceId=%s files=%s documents=%s manualAlternatives=%s debugMode=%s payloadKeys=%s",
             trace_id or "missing",
             len(files),
             len(documents_for_prompt),
             len(fallback_alternatives),
+            effective_debug_mode or "off",
+            ["title", "item_name", "analysis_type", "evaluation_horizon", "comparison_unit", "currency", "objective", "alternatives_json", "general_context", "additional_instructions"],
         )
+        logger.info("tco_analysis.stage traceId=%s stage=preflight", trace_id or "missing")
+        preflight = evaluate_tco_preflight(
+            documents=documents_for_prompt,
+            alternatives=fallback_alternatives,
+            has_written_context=has_written_context,
+        )
+
+        if effective_debug_mode == "preflight_only":
+            logger.info(
+                "tco_analysis.stage traceId=%s stage=preflight_only sufficient=%s missing=%s durationMs=%s",
+                trace_id or "missing",
+                preflight["sufficient"],
+                preflight["missing"],
+                int((time.perf_counter() - started_at) * 1000),
+            )
+            raw_result = build_preflight_blocked_result(
+                title=title,
+                item_name=item_name,
+                analysis_type=analysis_type,
+                evaluation_horizon=evaluation_horizon,
+                comparison_unit=comparison_unit or "Por compra",
+                currency=currency,
+                documents=documents_for_prompt,
+                preflight=preflight,
+                debug_mode=effective_debug_mode,
+            )
+            if preflight["sufficient"]:
+                raw_result["preflight"] = {
+                    "sufficient": True,
+                    "reason": "MODEL_CALL_SKIPPED_BY_PREFLIGHT_ONLY",
+                    "missing": [],
+                    "wouldCallModel": True,
+                    "debugMode": effective_debug_mode,
+                }
+                raw_result["downloadReadiness"] = {
+                    "status": "blocked",
+                    "reason": "MODEL_CALL_SKIPPED_BY_PREFLIGHT_ONLY",
+                    "message": "Preflight valido; no se llamo al modelo por modo diagnostico.",
+                }
+        elif not preflight["sufficient"]:
+            logger.info(
+                "tco_analysis.stage traceId=%s stage=preflight_blocked missing=%s durationMs=%s",
+                trace_id or "missing",
+                preflight["missing"],
+                int((time.perf_counter() - started_at) * 1000),
+            )
+            raw_result = build_preflight_blocked_result(
+                title=title,
+                item_name=item_name,
+                analysis_type=analysis_type,
+                evaluation_horizon=evaluation_horizon,
+                comparison_unit=comparison_unit or "Por compra",
+                currency=currency,
+                documents=documents_for_prompt,
+                preflight=preflight,
+            )
+        elif effective_debug_mode == "mock":
+            logger.info("tco_analysis.stage traceId=%s stage=mock_response", trace_id or "missing")
+            raw_result = build_mock_result(
+                title=title,
+                item_name=item_name,
+                analysis_type=analysis_type,
+                evaluation_horizon=evaluation_horizon,
+                comparison_unit=comparison_unit or "Por compra",
+                currency=currency,
+                documents=documents_for_prompt,
+            )
+        else:
+            raw_result = None
         prompt = build_user_prompt(
             title=title.strip(),
             item_name=item_name.strip(),
@@ -1741,32 +1954,37 @@ async def analyze_tco(
         )
         image_parts = build_image_content_parts(temp_paths, files)
 
-        try:
-            raw_result = await asyncio.wait_for(
-                analyze_tco_with_claude(prompt, image_parts, documents_for_prompt),
-                timeout=settings.tco_model_timeout_seconds,
-            )
-        except TimeoutError:
-            elapsed_ms = int((time.perf_counter() - started_at) * 1000)
-            logger.warning(
-                "tco_analysis.model_timeout traceId=%s timeoutSeconds=%s elapsedMs=%s files=%s documents=%s manualAlternatives=%s",
-                trace_id or "missing",
-                settings.tco_model_timeout_seconds,
-                elapsed_ms,
-                len(files),
-                len(documents_for_prompt),
-                len(fallback_alternatives),
-            )
-            raw_result = build_fallback_result(
-                title=title,
-                item_name=item_name,
-                analysis_type=analysis_type,
-                evaluation_horizon=evaluation_horizon,
-                comparison_unit=comparison_unit or "Por compra",
-                currency=currency,
-                documents=documents_for_prompt,
-                reason="El modelo TCO no respondio dentro del tiempo operativo.",
-            )
+        if raw_result is None:
+            logger.info("tco_analysis.stage traceId=%s stage=model_start", trace_id or "missing")
+            try:
+                raw_result = await asyncio.wait_for(
+                    analyze_tco_with_claude(prompt, image_parts, documents_for_prompt),
+                    timeout=settings.tco_model_timeout_seconds,
+                )
+            except TimeoutError:
+                elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+                logger.warning(
+                    "tco_analysis.model_timeout traceId=%s timeoutSeconds=%s elapsedMs=%s files=%s documents=%s manualAlternatives=%s",
+                    trace_id or "missing",
+                    settings.tco_model_timeout_seconds,
+                    elapsed_ms,
+                    len(files),
+                    len(documents_for_prompt),
+                    len(fallback_alternatives),
+                )
+                raw_result = build_fallback_result(
+                    title=title,
+                    item_name=item_name,
+                    analysis_type=analysis_type,
+                    evaluation_horizon=evaluation_horizon,
+                    comparison_unit=comparison_unit or "Por compra",
+                    currency=currency,
+                    documents=documents_for_prompt,
+                    reason="El modelo TCO no respondio dentro del tiempo operativo.",
+                )
+                raw_result["billable"] = False
+                raw_result["billingStatus"] = "diagnostic"
+                logger.info("tco_analysis.stage traceId=%s stage=fallback_returned", trace_id or "missing")
         raw_usage = raw_result.pop("_usage", {})
         raw_model = raw_result.pop("_model", None)
         raw_result.pop("_warnings", None)
@@ -1781,30 +1999,31 @@ async def analyze_tco(
             currency=currency,
         )
         raw_result = sanitize_tco_result(raw_result)
-        if raw_result.get("model_timed_out"):
+        if raw_result.get("model_timed_out") or raw_result.get("modelCalled") is False:
             raw_result["scorecard"] = None
             raw_result["ranking"] = []
             raw_result["tco_totals"] = []
             raw_result["financial_model"] = []
-            raw_result["executive_summary"] = {
-                **raw_result["executive_summary"],
-                "best_alternative": "No determinado",
-                "best_alternative_score": None,
-                "best_alternative_score_label": "No determinado",
-                "why_it_wins": "No se completo el modelo TCO; no existe una recomendacion analitica final.",
-                "final_recommendation": "Reintentar el analisis o completar informacion antes de decidir.",
-            }
-            raw_result["strategic_recommendation"] = {
-                "recommended_action": "Reintentar analisis",
-                "economic_option": "No determinado",
-                "technical_option": "No determinado",
-                "lowest_risk_option": "No determinado",
-                "balanced_option": "No determinado",
-                "final_recommended_option": "No determinado",
-                "recommendation_rationale": "El modelo TCO no respondio dentro del tiempo operativo; no se genero ranking ni calculo financiero.",
-                "negotiation_points": ["Solicitar costos, supuestos y condiciones comerciales faltantes antes de adjudicar."],
-                "next_steps": ["Reintentar procesamiento", "Cambiar documento", "Agregar informacion minima"],
-            }
+            if raw_result.get("model_timed_out"):
+                raw_result["executive_summary"] = {
+                    **raw_result["executive_summary"],
+                    "best_alternative": "No determinado",
+                    "best_alternative_score": None,
+                    "best_alternative_score_label": "No determinado",
+                    "why_it_wins": "No se completo el modelo TCO; no existe una recomendacion analitica final.",
+                    "final_recommendation": "Reintentar el analisis o completar informacion antes de decidir.",
+                }
+                raw_result["strategic_recommendation"] = {
+                    "recommended_action": "Reintentar analisis",
+                    "economic_option": "No determinado",
+                    "technical_option": "No determinado",
+                    "lowest_risk_option": "No determinado",
+                    "balanced_option": "No determinado",
+                    "final_recommended_option": "No determinado",
+                    "recommendation_rationale": "El modelo TCO no respondio dentro del tiempo operativo; no se genero ranking ni calculo financiero.",
+                    "negotiation_points": ["Solicitar costos, supuestos y condiciones comerciales faltantes antes de adjudicar."],
+                    "next_steps": ["Reintentar procesamiento", "Cambiar documento", "Agregar informacion minima"],
+                }
         if (objective or "").strip():
             user_instructions = objective.strip()
             raw_result["user_priority_instructions"] = user_instructions
@@ -1838,6 +2057,19 @@ async def analyze_tco(
                 "status": "blocked",
                 "reason": "El modelo TCO no respondio dentro del tiempo operativo; reintenta el analisis o agrega informacion minima.",
             }
+        elif raw_result.get("modelCalled") is False:
+            quality["warnings"] = [
+                *quality.get("warnings", []),
+                "No se llamo al modelo; esta ejecucion no consume tokens del proveedor IA.",
+            ]
+            raw_result["calculation_warnings"] = [
+                *_as_list(raw_result.get("calculation_warnings")),
+                "Ejecucion no facturable: no hubo llamada al modelo.",
+            ]
+            raw_result["downloadReadiness"] = raw_result.get("downloadReadiness") or {
+                "status": "blocked",
+                "reason": "No se llamo al modelo.",
+            }
         elif len(raw_result.get("detected_alternatives", [])) <= 1:
             quality["warnings"] = [
                 *quality.get("warnings", []),
@@ -1867,11 +2099,26 @@ async def analyze_tco(
             raw_result["tokens_input"] = raw_usage.get("tokens_input")
             raw_result["tokens_output"] = raw_usage.get("tokens_output")
         raw_result["latency_ms"] = int((time.perf_counter() - started_at) * 1000)
+        logger.info(
+            "tco_analysis.stage traceId=%s stage=response_sent durationMs=%s modelCalled=%s billable=%s readiness=%s",
+            trace_id or "missing",
+            raw_result["latency_ms"],
+            raw_result.get("modelCalled", raw_result.get("model_called", True)),
+            raw_result.get("billable", True),
+            (raw_result.get("downloadReadiness") or {}).get("status") if isinstance(raw_result.get("downloadReadiness"), dict) else "unknown",
+        )
 
         return TcoAnalysisResult.model_validate(raw_result)
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception(
+            "tco_analysis.exception traceId=%s errorClass=%s message=%s durationMs=%s",
+            trace_id or "missing",
+            exc.__class__.__name__,
+            str(exc)[:300],
+            int((time.perf_counter() - started_at) * 1000),
+        )
         raise HTTPException(status_code=502, detail="No se pudo generar el analisis TCO.") from exc
     finally:
         if settings.delete_temp_files:

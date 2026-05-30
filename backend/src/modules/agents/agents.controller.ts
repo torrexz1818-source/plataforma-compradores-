@@ -165,6 +165,7 @@ export class AgentsController {
       requestMeta: {
         traceId: this.getTraceId(request),
         country: this.getCountry(request),
+        debugMode: this.getAgentDebugMode(request, body),
       },
     });
   }
@@ -282,6 +283,14 @@ export class AgentsController {
   private getTraceId(request: Request) {
     const headerValue = request.headers['x-trace-id'] ?? request.headers['x-request-id'];
     return Array.isArray(headerValue) ? headerValue[0] : headerValue;
+  }
+
+  private getAgentDebugMode(request: Request, body: RunAgentBody) {
+    const headerValue = request.headers['x-agent-debug-mode'];
+    const rawValue = Array.isArray(headerValue) ? headerValue[0] : headerValue;
+    const bodyValue = typeof body.debugMode === 'string' ? body.debugMode : undefined;
+    const normalized = String(rawValue || bodyValue || '').trim().toLowerCase();
+    return normalized === 'mock' || normalized === 'preflight_only' ? normalized : undefined;
   }
 
   private getInputData(body: RunAgentBody) {

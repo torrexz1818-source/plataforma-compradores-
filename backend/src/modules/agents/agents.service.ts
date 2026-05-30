@@ -77,6 +77,8 @@ type AgentExecutionRecord = {
   costOutput?: number;
   costTotal?: number;
   costAmount?: number;
+  billable?: boolean;
+  billingStatus?: BillingStatus;
   latencyMs?: number;
   fileCount?: number;
   fileTypesJson?: string[];
@@ -155,6 +157,9 @@ type AgentRunFailureStage =
   | 'ai_provider_response'
   | 'timeout';
 
+type AgentDebugMode = 'mock' | 'preflight_only';
+type BillingStatus = 'billable' | 'non_billable_failure' | 'diagnostic' | 'blocked_before_model';
+
 type AgentRunLogStage =
   | AgentRunFailureStage
   | 'ensure_catalog'
@@ -172,6 +177,7 @@ type AiErrorCode =
   | 'AI_ENGINE_UNREACHABLE'
   | 'AI_ENGINE_TIMEOUT'
   | 'AI_ENGINE_TCO_TIMEOUT'
+  | 'AGENT_RUN_IN_PROGRESS'
   | 'AI_PROVIDER_ERROR'
   | 'AI_ENGINE_REQUEST_FAILED'
   | 'AI_ENGINE_BAD_RESPONSE'
@@ -261,6 +267,8 @@ const AI_ENGINE_ENDPOINTS: Record<string, AiEngineEndpointConfig> = {
 
 @Injectable()
 export class AgentsService {
+  private readonly activeAiRuns = new Set<string>();
+
   constructor(
     private readonly databaseService: DatabaseService,
     private readonly usersService: UsersService,
@@ -434,14 +442,18 @@ export class AgentsService {
     const user = await this.usersService.requireActiveUser(input.userId);
     const agent = await this.findAgent(input.agentId);
     const agentKey = agent?.agentKey ?? this.normalizeLegacyAgentKey(input.agentId);
-    const tokenStats = this.normalizeTokenUsage({
-      inputData: {},
-      outputData: input.outputData ?? {},
-      inputTokens: input.inputTokens,
-      outputTokens: input.outputTokens,
-      totalTokens: input.totalTokens,
-      costAmount: input.costAmount,
-    });
+    const outputData = input.outputData ?? {};
+    const billingPolicy = this.getBillingPolicy('completed', outputData);
+    const tokenStats = billingPolicy.billable
+      ? this.normalizeTokenUsage({
+          inputData: {},
+          outputData,
+          inputTokens: input.inputTokens,
+          outputTokens: input.outputTokens,
+          totalTokens: input.totalTokens,
+          costAmount: input.costAmount,
+        })
+      : this.zeroTokenUsage();
     const now = new Date();
     const execution: AgentExecutionRecord = {
       id: randomUUID(),
@@ -453,14 +465,16 @@ export class AgentsService {
       userRole: user.role,
       inputData: {},
       inputPayloadJson: {},
-      outputData: input.outputData ?? {},
-      outputJson: input.outputData ?? {},
-      status: 'completed',
+      outputData,
+      outputJson: outputData,
+      status: billingPolicy.billable ? 'completed' : 'failed',
       operationName: input.operationName ?? 'Operacion externa',
       modelProvider: 'anthropic',
       modelName: input.model ?? 'No especificado',
       model: input.model ?? 'No especificado',
       ...tokenStats,
+      billable: billingPolicy.billable,
+      billingStatus: billingPolicy.billingStatus,
       latencyMs: input.latencyMs,
       pdfGenerated: input.pdfGenerated ?? false,
       executedAt: now,
@@ -712,7 +726,7 @@ export class AgentsService {
     aiOperation?: string;
     formFields?: Record<string, unknown>;
     files?: UploadedAgentFile[];
-    requestMeta?: { traceId?: string; country?: string };
+    requestMeta?: { traceId?: string; country?: string; debugMode?: AgentDebugMode };
   }) {
     const catalogAgent = this.findCatalogAgent(input.agentId);
     try {
@@ -1030,7 +1044,7 @@ export class AgentsService {
     aiOperation?: string;
     formFields?: Record<string, unknown>;
     files?: UploadedAgentFile[];
-    requestMeta?: { traceId?: string; country?: string };
+    requestMeta?: { traceId?: string; country?: string; debugMode?: AgentDebugMode };
     agent: AgentRecord;
     userName: string;
   }) {
@@ -1041,6 +1055,8 @@ export class AgentsService {
     const endpointConfig = AI_ENGINE_ENDPOINTS[`${agentKey}:${operation}`];
     const provider = endpointConfig?.provider ?? this.getPrimaryProvider();
     const fileLog = this.buildSafeFileLog(input.files ?? []);
+    const timeoutMs = this.getAgentTimeoutMs(agentKey);
+    const debugMode = input.requestMeta?.debugMode;
 
     if (!endpointConfig) {
       return this.buildFailedAiExecution({
@@ -1064,6 +1080,9 @@ export class AgentsService {
       statusCode: 202,
       agentKey,
       operation,
+      timeoutMs,
+      debugMode,
+      inputKeys: Object.keys(input.formFields ?? input.inputData ?? {}).slice(0, 30),
       ...fileLog,
     });
 
@@ -1097,6 +1116,20 @@ export class AgentsService {
     }
 
     const aiEngineUrl = `${aiEngineBaseUrl}${endpointConfig.path}`;
+    const lockKey = `${input.userId}:${agentKey}:${operation}`;
+    if (this.activeAiRuns.has(lockKey)) {
+      return this.buildFailedAiExecution({
+        input,
+        traceId,
+        provider,
+        startedAt,
+        stage: 'frontend_to_backend',
+        statusCode: 409,
+        errorCode: 'AGENT_RUN_IN_PROGRESS',
+        message: 'Ya hay una ejecucion en curso para este agente. Espera a que termine o reintenta en unos segundos.',
+      });
+    }
+    this.activeAiRuns.add(lockKey);
 
     try {
       this.logAiEvent({
@@ -1110,9 +1143,12 @@ export class AgentsService {
         agentKey,
         operation,
         aiEngineUrl,
+        timeoutMs,
+        debugMode,
+        inputKeys: Object.keys(input.formFields ?? {}).slice(0, 30),
         ...fileLog,
       });
-      const aiEngineRequest = this.buildAiEngineRequest(endpointConfig, input.formFields ?? {}, input.files ?? [], traceId);
+      const aiEngineRequest = this.buildAiEngineRequest(endpointConfig, input.formFields ?? {}, input.files ?? [], traceId, debugMode);
       this.logAiEvent({
         endpoint: endpointConfig.path,
         traceId,
@@ -1124,12 +1160,14 @@ export class AgentsService {
         agentKey,
         operation,
         aiEngineUrl,
+        timeoutMs,
+        debugMode,
         ...fileLog,
       });
       const response = await this.fetchWithTimeout(
         aiEngineUrl,
         aiEngineRequest,
-        this.getAgentTimeoutMs(agentKey),
+        timeoutMs,
       );
       const responseText = await response.text();
       this.logAiEvent({
@@ -1145,6 +1183,9 @@ export class AgentsService {
         aiEngineUrl,
         aiEngineStatus: response.status,
         responseBytes: responseText.length,
+        responsePreview: this.summarizeResponseBody(responseText),
+        timeoutMs,
+        debugMode,
         ...fileLog,
       });
 
@@ -1185,7 +1226,7 @@ export class AgentsService {
         outputData,
         provider,
         modelName: this.extractModelName(outputData),
-        status: 'completed',
+        status: this.isBillableOutput(outputData) ? 'completed' : 'failed',
         startedAt,
       });
 
@@ -1199,6 +1240,8 @@ export class AgentsService {
         latencyMs: Date.now() - startedAt,
         agentKey,
         operation,
+        timeoutMs,
+        debugMode,
       });
       this.logAiEvent({
         endpoint: '/agents/run',
@@ -1210,6 +1253,8 @@ export class AgentsService {
         latencyMs: Date.now() - startedAt,
         agentKey,
         operation,
+        timeoutMs,
+        debugMode,
       });
 
       return {
@@ -1231,8 +1276,10 @@ export class AgentsService {
         statusCode: 503,
         errorCode,
         message: AI_ENGINE_UNAVAILABLE_MESSAGE,
-        diagnosticMessage: error instanceof Error ? error.message : String(error),
+        diagnosticMessage: this.describeError(error),
       });
+    } finally {
+      this.activeAiRuns.delete(lockKey);
     }
   }
 
@@ -1241,11 +1288,12 @@ export class AgentsService {
     fields: Record<string, unknown>,
     files: UploadedAgentFile[],
     traceId: string,
+    debugMode?: AgentDebugMode,
   ): RequestInit {
     if (endpointConfig.mode === 'json') {
       return {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Trace-Id': traceId },
+        headers: this.buildAiEngineHeaders(traceId, debugMode, true),
         body: JSON.stringify(this.buildAiEngineJsonBody(fields)),
       };
     }
@@ -1269,9 +1317,16 @@ export class AgentsService {
 
     return {
       method: 'POST',
-      headers: { 'X-Trace-Id': traceId },
+      headers: this.buildAiEngineHeaders(traceId, debugMode, false),
       body: formData,
     };
+  }
+
+  private buildAiEngineHeaders(traceId: string, debugMode: AgentDebugMode | undefined, isJson: boolean) {
+    const headers: Record<string, string> = { 'X-Trace-Id': traceId };
+    if (isJson) headers['Content-Type'] = 'application/json';
+    if (debugMode) headers['X-Agent-Debug-Mode'] = debugMode;
+    return headers;
   }
 
   private buildAiEngineJsonBody(fields: Record<string, unknown>) {
@@ -1294,7 +1349,7 @@ export class AgentsService {
       userRole?: string;
       inputData: Record<string, unknown>;
       formFields?: Record<string, unknown>;
-      requestMeta?: { traceId?: string; country?: string };
+      requestMeta?: { traceId?: string; country?: string; debugMode?: AgentDebugMode };
       agent: AgentRecord;
     };
     traceId: string;
@@ -1312,6 +1367,8 @@ export class AgentsService {
       message: input.message || AI_ENGINE_UNAVAILABLE_MESSAGE,
       execution: null,
       traceId: input.traceId,
+      billable: false,
+      billingStatus: 'non_billable_failure',
     };
     const execution = await this.persistAiExecution({
       input: input.input,
@@ -1366,7 +1423,10 @@ export class AgentsService {
   }) {
     const agent = input.input.agent;
     const inputData = this.buildStoredAiInput(input.input.inputData, input.input.formFields ?? {});
-    const tokenStats = this.normalizeTokenUsage({ inputData, outputData: input.outputData });
+    const billingPolicy = this.getBillingPolicy(input.status, input.outputData);
+    const tokenStats = billingPolicy.billable
+      ? this.normalizeTokenUsage({ inputData, outputData: input.outputData })
+      : this.zeroTokenUsage();
     const now = new Date();
     const execution: AgentExecutionRecord = {
       id: randomUUID(),
@@ -1389,6 +1449,8 @@ export class AgentsService {
       modelName: input.modelName ?? 'No especificado',
       model: input.modelName ?? 'No especificado',
       ...tokenStats,
+      billable: billingPolicy.billable,
+      billingStatus: billingPolicy.billingStatus,
       latencyMs: Date.now() - input.startedAt,
       fileCount: input.input.files?.length ?? 0,
       fileTypesJson: input.input.files?.map((file) => file.mimetype) ?? [],
@@ -1434,6 +1496,8 @@ export class AgentsService {
       outputData: execution.outputData,
       totalTokens: execution.totalTokens,
       costAmount: execution.costAmount,
+      billable: execution.billable,
+      billingStatus: execution.billingStatus,
       pdfGenerated: execution.pdfGenerated,
       executedAt: execution.executedAt.toISOString(),
     };
@@ -1519,7 +1583,10 @@ export class AgentsService {
 
   private getAgentTimeoutMs(agentKey: string) {
     const specificTimeout = process.env[`AI_AGENT_TIMEOUT_MS_${agentKey.toUpperCase()}`]?.trim();
-    return Number.parseInt(specificTimeout || process.env.AI_AGENT_TIMEOUT_MS || '', 10) || 120_000;
+    const secondsTimeout = Number.parseFloat(process.env.BACKEND_AI_ENGINE_TIMEOUT_SECONDS || '');
+    if (specificTimeout) return Number.parseInt(specificTimeout, 10) || 120_000;
+    if (Number.isFinite(secondsTimeout) && secondsTimeout > 0) return Math.round(secondsTimeout * 1000);
+    return Number.parseInt(process.env.AI_AGENT_TIMEOUT_MS || '', 10) || 120_000;
   }
 
   private getAiHealthTimeoutMs() {
@@ -1629,6 +1696,11 @@ export class AgentsService {
       fileCount: files.length,
       fileNames: files.map((file) => file.originalname || 'archivo').slice(0, 12),
       fileSizes: files.map((file) => file.size).slice(0, 12),
+      fileExtensions: files.map((file) => {
+        const name = file.originalname || '';
+        const extension = name.includes('.') ? name.split('.').pop() : file.mimetype;
+        return String(extension || 'unknown').toLowerCase();
+      }).slice(0, 12),
     };
   }
 
@@ -1652,6 +1724,17 @@ export class AgentsService {
       .slice(0, 500);
   }
 
+  private summarizeResponseBody(body?: string) {
+    return this.sanitizeLogMessage((body || '').replace(/\s+/g, ' ').slice(0, 800));
+  }
+
+  private describeError(error: unknown) {
+    if (!(error instanceof Error)) return String(error);
+    const cause = 'cause' in error ? (error as Error & { cause?: unknown }).cause : undefined;
+    const causeMessage = cause instanceof Error ? `${cause.name}: ${cause.message}` : cause ? String(cause) : '';
+    return [error.name, error.message, causeMessage].filter(Boolean).join(' | ');
+  }
+
   private logAiEvent(event: {
     endpoint: string;
     traceId: string;
@@ -1667,10 +1750,15 @@ export class AgentsService {
     fileCount?: number;
     fileNames?: string[];
     fileSizes?: number[];
+    fileExtensions?: string[];
     aiEngineUrl?: string;
     aiEngineStatus?: number;
     responseBytes?: number;
+    responsePreview?: string;
     errorClass?: string;
+    timeoutMs?: number;
+    debugMode?: AgentDebugMode;
+    inputKeys?: string[];
   }) {
     const payload = {
       scope: 'nodus_ia',
@@ -1688,10 +1776,15 @@ export class AgentsService {
       fileCount: event.fileCount,
       fileNames: event.fileNames,
       fileSizes: event.fileSizes,
+      fileExtensions: event.fileExtensions,
       aiEngineUrl: this.getSafeUrlForLog(event.aiEngineUrl),
       aiEngineStatus: event.aiEngineStatus,
       responseBytes: event.responseBytes,
+      responsePreview: this.sanitizeLogMessage(event.responsePreview),
       errorClass: event.errorClass,
+      timeoutMs: event.timeoutMs,
+      debugMode: event.debugMode,
+      inputKeys: event.inputKeys,
     };
 
     if (event.statusCode >= 400 || event.stage === 'timeout') {
@@ -1876,6 +1969,72 @@ export class AgentsService {
       costTotal: Number(costTotal.toFixed(6)),
       costAmount: Number(costTotal.toFixed(6)),
     };
+  }
+
+  private zeroTokenUsage() {
+    return {
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      costInput: 0,
+      costOutput: 0,
+      costTotal: 0,
+      costAmount: 0,
+    };
+  }
+
+  private isBillableOutput(outputData: Record<string, unknown>) {
+    return this.getBillingPolicy('completed', outputData).billable;
+  }
+
+  private getBillingPolicy(status: 'completed' | 'failed', outputData: Record<string, unknown>): {
+    billable: boolean;
+    billingStatus: BillingStatus;
+  } {
+    const readiness = outputData.downloadReadiness;
+    const readinessRecord = readiness && typeof readiness === 'object' && !Array.isArray(readiness)
+      ? (readiness as Record<string, unknown>)
+      : {};
+    const readinessStatus = String(readinessRecord.status ?? '').toLowerCase();
+    const readinessReason = String(readinessRecord.reason ?? '').toLowerCase();
+    const errorCode = String(outputData.errorCode ?? '').toUpperCase();
+    const modelCalled = outputData.modelCalled ?? outputData.model_called;
+    const hasFailureShape =
+      status === 'failed' ||
+      outputData.ok === false ||
+      outputData.execution === null ||
+      Boolean(errorCode) ||
+      /TIMEOUT|ERROR|FAILED|UNREACHABLE|INVALID/.test(errorCode);
+
+    if (outputData.billable === false) {
+      const requestedStatus = String(outputData.billingStatus || '');
+      if (requestedStatus === 'non_billable_failure') return { billable: false, billingStatus: 'non_billable_failure' };
+      if (requestedStatus === 'diagnostic') return { billable: false, billingStatus: 'diagnostic' };
+      if (requestedStatus === 'blocked_before_model') return { billable: false, billingStatus: 'blocked_before_model' };
+      return { billable: false, billingStatus: status === 'failed' ? 'non_billable_failure' : 'blocked_before_model' };
+    }
+
+    if (modelCalled === false) {
+      return {
+        billable: false,
+        billingStatus: String(outputData.billingStatus) === 'diagnostic' ? 'diagnostic' : 'blocked_before_model',
+      };
+    }
+
+    if (
+      readinessStatus === 'blocked' &&
+      (outputData.model_timed_out === true ||
+        outputData.modelTimedOut === true ||
+        /timeout|tiempo|time|modelo|motor/.test(readinessReason))
+    ) {
+      return { billable: false, billingStatus: 'diagnostic' };
+    }
+
+    if (hasFailureShape) {
+      return { billable: false, billingStatus: 'non_billable_failure' };
+    }
+
+    return { billable: true, billingStatus: 'billable' };
   }
 
   private buildAgentOutput(agent: AgentRecord, inputData: Record<string, unknown>, userName: string) {

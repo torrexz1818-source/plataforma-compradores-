@@ -145,7 +145,7 @@ describe('AgentsService AI engine proxy', () => {
     process.env.NODE_ENV = 'production';
     process.env.AI_ENGINE_URL = 'https://ai.example.test';
     global.fetch = jest.fn().mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
-    const { service } = createService();
+    const { service, insertedExecutions } = createService();
 
     const response = await service.runAgent({
       agentId: 'terms_of_reference',
@@ -164,6 +164,15 @@ describe('AgentsService AI engine proxy', () => {
       errorCode: 'AI_ENGINE_TIMEOUT',
       traceId: 'trace-timeout',
     });
+    expect(response.execution.billable).toBe(false);
+    expect(response.execution.billingStatus).toBe('non_billable_failure');
+    expect(response.execution.costAmount).toBe(0);
+    expect(insertedExecutions[0]).toMatchObject({
+      status: 'failed',
+      billable: false,
+      billingStatus: 'non_billable_failure',
+      costAmount: 0,
+    });
   });
 
   it('passes trace id to the AI Engine TCO endpoint', async () => {
@@ -179,7 +188,7 @@ describe('AgentsService AI engine proxy', () => {
         model_name: 'test-model',
       })),
     } as unknown as Response);
-    const { service } = createService({
+    const { service, insertedExecutions } = createService({
       agentsFindOne: jest.fn().mockResolvedValue({
         ...activeAgent,
         id: 'tco_analysis',
@@ -237,7 +246,7 @@ describe('AgentsService AI engine proxy', () => {
         model_name: 'test-model',
       })),
     } as unknown as Response);
-    const { service } = createService({
+    const { service, insertedExecutions } = createService({
       agentsFindOne: jest.fn().mockResolvedValue({
         ...activeAgent,
         id: 'tco_analysis',
@@ -273,6 +282,136 @@ describe('AgentsService AI engine proxy', () => {
       ranking: [],
       scorecard: null,
       financial_model: [],
+    });
+    expect(response.execution.billable).toBe(false);
+    expect(response.execution.billingStatus).toBe('diagnostic');
+    expect(response.execution.costAmount).toBe(0);
+    expect(insertedExecutions[0]).toMatchObject({
+      status: 'failed',
+      billable: false,
+      billingStatus: 'diagnostic',
+      costAmount: 0,
+    });
+  });
+
+  it('stores insufficient TCO data as blocked before model and non billable', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.NODE_ENV = 'production';
+    process.env.AI_ENGINE_URL = 'https://ai.example.test';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(JSON.stringify({
+        analysis_title: 'Analisis TCO',
+        ok: true,
+        modelCalled: false,
+        billable: false,
+        billingStatus: 'blocked_before_model',
+        downloadReadiness: { status: 'blocked', reason: 'INSUFFICIENT_TCO_DATA' },
+        ranking: [],
+        scorecard: null,
+        financial_model: [],
+        model_name: 'preflight',
+      })),
+    } as unknown as Response);
+    const { service, insertedExecutions } = createService({
+      agentsFindOne: jest.fn().mockResolvedValue({
+        ...activeAgent,
+        id: 'tco_analysis',
+        agentKey: 'tco_analysis',
+        slug: 'analisis-tco',
+        name: 'Analisis TCO',
+      }),
+    });
+
+    const response = await service.runAgent({
+      agentId: 'tco_analysis',
+      userId: 'user-buyer-1',
+      inputData: {},
+      aiOperation: 'analyze',
+      formFields: {
+        agentId: 'tco_analysis',
+        operation: 'analyze',
+        title: 'Analisis TCO',
+        item_name: 'Equipo',
+        analysis_type: 'Compra',
+        evaluation_horizon: '3 anos',
+        currency: 'USD',
+      },
+      files: [],
+      requestMeta: { traceId: 'trace-tco-insufficient', country: 'CN' },
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.execution.outputData).toMatchObject({
+      modelCalled: false,
+      downloadReadiness: { status: 'blocked', reason: 'INSUFFICIENT_TCO_DATA' },
+    });
+    expect(response.execution.billable).toBe(false);
+    expect(response.execution.billingStatus).toBe('blocked_before_model');
+    expect(response.execution.costAmount).toBe(0);
+    expect(insertedExecutions[0]).toMatchObject({
+      status: 'failed',
+      billable: false,
+      billingStatus: 'blocked_before_model',
+      inputTokens: 0,
+      outputTokens: 0,
+      costAmount: 0,
+    });
+  });
+
+  it('marks successful AI Engine results as billable', async () => {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    process.env.NODE_ENV = 'production';
+    process.env.AI_ENGINE_URL = 'https://ai.example.test';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: jest.fn().mockResolvedValue(JSON.stringify({
+        analysis_title: 'Analisis TCO',
+        downloadReadiness: { status: 'ready' },
+        executive_summary: { best_alternative: 'Proveedor A' },
+        model_name: 'test-model',
+      })),
+    } as unknown as Response);
+    const { service, insertedExecutions } = createService({
+      agentsFindOne: jest.fn().mockResolvedValue({
+        ...activeAgent,
+        id: 'tco_analysis',
+        agentKey: 'tco_analysis',
+        slug: 'analisis-tco',
+        name: 'Analisis TCO',
+      }),
+    });
+
+    const response = await service.runAgent({
+      agentId: 'tco_analysis',
+      userId: 'user-buyer-1',
+      inputData: {},
+      aiOperation: 'analyze',
+      formFields: {
+        agentId: 'tco_analysis',
+        operation: 'analyze',
+        title: 'Analisis TCO',
+        item_name: 'Equipo',
+        analysis_type: 'Compra',
+        evaluation_horizon: '3 anos',
+        currency: 'USD',
+      },
+      files: [],
+      requestMeta: { traceId: 'trace-tco-billable', country: 'CN' },
+    });
+
+    expect(response.ok).toBe(true);
+    expect(response.execution.billable).toBe(true);
+    expect(response.execution.billingStatus).toBe('billable');
+    expect(response.execution.costAmount).toBeGreaterThan(0);
+    expect(insertedExecutions[0]).toMatchObject({
+      status: 'completed',
+      billable: true,
+      billingStatus: 'billable',
     });
   });
 

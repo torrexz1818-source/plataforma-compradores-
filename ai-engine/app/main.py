@@ -1,3 +1,6 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from anthropic import APIError, AsyncAnthropic
@@ -15,10 +18,29 @@ from app.utils.google_pubsub_notifier import get_pubsub_status
 settings = get_settings()
 from app.agents.terms_of_reference.router import router as terms_of_reference_router
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    logger.info(
+        "ai_engine.startup_config aiProvider=%s anthropicModelConfigured=%s tcoModelTimeoutSeconds=%s anthropicTimeoutSeconds=%s anthropicMaxRetries=%s maxFileSizeMb=%s maxFilesPerAnalysis=%s",
+        settings.ai_provider,
+        bool(settings.anthropic_model),
+        settings.tco_model_timeout_seconds,
+        settings.anthropic_timeout_seconds,
+        settings.anthropic_max_retries,
+        settings.max_file_size_mb,
+        settings.max_files_per_analysis,
+    )
+    yield
+
+
 app = FastAPI(
     title="Buyer Nodus AI Engine",
     version="0.1.0",
     description="Motor temporal para agentes IA de Buyer Nodus.",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -82,6 +104,20 @@ async def deep_health_check():
         "model": getattr(model, "id", settings.anthropic_model),
         "error_code": None,
         "message": "AI Engine y proveedor IA responden correctamente.",
+    }
+
+
+@app.get("/diagnostics/config")
+def diagnostics_config():
+    return {
+        "aiProvider": settings.ai_provider,
+        "anthropicModelConfigured": bool(settings.anthropic_model),
+        "anthropicApiKeyConfigured": bool(settings.anthropic_api_key),
+        "tcoModelTimeoutSeconds": settings.tco_model_timeout_seconds,
+        "anthropicTimeoutSeconds": settings.anthropic_timeout_seconds,
+        "anthropicMaxRetries": settings.anthropic_max_retries,
+        "maxFileSizeMb": settings.max_file_size_mb,
+        "maxFilesPerAnalysis": settings.max_files_per_analysis,
     }
 
 

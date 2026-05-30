@@ -76,6 +76,8 @@ services:
         value: anthropic
       - key: AI_AGENT_TIMEOUT_MS
         value: "120000"
+      - key: BACKEND_AI_ENGINE_TIMEOUT_SECONDS
+        value: "130"
       - key: AI_HEALTH_TIMEOUT_MS
         value: "10000"
       - key: AI_DEEP_HEALTH_ENABLED
